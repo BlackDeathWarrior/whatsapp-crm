@@ -54,7 +54,13 @@ export function ConversationList({
       .order("last_message_at", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch conversations:", error);
+      // Supabase errors have non-enumerable properties — log fields explicitly
+      console.error("Failed to fetch conversations:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
       setLoading(false);
       return;
     }
