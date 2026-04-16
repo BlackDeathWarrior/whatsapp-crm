@@ -134,6 +134,8 @@ export interface PipelineStage {
   created_at: string;
 }
 
+export type DealStatus = 'open' | 'won' | 'lost';
+
 export interface Deal {
   id: string;
   user_id: string;
@@ -141,15 +143,18 @@ export interface Deal {
   stage_id: string;
   contact_id: string;
   conversation_id?: string;
+  assigned_to?: string;
   title: string;
   value: number;
   currency?: string;
   notes?: string;
   expected_close_date?: string;
-  status?: string;
+  status?: DealStatus;
   created_at: string;
+  updated_at?: string;
   contact?: Contact;
   stage?: PipelineStage;
+  assignee?: Profile;
 }
 
 export type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed';
