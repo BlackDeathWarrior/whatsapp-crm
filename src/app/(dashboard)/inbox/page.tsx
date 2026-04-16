@@ -8,7 +8,7 @@ import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { toast } from "sonner";
-import { Wifi, WifiOff } from "lucide-react";
+import { WifiOff } from "lucide-react";
 
 export default function InboxPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -31,11 +31,13 @@ export default function InboxPage() {
 
       if (!user) return;
 
+      // Table is `whatsapp_config` (singular) — the previous "whatsapp_configs"
+      // query always returned no rows, so the banner always showed "not connected".
       const { data } = await supabase
-        .from("whatsapp_configs")
+        .from("whatsapp_config")
         .select("status")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       setWhatsappConnected(data?.status === "connected");
     };
@@ -167,10 +169,11 @@ export default function InboxPage() {
   );
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-3.5rem)] overflow-hidden">
-      {/* WhatsApp connection banner */}
+    <div className="-m-6 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden">
+      {/* WhatsApp connection banner — in the flex column, not absolute,
+          so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (
-        <div className="absolute left-60 right-0 top-14 z-10 flex items-center justify-center gap-2 bg-amber-500/10 px-4 py-2">
+        <div className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
           <WifiOff className="h-4 w-4 text-amber-400" />
           <p className="text-xs text-amber-400">
             WhatsApp is not connected. Go to Settings to connect your account.
@@ -178,27 +181,29 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* Left panel: Conversation list */}
-      <ConversationList
-        activeConversationId={activeConversation?.id ?? null}
-        onSelect={handleSelectConversation}
-        conversations={conversations}
-        onConversationsLoaded={handleConversationsLoaded}
-      />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left panel: Conversation list */}
+        <ConversationList
+          activeConversationId={activeConversation?.id ?? null}
+          onSelect={handleSelectConversation}
+          conversations={conversations}
+          onConversationsLoaded={handleConversationsLoaded}
+        />
 
-      {/* Center panel: Message thread */}
-      <MessageThread
-        conversation={activeConversation}
-        contact={activeContact}
-        messages={messages}
-        onMessagesLoaded={handleMessagesLoaded}
-        onNewMessage={handleNewMessage}
-        onStatusChange={handleStatusChange}
-      />
+        {/* Center panel: Message thread */}
+        <MessageThread
+          conversation={activeConversation}
+          contact={activeContact}
+          messages={messages}
+          onMessagesLoaded={handleMessagesLoaded}
+          onNewMessage={handleNewMessage}
+          onStatusChange={handleStatusChange}
+        />
 
-      {/* Right panel: Contact sidebar (hidden on small screens) */}
-      <div className="hidden lg:block">
-        <ContactSidebar contact={activeContact} />
+        {/* Right panel: Contact sidebar (hidden on small screens) */}
+        <div className="hidden lg:block">
+          <ContactSidebar contact={activeContact} />
+        </div>
       </div>
     </div>
   );
