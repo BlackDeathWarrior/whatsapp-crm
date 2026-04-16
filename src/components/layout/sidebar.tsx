@@ -17,15 +17,15 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/inbox", label: "Inbox", icon: MessageSquare },
-  { href: "/dashboard/contacts", label: "Contacts", icon: Users },
-  { href: "/dashboard/pipelines", label: "Pipelines", icon: GitBranch },
-  { href: "/dashboard/broadcasts", label: "Broadcasts", icon: Radio },
-  { href: "/dashboard/automations", label: "Automations", icon: Zap },
+  { href: "/inbox", label: "Inbox", icon: MessageSquare },
+  { href: "/contacts", label: "Contacts", icon: Users },
+  { href: "/pipelines", label: "Pipelines", icon: GitBranch },
+  { href: "/broadcasts", label: "Broadcasts", icon: Radio },
+  { href: "/automations", label: "Automations", icon: Zap },
 ];
 
 const bottomNavItems = [
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {

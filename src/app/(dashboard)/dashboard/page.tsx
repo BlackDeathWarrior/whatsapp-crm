@@ -234,7 +234,7 @@ export default function DashboardPage() {
             </h2>
           </div>
           <button
-            onClick={() => router.push("/dashboard/inbox")}
+            onClick={() => router.push("/inbox")}
             className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
           >
             View all
@@ -261,7 +261,7 @@ export default function DashboardPage() {
             recentConversations.map((conv) => (
               <button
                 key={conv.id}
-                onClick={() => router.push("/dashboard/inbox")}
+                onClick={() => router.push("/inbox")}
                 className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-800/50"
               >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-sm font-medium text-emerald-500">
