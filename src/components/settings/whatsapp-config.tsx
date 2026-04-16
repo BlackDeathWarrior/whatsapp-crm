@@ -13,6 +13,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +31,7 @@ const MASKED_TOKEN = '••••••••••••••••';
 
 export function WhatsAppConfig() {
   const supabase = createClient();
+  const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,19 +52,23 @@ export function WhatsAppConfig() {
       : '';
 
   useEffect(() => {
-    fetchConfig();
-  }, []);
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    fetchConfig(user.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id]);
 
-  async function fetchConfig() {
+  async function fetchConfig(userId: string) {
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
-      if (!user) return;
 
       const { data, error } = await supabase
         .from('whatsapp_config')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single();
 
       if (error && error.code !== 'PGRST116') {
@@ -97,7 +103,6 @@ export function WhatsAppConfig() {
 
     try {
       setSaving(true);
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) {
         toast.error('Not authenticated');
         return;
@@ -134,7 +139,7 @@ export function WhatsAppConfig() {
       }
 
       toast.success('Configuration saved successfully');
-      await fetchConfig();
+      if (user) await fetchConfig(user.id);
     } catch (err) {
       console.error('Save error:', err);
       toast.error('Failed to save configuration');
