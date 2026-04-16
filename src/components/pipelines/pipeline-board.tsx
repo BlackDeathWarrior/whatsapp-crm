@@ -172,35 +172,32 @@ function StageColumn({
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
   return (
-    <div
-      className="flex min-w-[280px] max-w-[300px] shrink-0 flex-col rounded-xl p-4"
-      style={{ backgroundColor: "#f9fafb" }}
-    >
-      {/* 3px colored top border (spec) — sits above the column's padding */}
+    <div className="flex min-w-[280px] max-w-[300px] shrink-0 flex-col rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+      {/* 3px colored top border — sits above the column's padding */}
       <div
         className="-mx-4 -mt-4 h-[3px] rounded-t-xl"
         style={{ backgroundColor: stage.color }}
       />
       <div className="flex items-center justify-between pt-3">
-        <h3 className="truncate text-sm font-semibold text-gray-900">
+        <h3 className="truncate text-sm font-semibold text-white">
           {stage.name}
         </h3>
-        <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+        <span className="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-300">
           {deals.length}
         </span>
       </div>
-      <p className="text-xs text-gray-500">{formatCurrency(totalValue)}</p>
+      <p className="text-xs text-slate-400">{formatCurrency(totalValue)}</p>
 
       <div
         ref={setNodeRef}
         className={`mt-3 flex flex-1 flex-col gap-2 rounded-lg transition-all ${
           isOver
-            ? "bg-emerald-50 outline outline-2 outline-dashed outline-emerald-400 outline-offset-2"
+            ? "bg-emerald-500/5 outline outline-2 outline-dashed outline-emerald-400 outline-offset-2"
             : ""
         }`}
       >
         {deals.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-white/40 py-10 text-xs text-gray-400">
+          <div className="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-slate-700 py-10 text-xs text-slate-500">
             Drop a deal here
           </div>
         ) : (
@@ -219,7 +216,7 @@ function StageColumn({
         variant="ghost"
         size="sm"
         onClick={() => onAddDeal(stage.id)}
-        className="mt-3 w-full justify-start border border-dashed border-gray-300 bg-transparent text-gray-500 hover:border-gray-400 hover:bg-white hover:text-gray-700"
+        className="mt-3 w-full justify-start border border-dashed border-slate-700 bg-transparent text-slate-400 hover:border-slate-600 hover:bg-slate-800 hover:text-white"
       >
         <Plus className="mr-1 h-3 w-3" />
         Add Deal
