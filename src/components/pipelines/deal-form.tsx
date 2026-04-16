@@ -96,8 +96,9 @@ export function DealForm({
       await supabase.from("deals").update(payload).eq("id", deal.id);
     } else {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
       if (user) {
         await supabase
           .from("deals")

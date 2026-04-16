@@ -49,7 +49,7 @@ export function TagManager() {
   async function fetchTags() {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) return;
 
       const { data, error } = await supabase
@@ -76,7 +76,7 @@ export function TagManager() {
 
     try {
       setSaving(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) {
         toast.error('Not authenticated');
         return;
