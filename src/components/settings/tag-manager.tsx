@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,6 +32,7 @@ const PRESET_COLORS = [
 
 export function TagManager() {
   const supabase = createClient();
+  const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -43,19 +45,23 @@ export function TagManager() {
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[3].value);
 
   useEffect(() => {
-    fetchTags();
-  }, []);
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    fetchTags(user.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id]);
 
-  async function fetchTags() {
+  async function fetchTags(userId: string) {
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
-      if (!user) return;
 
       const { data, error } = await supabase
         .from('tags')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -76,7 +82,6 @@ export function TagManager() {
 
     try {
       setSaving(true);
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) {
         toast.error('Not authenticated');
         return;
@@ -96,7 +101,7 @@ export function TagManager() {
       setDialogOpen(false);
       setNewTagName('');
       setSelectedColor(PRESET_COLORS[3].value);
-      await fetchTags();
+      if (user) await fetchTags(user.id);
     } catch (err) {
       console.error('Create error:', err);
       toast.error('Failed to create tag');

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,6 +64,7 @@ const emptyForm: TemplateFormData = {
 
 export function TemplateManager() {
   const supabase = createClient();
+  const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -71,19 +73,23 @@ export function TemplateManager() {
   const [form, setForm] = useState<TemplateFormData>(emptyForm);
 
   useEffect(() => {
-    fetchTemplates();
-  }, []);
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    fetchTemplates(user.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id]);
 
-  async function fetchTemplates() {
+  async function fetchTemplates(userId: string) {
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
-      if (!user) return;
 
       const { data, error } = await supabase
         .from('message_templates')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -108,7 +114,6 @@ export function TemplateManager() {
 
     try {
       setSaving(true);
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) {
         toast.error('Not authenticated');
         return;
@@ -134,7 +139,7 @@ export function TemplateManager() {
       toast.success('Template created successfully');
       setDialogOpen(false);
       setForm(emptyForm);
-      await fetchTemplates();
+      if (user) await fetchTemplates(user.id);
     } catch (err) {
       console.error('Save error:', err);
       toast.error('Failed to create template');

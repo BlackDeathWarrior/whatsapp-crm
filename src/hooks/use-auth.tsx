@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -11,7 +18,21 @@ interface Profile {
   avatar_url: string | null;
 }
 
-export function useAuth() {
+interface AuthContextValue {
+  user: User | null;
+  profile: Profile | null;
+  loading: boolean;
+  signOut: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+/**
+ * AuthProvider — wrap this around the dashboard layout.
+ * Makes ONE getSession() call for the whole tree instead of one per
+ * component, avoiding internal lock contention in the Supabase client.
+ */
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,18 +41,15 @@ export function useAuth() {
     const supabase = createClient();
     let mounted = true;
 
-    // Safety net: 3s is plenty for localStorage reads. If it hangs here,
-    // something else is wrong (likely storage permissions in an iframe).
     const safetyTimer = setTimeout(() => {
       if (mounted) {
-        console.warn("[useAuth] getSession() timed out after 3s, clearing loading state");
+        console.warn("[AuthProvider] getSession() timed out after 3s");
         setLoading(false);
       }
     }, 3000);
 
     const fetchProfile = async (userId: string) => {
       try {
-        // profiles.user_id (NOT profiles.id) references auth.users.id
         const { data, error } = await supabase
           .from("profiles")
           .select("id, full_name, email, avatar_url")
@@ -39,7 +57,7 @@ export function useAuth() {
           .maybeSingle();
 
         if (error) {
-          console.error("[useAuth] fetchProfile error:", {
+          console.error("[AuthProvider] fetchProfile error:", {
             message: error.message,
             details: error.details,
             hint: error.hint,
@@ -48,38 +66,32 @@ export function useAuth() {
           return;
         }
 
-        if (data && mounted) {
-          setProfile(data);
-        }
+        if (data && mounted) setProfile(data);
       } catch (err) {
-        console.error("[useAuth] fetchProfile threw:", err);
+        console.error("[AuthProvider] fetchProfile threw:", err);
       }
     };
 
     const init = async () => {
       try {
-        // getSession() reads from localStorage — instant, no network call.
-        // The middleware already validates the JWT server-side with getUser()
-        // on every request, and RLS enforces authorization at the DB level,
-        // so the client can trust the local session for UI purposes.
         const {
           data: { session },
           error,
         } = await supabase.auth.getSession();
 
-        if (error) {
-          console.error("[useAuth] getSession error:", error.message);
-        }
+        if (error) console.error("[AuthProvider] getSession error:", error.message);
 
         if (!mounted) return;
         const currentUser = session?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
-          await fetchProfile(currentUser.id);
+          // Don't block loading on profile fetch — let the UI render
+          // with the user info we already have, profile enriches async.
+          fetchProfile(currentUser.id);
         }
       } catch (err) {
-        console.error("[useAuth] init threw:", err);
+        console.error("[AuthProvider] init threw:", err);
       } finally {
         if (mounted) setLoading(false);
         clearTimeout(safetyTimer);
@@ -90,13 +102,13 @@ export function useAuth() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
       const currentUser = session?.user ?? null;
       setUser(currentUser);
 
       if (currentUser) {
-        await fetchProfile(currentUser.id);
+        fetchProfile(currentUser.id);
       } else {
         setProfile(null);
       }
@@ -109,8 +121,6 @@ export function useAuth() {
       clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
-    // Intentionally run once on mount — createClient() is a singleton
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const signOut = useCallback(async () => {
@@ -121,5 +131,30 @@ export function useAuth() {
     window.location.href = "/login";
   }, []);
 
-  return { user, profile, loading, signOut };
+  return (
+    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+/**
+ * useAuth — read the shared auth state from context.
+ * Must be used inside an <AuthProvider>.
+ */
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    // Fallback for components rendered outside the provider (shouldn't
+    // happen in normal flow, but don't crash the page).
+    return {
+      user: null,
+      profile: null,
+      loading: false,
+      signOut: async () => {
+        window.location.href = "/login";
+      },
+    };
+  }
+  return ctx;
 }
