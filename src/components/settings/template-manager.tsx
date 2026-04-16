@@ -77,7 +77,7 @@ export function TemplateManager() {
   async function fetchTemplates() {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) return;
 
       const { data, error } = await supabase
@@ -108,7 +108,7 @@ export function TemplateManager() {
 
     try {
       setSaving(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) {
         toast.error('Not authenticated');
         return;

@@ -223,8 +223,9 @@ export function ContactDetailView({
     setSavingNote(true);
 
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       toast.error('Not authenticated');
       setSavingNote(false);
