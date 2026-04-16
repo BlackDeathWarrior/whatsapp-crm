@@ -1,8 +1,92 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { verifyPhoneNumber } from '@/lib/whatsapp/meta-api'
-import { encrypt } from '@/lib/whatsapp/encryption'
+import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
 
+/**
+ * GET /api/whatsapp/config
+ *
+ * Used by the "Test API Connection" button in Settings.
+ * Fetches the user's saved config, decrypts the access token, and pings
+ * Meta to verify the credentials still work. Returns the phone info
+ * (display_phone_number, verified_name, quality_rating) on success.
+ */
+export async function GET() {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: config, error: configError } = await supabase
+      .from('whatsapp_config')
+      .select('phone_number_id, access_token, status')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (configError) {
+      console.error('Error fetching whatsapp_config:', configError)
+      return NextResponse.json(
+        { error: 'Failed to fetch configuration' },
+        { status: 500 }
+      )
+    }
+
+    if (!config) {
+      return NextResponse.json(
+        { connected: false, error: 'No WhatsApp configuration saved yet' },
+        { status: 404 }
+      )
+    }
+
+    // Decrypt access token and call Meta to verify it still works
+    let accessToken: string
+    try {
+      accessToken = decrypt(config.access_token)
+    } catch (err) {
+      console.error('Failed to decrypt access token:', err)
+      return NextResponse.json(
+        { connected: false, error: 'Stored access token is corrupted — please re-save configuration' },
+        { status: 500 }
+      )
+    }
+
+    try {
+      const phoneInfo = await verifyPhoneNumber(
+        config.phone_number_id,
+        accessToken
+      )
+      return NextResponse.json({
+        connected: true,
+        phone_info: phoneInfo,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown Meta API error'
+      console.error('Meta API verification failed:', message)
+      return NextResponse.json(
+        { connected: false, error: message },
+        { status: 502 }
+      )
+    }
+  } catch (error) {
+    console.error('Error in WhatsApp config GET:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+/**
+ * POST /api/whatsapp/config
+ *
+ * Saves or updates the WhatsApp config for the authenticated user.
+ * Verifies the credentials with Meta before saving. Tokens are encrypted
+ * at rest with AES-256-CBC.
+ */
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
@@ -13,10 +97,7 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
@@ -29,22 +110,32 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verify the phone number with Meta API
-    const phoneInfo = await verifyPhoneNumber(access_token, phone_number_id)
+    // Verify credentials with Meta BEFORE saving
+    // (function signature is verifyPhoneNumber(phoneNumberId, accessToken))
+    let phoneInfo
+    try {
+      phoneInfo = await verifyPhoneNumber(phone_number_id, access_token)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown Meta API error'
+      console.error('Meta API verification failed during save:', message)
+      return NextResponse.json(
+        { error: `Meta API error: ${message}` },
+        { status: 400 }
+      )
+    }
 
-    // Encrypt sensitive tokens
+    // Encrypt sensitive tokens before storing
     const encryptedAccessToken = encrypt(access_token)
     const encryptedVerifyToken = verify_token ? encrypt(verify_token) : null
 
-    // Check if config already exists for this user
+    // Upsert
     const { data: existing } = await supabase
       .from('whatsapp_config')
       .select('id')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     if (existing) {
-      // Update existing config
       const { error: updateError } = await supabase
         .from('whatsapp_config')
         .update({
@@ -52,6 +143,8 @@ export async function POST(request: Request) {
           waba_id: waba_id || null,
           access_token: encryptedAccessToken,
           verify_token: encryptedVerifyToken,
+          status: 'connected',
+          connected_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('user_id', user.id)
@@ -64,7 +157,6 @@ export async function POST(request: Request) {
         )
       }
     } else {
-      // Insert new config
       const { error: insertError } = await supabase
         .from('whatsapp_config')
         .insert({
@@ -73,6 +165,8 @@ export async function POST(request: Request) {
           waba_id: waba_id || null,
           access_token: encryptedAccessToken,
           verify_token: encryptedVerifyToken,
+          status: 'connected',
+          connected_at: new Date().toISOString(),
         })
 
       if (insertError) {
@@ -90,9 +184,6 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Error in WhatsApp config POST:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
