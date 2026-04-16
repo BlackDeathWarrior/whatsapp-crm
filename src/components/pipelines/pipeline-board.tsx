@@ -1,12 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { PipelineStage, Deal } from "@/types";
+import { useMemo, useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+  closestCorners,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import type { Deal, PipelineStage } from "@/types";
 import { DealCard } from "./deal-card";
-import { DealForm } from "./deal-form";
 import { Button } from "@/components/ui/button";
-import { Plus, DollarSign } from "lucide-react";
+import { Plus } from "lucide-react";
+
+interface PipelineBoardProps {
+  stages: PipelineStage[];
+  deals: Deal[];
+  onDealMoved: (dealId: string, newStageId: string) => void;
+  onAddDeal: (stageId: string) => void;
+  onEditDeal: (deal: Deal) => void;
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -17,184 +35,220 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-interface PipelineBoardProps {
-  pipelineId: string;
-  stages: PipelineStage[];
-  onStagesChange: () => void;
-}
-
 export function PipelineBoard({
-  pipelineId,
   stages,
-  onStagesChange,
+  deals,
+  onDealMoved,
+  onAddDeal,
+  onEditDeal,
 }: PipelineBoardProps) {
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dealFormOpen, setDealFormOpen] = useState(false);
-  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
-  const [defaultStageId, setDefaultStageId] = useState<string>("");
+  const [activeDealId, setActiveDealId] = useState<string | null>(null);
 
-  const supabase = createClient();
-  const sortedStages = [...stages].sort((a, b) => a.position - b.position);
+  const sortedStages = useMemo(
+    () => [...stages].sort((a, b) => a.position - b.position),
+    [stages],
+  );
 
-  useEffect(() => {
-    if (pipelineId) {
-      loadDeals();
+  const dealsByStage = useMemo(() => {
+    const map = new Map<string, Deal[]>();
+    for (const stage of sortedStages) map.set(stage.id, []);
+    for (const deal of deals) {
+      const bucket = map.get(deal.stage_id);
+      if (bucket) bucket.push(deal);
     }
-  }, [pipelineId]);
+    return map;
+  }, [sortedStages, deals]);
 
-  async function loadDeals() {
-    setLoading(true);
-    const { data } = await supabase
-      .from("deals")
-      .select("*, contact:contacts(*)")
-      .eq("pipeline_id", pipelineId)
-      .order("created_at", { ascending: false });
-    if (data) setDeals(data);
-    setLoading(false);
+  const sensors = useSensors(
+    // 5px activation distance avoids clicks being interpreted as drags.
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const activeDeal = activeDealId
+    ? deals.find((d) => d.id === activeDealId) ?? null
+    : null;
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDealId(String(event.active.id));
   }
 
-  function getDealsForStage(stageId: string) {
-    return deals.filter((d) => d.stage_id === stageId);
-  }
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveDealId(null);
+    const { active, over } = event;
+    if (!over) return;
+    const dealId = String(active.id);
+    const targetStageId = String(over.id);
 
-  function getTotalValue(stageId: string) {
-    return getDealsForStage(stageId).reduce((sum, d) => sum + d.value, 0);
-  }
-
-  function handleAddDeal(stageId: string) {
-    setEditingDeal(null);
-    setDefaultStageId(stageId);
-    setDealFormOpen(true);
-  }
-
-  function handleEditDeal(deal: Deal) {
-    setEditingDeal(deal);
-    setDefaultStageId(deal.stage_id);
-    setDealFormOpen(true);
-  }
-
-  async function handleMoveStage(dealId: string, direction: "prev" | "next") {
     const deal = deals.find((d) => d.id === dealId);
-    if (!deal) return;
+    if (!deal || deal.stage_id === targetStageId) return;
+    if (!sortedStages.some((s) => s.id === targetStageId)) return;
 
-    const currentIndex = sortedStages.findIndex(
-      (s) => s.id === deal.stage_id
-    );
-    const targetIndex =
-      direction === "prev" ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= sortedStages.length) return;
-
-    const targetStage = sortedStages[targetIndex];
-    await supabase
-      .from("deals")
-      .update({ stage_id: targetStage.id })
-      .eq("id", dealId);
-
-    setDeals(
-      deals.map((d) =>
-        d.id === dealId ? { ...d, stage_id: targetStage.id } : d
-      )
-    );
+    onDealMoved(dealId, targetStageId);
   }
 
-  if (loading) {
-    return (
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {sortedStages.map((stage) => (
-          <div
-            key={stage.id}
-            className="flex w-72 shrink-0 flex-col rounded-xl border border-slate-800 bg-slate-900/50"
-          >
-            <div className="p-3 border-b border-slate-800">
-              <div className="h-4 w-24 animate-pulse rounded bg-slate-800" />
-              <div className="mt-2 h-3 w-16 animate-pulse rounded bg-slate-800" />
-            </div>
-            <div className="p-3 space-y-3">
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-24 animate-pulse rounded-lg bg-slate-800/50"
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+  function handleDragCancel() {
+    setActiveDealId(null);
   }
 
   return (
-    <>
-      <div className="flex gap-4 overflow-x-auto pb-4 min-h-[calc(100vh-14rem)]">
-        {sortedStages.map((stage, stageIndex) => {
-          const stageDeals = getDealsForStage(stage.id);
-          const totalValue = getTotalValue(stage.id);
-
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div className="pipeline-scroll flex gap-3 overflow-x-auto pb-4">
+        {sortedStages.map((stage) => {
+          const stageDeals = dealsByStage.get(stage.id) ?? [];
+          const totalValue = stageDeals.reduce(
+            (s, d) => s + Number(d.value || 0),
+            0,
+          );
           return (
-            <div
+            <StageColumn
               key={stage.id}
-              className="flex w-72 shrink-0 flex-col rounded-xl border border-slate-800 bg-slate-900/50"
-            >
-              {/* Column header */}
-              <div className="p-3 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-2.5 w-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: stage.color }}
-                  />
-                  <h3 className="text-sm font-medium text-white truncate">
-                    {stage.name}
-                  </h3>
-                  <span className="ml-auto shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-xs text-slate-400">
-                    {stageDeals.length}
-                  </span>
-                </div>
-                {totalValue > 0 && (
-                  <div className="mt-1.5 flex items-center gap-1 text-xs text-slate-400">
-                    <DollarSign className="h-3 w-3" />
-                    {formatCurrency(totalValue)}
-                  </div>
-                )}
-              </div>
-
-              {/* Deal cards */}
-              <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                {stageDeals.map((deal) => (
-                  <DealCard
-                    key={deal.id}
-                    deal={deal}
-                    onEdit={handleEditDeal}
-                    onMoveStage={handleMoveStage}
-                    hasPrev={stageIndex > 0}
-                    hasNext={stageIndex < sortedStages.length - 1}
-                  />
-                ))}
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleAddDeal(stage.id)}
-                  className="w-full justify-start text-slate-400 hover:text-white border border-dashed border-slate-700 hover:border-slate-600"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add Deal
-                </Button>
-              </div>
-            </div>
+              stage={stage}
+              deals={stageDeals}
+              totalValue={totalValue}
+              onAddDeal={onAddDeal}
+              onEditDeal={onEditDeal}
+            />
           );
         })}
       </div>
 
-      <DealForm
-        open={dealFormOpen}
-        onOpenChange={setDealFormOpen}
-        deal={editingDeal}
-        pipelineId={pipelineId}
-        stages={sortedStages}
-        defaultStageId={defaultStageId}
-        onSaved={loadDeals}
+      <DragOverlay
+        dropAnimation={{
+          duration: 200,
+          easing: "cubic-bezier(0.2, 0, 0, 1)",
+        }}
+      >
+        {activeDeal ? (
+          <div className="opacity-90">
+            <DealCard
+              deal={activeDeal}
+              stage={
+                sortedStages.find((s) => s.id === activeDeal.stage_id) ?? null
+              }
+              onEdit={() => {}}
+              isOverlay
+            />
+          </div>
+        ) : null}
+      </DragOverlay>
+
+      <style jsx>{`
+        .pipeline-scroll {
+          scroll-behavior: smooth;
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .pipeline-scroll::-webkit-scrollbar {
+            height: 0;
+            display: none;
+          }
+          .pipeline-scroll {
+            scrollbar-width: none;
+          }
+        }
+      `}</style>
+    </DndContext>
+  );
+}
+
+function StageColumn({
+  stage,
+  deals,
+  totalValue,
+  onAddDeal,
+  onEditDeal,
+}: {
+  stage: PipelineStage;
+  deals: Deal[];
+  totalValue: number;
+  onAddDeal: (stageId: string) => void;
+  onEditDeal: (deal: Deal) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: stage.id });
+
+  return (
+    <div
+      className="flex min-w-[280px] max-w-[300px] shrink-0 flex-col rounded-xl p-4"
+      style={{ backgroundColor: "#f9fafb" }}
+    >
+      {/* 3px colored top border (spec) — sits above the column's padding */}
+      <div
+        className="-mx-4 -mt-4 h-[3px] rounded-t-xl"
+        style={{ backgroundColor: stage.color }}
       />
-    </>
+      <div className="flex items-center justify-between pt-3">
+        <h3 className="truncate text-sm font-semibold text-gray-900">
+          {stage.name}
+        </h3>
+        <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+          {deals.length}
+        </span>
+      </div>
+      <p className="text-xs text-gray-500">{formatCurrency(totalValue)}</p>
+
+      <div
+        ref={setNodeRef}
+        className={`mt-3 flex flex-1 flex-col gap-2 rounded-lg transition-all ${
+          isOver
+            ? "bg-emerald-50 outline outline-2 outline-dashed outline-emerald-400 outline-offset-2"
+            : ""
+        }`}
+      >
+        {deals.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-white/40 py-10 text-xs text-gray-400">
+            Drop a deal here
+          </div>
+        ) : (
+          deals.map((deal) => (
+            <DraggableDealCard
+              key={deal.id}
+              deal={deal}
+              stage={stage}
+              onEdit={onEditDeal}
+            />
+          ))
+        )}
+      </div>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onAddDeal(stage.id)}
+        className="mt-3 w-full justify-start border border-dashed border-gray-300 bg-transparent text-gray-500 hover:border-gray-400 hover:bg-white hover:text-gray-700"
+      >
+        <Plus className="mr-1 h-3 w-3" />
+        Add Deal
+      </Button>
+    </div>
+  );
+}
+
+function DraggableDealCard({
+  deal,
+  stage,
+  onEdit,
+}: {
+  deal: Deal;
+  stage: PipelineStage;
+  onEdit: (deal: Deal) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: deal.id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
+    >
+      <DealCard deal={deal} stage={stage} onEdit={onEdit} />
+    </div>
   );
 }

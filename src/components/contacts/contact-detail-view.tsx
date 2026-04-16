@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue } from '@/types';
+import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal } from '@/types';
 import {
   Sheet,
   SheetContent,
@@ -30,6 +30,7 @@ import {
   Trash2,
   Save,
   X,
+  DollarSign,
 } from 'lucide-react';
 
 interface ContactDetailViewProps {
@@ -74,6 +75,10 @@ export function ContactDetailView({
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [savingCustom, setSavingCustom] = useState(false);
   const [loadingCustom, setLoadingCustom] = useState(false);
+
+  // Deals tab
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loadingDeals, setLoadingDeals] = useState(false);
 
   const fetchContact = useCallback(async () => {
     if (!contactId) return;
@@ -146,14 +151,27 @@ export function ContactDetailView({
     setLoadingCustom(false);
   }, [contactId, supabase]);
 
+  const fetchDeals = useCallback(async () => {
+    if (!contactId) return;
+    setLoadingDeals(true);
+    const { data } = await supabase
+      .from('deals')
+      .select('*, stage:pipeline_stages(*)')
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: false });
+    setDeals((data ?? []) as Deal[]);
+    setLoadingDeals(false);
+  }, [contactId, supabase]);
+
   useEffect(() => {
     if (open && contactId) {
       fetchContact();
       fetchTags();
       fetchNotes();
       fetchCustomFields();
+      fetchDeals();
     }
-  }, [open, contactId, fetchContact, fetchTags, fetchNotes, fetchCustomFields]);
+  }, [open, contactId, fetchContact, fetchTags, fetchNotes, fetchCustomFields, fetchDeals]);
 
   async function copyPhone() {
     if (!contact) return;
@@ -389,6 +407,12 @@ export function ContactDetailView({
                 >
                   Custom Fields
                 </TabsTrigger>
+                <TabsTrigger
+                  value="deals"
+                  className="data-active:bg-slate-800 data-active:text-emerald-400 text-slate-400"
+                >
+                  Deals
+                </TabsTrigger>
               </TabsList>
 
               {/* Details Tab */}
@@ -591,6 +615,64 @@ export function ContactDetailView({
                       )}
                       Save Custom Fields
                     </Button>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Deals Tab */}
+              <TabsContent value="deals" className="flex-1 overflow-y-auto px-4 py-3">
+                {loadingDeals ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="size-5 animate-spin text-emerald-500" />
+                  </div>
+                ) : deals.length === 0 ? (
+                  <p className="text-xs text-slate-500">No deals yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {deals.map((deal) => (
+                      <div
+                        key={deal.id}
+                        className="rounded-lg border border-slate-700 bg-slate-800/50 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-white">
+                            {deal.title}
+                          </p>
+                          {deal.stage && (
+                            <span
+                              className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                              style={{
+                                backgroundColor: `${deal.stage.color}20`,
+                                color: deal.stage.color,
+                              }}
+                            >
+                              {deal.stage.name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-between text-xs text-slate-400">
+                          <span className="flex items-center gap-1">
+                            <DollarSign className="size-3" />
+                            {new Intl.NumberFormat('en-US', {
+                              style: 'currency',
+                              currency: deal.currency || 'USD',
+                              maximumFractionDigits: 0,
+                            }).format(Number(deal.value || 0))}
+                          </span>
+                          {deal.status && deal.status !== 'open' && (
+                            <span
+                              className={
+                                deal.status === 'won'
+                                  ? 'text-emerald-400'
+                                  : 'text-red-400'
+                              }
+                            >
+                              {deal.status}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </TabsContent>
