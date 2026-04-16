@@ -69,10 +69,12 @@ export function DealForm({
   const [saving, setSaving] = useState(false);
   const [statusAction, setStatusAction] = useState<DealStatus | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Reset when opening
   useEffect(() => {
     if (!open) return;
+    setConfirmDelete(false);
     if (deal) {
       setTitle(deal.title);
       setValue(String(deal.value ?? ""));
@@ -211,10 +213,6 @@ export function DealForm({
 
   async function handleDelete() {
     if (!deal) return;
-    const confirmed = window.confirm(
-      "Delete this deal? This cannot be undone.",
-    );
-    if (!confirmed) return;
     setDeleting(true);
     const { error } = await supabase.from("deals").delete().eq("id", deal.id);
     setDeleting(false);
@@ -223,6 +221,7 @@ export function DealForm({
       return;
     }
     toast.success("Deal deleted");
+    setConfirmDelete(false);
     onOpenChange(false);
     onSaved();
   }
@@ -426,17 +425,39 @@ export function DealForm({
               </Button>
             </div>
 
-            {deal && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="mt-3 flex w-full items-center justify-center gap-1 text-xs text-red-400 hover:text-red-300"
-              >
-                <Trash2 className="h-3 w-3" />
-                {deleting ? "Deleting..." : "Delete Deal"}
-              </button>
-            )}
+            {deal &&
+              (confirmDelete ? (
+                <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs">
+                  <span className="text-red-300">Delete this deal?</span>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      disabled={deleting}
+                      className="rounded px-2 py-1 text-slate-300 hover:bg-slate-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="rounded bg-red-600 px-2 py-1 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {deleting ? "Deleting..." : "Confirm"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  className="mt-3 flex w-full items-center justify-center gap-1 text-xs text-red-400 hover:text-red-300"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Delete Deal
+                </button>
+              ))}
           </div>
         </div>
       </SheetContent>

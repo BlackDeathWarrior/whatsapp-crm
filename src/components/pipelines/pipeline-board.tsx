@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -62,6 +63,9 @@ export function PipelineBoard({
   const sensors = useSensors(
     // 5px activation distance avoids clicks being interpreted as drags.
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // Keyboard drag support: focus a card, Space to pick up, arrows to move,
+    // Space to drop, Escape to cancel.
+    useSensor(KeyboardSensor),
   );
 
   const activeDeal = activeDealId
@@ -172,7 +176,7 @@ function StageColumn({
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
   return (
-    <div className="flex min-w-[280px] max-w-[300px] shrink-0 flex-col rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+    <div className="flex min-w-[260px] flex-1 basis-[260px] flex-col rounded-xl border border-slate-800 bg-slate-900/60 p-4">
       {/* 3px colored top border — sits above the column's padding */}
       <div
         className="-mx-4 -mt-4 h-[3px] rounded-t-xl"
