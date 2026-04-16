@@ -139,11 +139,19 @@ export default function InboxPage() {
     []
   );
 
-  const handleSelectConversation = useCallback((conv: Conversation) => {
-    setActiveConversation(conv);
-    setActiveContact(conv.contact ?? null);
-    setMessages([]);
-  }, []);
+  const handleSelectConversation = useCallback(
+    (conv: Conversation) => {
+      // Re-clicking the already-active conversation would clear the
+      // messages array, but the fetch effect in MessageThread only re-runs
+      // when conversationId changes — so messages would stay empty until
+      // the user navigated away and back. Bail out early instead.
+      if (activeConversation?.id === conv.id) return;
+      setActiveConversation(conv);
+      setActiveContact(conv.contact ?? null);
+      setMessages([]);
+    },
+    [activeConversation?.id]
+  );
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
     setMessages(loaded);
