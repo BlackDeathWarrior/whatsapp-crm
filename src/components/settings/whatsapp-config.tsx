@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   Eye,
@@ -11,6 +11,8 @@ import {
   Loader2,
   ExternalLink,
   Zap,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -29,6 +31,9 @@ import type { WhatsAppConfig as WhatsAppConfigType } from '@/types';
 
 const MASKED_TOKEN = '••••••••••••••••';
 
+type ConnectionStatus = 'connected' | 'disconnected' | 'unknown';
+type ResetReason = 'token_corrupted' | 'meta_api_error' | null;
+
 export function WhatsAppConfig() {
   const supabase = createClient();
   const { user, loading: authLoading } = useAuth();
@@ -36,9 +41,12 @@ export function WhatsAppConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [config, setConfig] = useState<WhatsAppConfigType | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'unknown'>('unknown');
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
+  const [resetReason, setResetReason] = useState<ResetReason>(null);
+  const [statusMessage, setStatusMessage] = useState<string>('');
 
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [wabaId, setWabaId] = useState('');
@@ -51,28 +59,18 @@ export function WhatsAppConfig() {
       ? `${window.location.origin}/api/whatsapp/webhook`
       : '';
 
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    fetchConfig(user.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id]);
-
-  async function fetchConfig(userId: string) {
+  const fetchConfig = useCallback(async (userId: string) => {
+    setLoading(true);
     try {
-      setLoading(true);
-
+      // Load form values from Supabase (shows what's in DB)
       const { data, error } = await supabase
         .from('whatsapp_config')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
+      if (error) {
+        console.error('Failed to load config row:', error);
       }
 
       if (data) {
@@ -80,65 +78,113 @@ export function WhatsAppConfig() {
         setPhoneNumberId(data.phone_number_id || '');
         setWabaId(data.waba_id || '');
         setAccessToken(MASKED_TOKEN);
-        setVerifyToken(data.verify_token || '');
-        setConnectionStatus(data.status || 'disconnected');
+        setVerifyToken('');
+        setTokenEdited(false);
+      } else {
+        setConfig(null);
+        setPhoneNumberId('');
+        setWabaId('');
+        setAccessToken('');
+        setVerifyToken('');
+        setTokenEdited(false);
+      }
+
+      // Then verify health via the API (decrypts token + pings Meta)
+      if (data) {
+        try {
+          const res = await fetch('/api/whatsapp/config', { method: 'GET' });
+          const payload = await res.json();
+
+          if (payload.connected) {
+            setConnectionStatus('connected');
+            setResetReason(null);
+            setStatusMessage('');
+          } else {
+            setConnectionStatus('disconnected');
+            setResetReason(payload.needs_reset ? 'token_corrupted' : payload.reason === 'meta_api_error' ? 'meta_api_error' : null);
+            setStatusMessage(payload.message || '');
+          }
+        } catch (err) {
+          console.error('Health check failed:', err);
+          setConnectionStatus('disconnected');
+        }
+      } else {
+        setConnectionStatus('disconnected');
+        setResetReason(null);
+        setStatusMessage('');
       }
     } catch (err) {
-      console.error('Failed to fetch config:', err);
+      console.error('fetchConfig error:', err);
       toast.error('Failed to load WhatsApp configuration');
     } finally {
       setLoading(false);
     }
-  }
+  }, [supabase]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    fetchConfig(user.id);
+  }, [authLoading, user, fetchConfig]);
 
   async function handleSave() {
     if (!phoneNumberId.trim()) {
       toast.error('Phone Number ID is required');
       return;
     }
-    if (!tokenEdited && !config) {
-      toast.error('Access Token is required');
+    if (!config && (!accessToken.trim() || !tokenEdited)) {
+      toast.error('Access Token is required for initial setup');
       return;
     }
 
     try {
       setSaving(true);
-      if (!user) {
-        toast.error('Not authenticated');
-        return;
-      }
 
+      // Always POST through the API — it verifies with Meta and encrypts
+      // the access_token server-side with ENCRYPTION_KEY. Skipping this
+      // and writing direct to Supabase stores the token in plaintext,
+      // which then fails decryption on every subsequent health check.
       const payload: Record<string, unknown> = {
-        user_id: user.id,
         phone_number_id: phoneNumberId.trim(),
         waba_id: wabaId.trim() || null,
         verify_token: verifyToken.trim() || null,
       };
 
-      if (tokenEdited && accessToken !== MASKED_TOKEN) {
+      if (tokenEdited && accessToken !== MASKED_TOKEN && accessToken.trim()) {
         payload.access_token = accessToken.trim();
+      } else if (config) {
+        // Existing config — reuse stored encrypted token by decrypting on the
+        // server. But our POST handler requires an access_token to verify
+        // with Meta. If the user didn't change the token, we need to signal
+        // that. Simplest: require token re-entry if they're updating.
+        toast.error('Please re-enter the Access Token to save changes');
+        setSaving(false);
+        return;
       }
 
-      if (config?.id) {
-        const { error } = await supabase
-          .from('whatsapp_config')
-          .update(payload)
-          .eq('id', config.id);
-        if (error) throw error;
-      } else {
-        if (!tokenEdited || !accessToken.trim() || accessToken === MASKED_TOKEN) {
-          toast.error('Access Token is required for initial setup');
-          return;
-        }
-        payload.access_token = accessToken.trim();
-        payload.status = 'disconnected';
-        const { error } = await supabase
-          .from('whatsapp_config')
-          .insert(payload);
-        if (error) throw error;
+      const res = await fetch('/api/whatsapp/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to save configuration');
+        setSaving(false);
+        return;
       }
 
-      toast.success('Configuration saved successfully');
+      toast.success(
+        data.phone_info?.verified_name
+          ? `Connected to ${data.phone_info.verified_name}`
+          : 'Configuration saved successfully'
+      );
+
       if (user) await fetchConfig(user.id);
     } catch (err) {
       console.error('Save error:', err);
@@ -151,29 +197,63 @@ export function WhatsAppConfig() {
   async function handleTestConnection() {
     try {
       setTesting(true);
-      const response = await fetch('/api/whatsapp/config', {
-        method: 'GET',
-      });
+      const res = await fetch('/api/whatsapp/config', { method: 'GET' });
+      const payload = await res.json();
 
-      if (response.ok) {
+      if (payload.connected) {
         setConnectionStatus('connected');
-        toast.success('API connection successful');
-
-        if (config?.id) {
-          await supabase
-            .from('whatsapp_config')
-            .update({ status: 'connected', connected_at: new Date().toISOString() })
-            .eq('id', config.id);
-        }
+        setResetReason(null);
+        setStatusMessage('');
+        toast.success(
+          payload.phone_info?.verified_name
+            ? `Connected to ${payload.phone_info.verified_name}`
+            : 'API connection successful'
+        );
       } else {
         setConnectionStatus('disconnected');
-        toast.error('API connection failed. Check your credentials.');
+        setResetReason(payload.needs_reset ? 'token_corrupted' : payload.reason === 'meta_api_error' ? 'meta_api_error' : null);
+        setStatusMessage(payload.message || '');
+        toast.error(payload.message || 'API connection failed');
       }
-    } catch {
+    } catch (err) {
+      console.error('Test connection error:', err);
       setConnectionStatus('disconnected');
-      toast.error('Connection test failed. Ensure your server is running.');
+      toast.error('Connection test failed. Check network and try again.');
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function handleReset() {
+    if (!confirm('This will delete the current WhatsApp config so you can re-enter it. Continue?')) {
+      return;
+    }
+
+    try {
+      setResetting(true);
+      const res = await fetch('/api/whatsapp/config', { method: 'DELETE' });
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to reset configuration');
+        return;
+      }
+
+      toast.success('Configuration cleared. You can now re-enter your credentials.');
+      setConfig(null);
+      setPhoneNumberId('');
+      setWabaId('');
+      setAccessToken('');
+      setVerifyToken('');
+      setTokenEdited(false);
+      setConnectionStatus('disconnected');
+      setResetReason(null);
+      setStatusMessage('');
+    } catch (err) {
+      console.error('Reset error:', err);
+      toast.error('Failed to reset configuration');
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -190,10 +270,47 @@ export function WhatsAppConfig() {
     );
   }
 
+  const showResetBanner = resetReason === 'token_corrupted';
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_380px] mt-4">
       {/* Main config form */}
       <div className="space-y-6">
+        {/* Corrupted-token reset banner */}
+        {showResetBanner && (
+          <Alert className="bg-amber-950/40 border-amber-600/40">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="size-5 text-amber-400 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <AlertTitle className="text-amber-200 mb-1">
+                  Stored token can&apos;t be decrypted
+                </AlertTitle>
+                <AlertDescription className="text-amber-100/80 text-sm">
+                  {statusMessage}
+                </AlertDescription>
+                <Button
+                  onClick={handleReset}
+                  disabled={resetting}
+                  size="sm"
+                  className="mt-3 bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {resetting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Resetting...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="size-4" />
+                      Reset Configuration
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </Alert>
+        )}
+
         {/* Connection Status */}
         <Alert className="bg-slate-900 border-slate-700">
           <div className="flex items-center gap-2">
@@ -209,7 +326,8 @@ export function WhatsAppConfig() {
           <AlertDescription className="text-slate-400">
             {connectionStatus === 'connected'
               ? 'Your WhatsApp Business API is connected and ready to send/receive messages.'
-              : 'Configure your Meta API credentials below to connect your WhatsApp Business account.'}
+              : statusMessage ||
+                'Configure your Meta API credentials below to connect your WhatsApp Business account.'}
           </AlertDescription>
         </Alert>
 
@@ -269,6 +387,11 @@ export function WhatsAppConfig() {
                   {showToken ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
+              {config && !tokenEdited && (
+                <p className="text-xs text-slate-500">
+                  Token is hidden for security. Re-enter it to update configuration.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -317,7 +440,7 @@ export function WhatsAppConfig() {
         </Card>
 
         {/* Action Buttons */}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button
             onClick={handleSave}
             disabled={saving}
@@ -350,6 +473,26 @@ export function WhatsAppConfig() {
               </>
             )}
           </Button>
+          {config && (
+            <Button
+              variant="outline"
+              onClick={handleReset}
+              disabled={resetting}
+              className="border-red-900 text-red-400 hover:text-red-300 hover:bg-red-950/40"
+            >
+              {resetting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Resetting...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="size-4" />
+                  Reset Configuration
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </div>
 
