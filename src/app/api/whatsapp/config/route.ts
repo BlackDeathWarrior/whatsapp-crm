@@ -75,10 +75,10 @@ export async function GET() {
 
     // Validate credentials against Meta
     try {
-      const phoneInfo = await verifyPhoneNumber(
-        config.phone_number_id,
-        accessToken
-      )
+      const phoneInfo = await verifyPhoneNumber({
+        phoneNumberId: config.phone_number_id,
+        accessToken,
+      })
       return NextResponse.json({ connected: true, phone_info: phoneInfo })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown Meta API error'
@@ -131,10 +131,12 @@ export async function POST(request: Request) {
     }
 
     // Verify credentials with Meta BEFORE saving
-    // Signature: verifyPhoneNumber(phoneNumberId, accessToken)
     let phoneInfo
     try {
-      phoneInfo = await verifyPhoneNumber(phone_number_id, access_token)
+      phoneInfo = await verifyPhoneNumber({
+        phoneNumberId: phone_number_id,
+        accessToken: access_token,
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown Meta API error'
       console.error('Meta API verification failed during save:', message)
