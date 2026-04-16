@@ -6,12 +6,12 @@ import { LogOut } from "lucide-react";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
-  "/dashboard/inbox": "Inbox",
-  "/dashboard/contacts": "Contacts",
-  "/dashboard/pipelines": "Pipelines",
-  "/dashboard/broadcasts": "Broadcasts",
-  "/dashboard/automations": "Automations",
-  "/dashboard/settings": "Settings",
+  "/inbox": "Inbox",
+  "/contacts": "Contacts",
+  "/pipelines": "Pipelines",
+  "/broadcasts": "Broadcasts",
+  "/automations": "Automations",
+  "/settings": "Settings",
 };
 
 function getPageTitle(pathname: string): string {
