@@ -156,6 +156,15 @@ export default function InboxPage() {
     });
   }, []);
 
+  const handleUpdateMessage = useCallback(
+    (id: string, updates: Partial<Message>) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
+      );
+    },
+    []
+  );
+
   const handleStatusChange = useCallback(
     (conversationId: string, status: ConversationStatus) => {
       setConversations((prev) =>
@@ -197,6 +206,7 @@ export default function InboxPage() {
           messages={messages}
           onMessagesLoaded={handleMessagesLoaded}
           onNewMessage={handleNewMessage}
+          onUpdateMessage={handleUpdateMessage}
           onStatusChange={handleStatusChange}
         />
 

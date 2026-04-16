@@ -100,40 +100,57 @@ export async function POST(request: Request) {
     const accessToken = decrypt(config.access_token)
 
     // Send via Meta API
+    // Function signatures are:
+    //   sendTextMessage(phoneNumberId, accessToken, to, text)
+    //   sendTemplateMessage(phoneNumberId, accessToken, to, templateName, language?, params?)
+    // The args were previously swapped (accessToken before phoneNumberId),
+    // causing Meta to reject every send.
     let waMessageId: string
 
-    if (message_type === 'template') {
-      const result = await sendTemplateMessage(
-        accessToken,
-        config.phone_number_id,
-        sanitizedPhone,
-        template_name,
-        template_params || []
+    try {
+      if (message_type === 'template') {
+        const result = await sendTemplateMessage(
+          config.phone_number_id,
+          accessToken,
+          sanitizedPhone,
+          template_name,
+          undefined, // use default language (en_US)
+          template_params || []
+        )
+        waMessageId = result.messageId
+      } else {
+        const result = await sendTextMessage(
+          config.phone_number_id,
+          accessToken,
+          sanitizedPhone,
+          content_text
+        )
+        waMessageId = result.messageId
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown Meta API error'
+      console.error('Meta API send failed:', message)
+      return NextResponse.json(
+        { error: `Meta API error: ${message}` },
+        { status: 502 }
       )
-      waMessageId = result.messageId
-    } else {
-      const result = await sendTextMessage(
-        accessToken,
-        config.phone_number_id,
-        sanitizedPhone,
-        content_text
-      )
-      waMessageId = result.messageId
     }
 
-    // Insert message into DB
+    // Insert message into DB — field names MUST match the messages schema
+    // (see supabase/migrations/001_initial_schema.sql):
+    //   conversation_id, sender_type, content_type, content_text,
+    //   media_url, template_name, message_id, status, created_at
     const { data: messageRecord, error: msgError } = await supabase
       .from('messages')
       .insert({
         conversation_id,
-        user_id: user.id,
-        whatsapp_message_id: waMessageId,
-        direction: 'outbound',
-        message_type,
+        sender_type: 'agent',
+        content_type: message_type,
         content_text: content_text || null,
         media_url: media_url || null,
+        template_name: template_name || null,
+        message_id: waMessageId,
         status: 'sent',
-        timestamp: new Date().toISOString(),
       })
       .select()
       .single()
@@ -141,7 +158,7 @@ export async function POST(request: Request) {
     if (msgError) {
       console.error('Error inserting sent message:', msgError)
       return NextResponse.json(
-        { error: 'Message sent but failed to save to database' },
+        { error: `Message sent to Meta but failed to save to DB: ${msgError.message}` },
         { status: 500 }
       )
     }
