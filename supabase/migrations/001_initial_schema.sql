@@ -1,10 +1,16 @@
+-- ============================================================
+-- Idempotent migration — safe to run multiple times.
+-- Uses IF NOT EXISTS for tables/indexes and DROP IF EXISTS
+-- for policies/triggers (Postgres has no CREATE POLICY IF NOT EXISTS).
+-- ============================================================
+
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
 -- PROFILES
 -- ============================================================
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT NOT NULL,
@@ -17,6 +23,9 @@ CREATE TABLE profiles (
 );
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
 CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = user_id);
@@ -24,7 +33,7 @@ CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (
 -- ============================================================
 -- CONTACTS
 -- ============================================================
-CREATE TABLE contacts (
+CREATE TABLE IF NOT EXISTS contacts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   phone TEXT NOT NULL,
@@ -36,16 +45,17 @@ CREATE TABLE contacts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_contacts_user_id ON contacts(user_id);
-CREATE INDEX idx_contacts_phone ON contacts(phone);
+CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(phone);
 
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own contacts" ON contacts;
 CREATE POLICY "Users can manage own contacts" ON contacts FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- TAGS
 -- ============================================================
-CREATE TABLE tags (
+CREATE TABLE IF NOT EXISTS tags (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -54,12 +64,13 @@ CREATE TABLE tags (
 );
 
 ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own tags" ON tags;
 CREATE POLICY "Users can manage own tags" ON tags FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- CONTACT_TAGS (many-to-many)
 -- ============================================================
-CREATE TABLE contact_tags (
+CREATE TABLE IF NOT EXISTS contact_tags (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
   tag_id UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
@@ -67,17 +78,18 @@ CREATE TABLE contact_tags (
   UNIQUE(contact_id, tag_id)
 );
 
-CREATE INDEX idx_contact_tags_contact ON contact_tags(contact_id);
-CREATE INDEX idx_contact_tags_tag ON contact_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_contact_tags_contact ON contact_tags(contact_id);
+CREATE INDEX IF NOT EXISTS idx_contact_tags_tag ON contact_tags(tag_id);
 
 ALTER TABLE contact_tags ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage contact tags" ON contact_tags;
 CREATE POLICY "Users can manage contact tags" ON contact_tags FOR ALL
   USING (EXISTS (SELECT 1 FROM contacts WHERE contacts.id = contact_tags.contact_id AND contacts.user_id = auth.uid()));
 
 -- ============================================================
 -- CUSTOM_FIELDS
 -- ============================================================
-CREATE TABLE custom_fields (
+CREATE TABLE IF NOT EXISTS custom_fields (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   field_name TEXT NOT NULL,
@@ -87,12 +99,13 @@ CREATE TABLE custom_fields (
 );
 
 ALTER TABLE custom_fields ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own custom fields" ON custom_fields;
 CREATE POLICY "Users can manage own custom fields" ON custom_fields FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- CONTACT_CUSTOM_VALUES
 -- ============================================================
-CREATE TABLE contact_custom_values (
+CREATE TABLE IF NOT EXISTS contact_custom_values (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
   custom_field_id UUID NOT NULL REFERENCES custom_fields(id) ON DELETE CASCADE,
@@ -102,13 +115,14 @@ CREATE TABLE contact_custom_values (
 );
 
 ALTER TABLE contact_custom_values ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage custom values" ON contact_custom_values;
 CREATE POLICY "Users can manage custom values" ON contact_custom_values FOR ALL
   USING (EXISTS (SELECT 1 FROM contacts WHERE contacts.id = contact_custom_values.contact_id AND contacts.user_id = auth.uid()));
 
 -- ============================================================
 -- CONTACT_NOTES
 -- ============================================================
-CREATE TABLE contact_notes (
+CREATE TABLE IF NOT EXISTS contact_notes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -117,12 +131,13 @@ CREATE TABLE contact_notes (
 );
 
 ALTER TABLE contact_notes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own notes" ON contact_notes;
 CREATE POLICY "Users can manage own notes" ON contact_notes FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- CONVERSATIONS
 -- ============================================================
-CREATE TABLE conversations (
+CREATE TABLE IF NOT EXISTS conversations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
@@ -135,16 +150,17 @@ CREATE TABLE conversations (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_conversations_user_id ON conversations(user_id);
-CREATE INDEX idx_conversations_contact_id ON conversations(contact_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_contact_id ON conversations(contact_id);
 
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own conversations" ON conversations;
 CREATE POLICY "Users can manage own conversations" ON conversations FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- MESSAGES
 -- ============================================================
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   sender_type TEXT NOT NULL CHECK (sender_type IN ('customer', 'agent', 'bot')),
@@ -158,21 +174,20 @@ CREATE TABLE messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_messages_conversation ON messages(conversation_id);
-CREATE INDEX idx_messages_message_id ON messages(message_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
 
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own messages" ON messages;
+DROP POLICY IF EXISTS "Service role can insert messages" ON messages;
 CREATE POLICY "Users can view own messages" ON messages FOR ALL
   USING (EXISTS (SELECT 1 FROM conversations WHERE conversations.id = messages.conversation_id AND conversations.user_id = auth.uid()));
-
--- Service role bypass for webhook inserts
-CREATE POLICY "Service role can insert messages" ON messages FOR INSERT
-  WITH CHECK (true);
+CREATE POLICY "Service role can insert messages" ON messages FOR INSERT WITH CHECK (true);
 
 -- ============================================================
 -- WHATSAPP_CONFIG
 -- ============================================================
-CREATE TABLE whatsapp_config (
+CREATE TABLE IF NOT EXISTS whatsapp_config (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   phone_number_id TEXT NOT NULL,
@@ -187,12 +202,13 @@ CREATE TABLE whatsapp_config (
 );
 
 ALTER TABLE whatsapp_config ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own config" ON whatsapp_config;
 CREATE POLICY "Users can manage own config" ON whatsapp_config FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- MESSAGE_TEMPLATES
 -- ============================================================
-CREATE TABLE message_templates (
+CREATE TABLE IF NOT EXISTS message_templates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -209,12 +225,13 @@ CREATE TABLE message_templates (
 );
 
 ALTER TABLE message_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own templates" ON message_templates;
 CREATE POLICY "Users can manage own templates" ON message_templates FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- PIPELINES
 -- ============================================================
-CREATE TABLE pipelines (
+CREATE TABLE IF NOT EXISTS pipelines (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -222,12 +239,13 @@ CREATE TABLE pipelines (
 );
 
 ALTER TABLE pipelines ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own pipelines" ON pipelines;
 CREATE POLICY "Users can manage own pipelines" ON pipelines FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- PIPELINE_STAGES
 -- ============================================================
-CREATE TABLE pipeline_stages (
+CREATE TABLE IF NOT EXISTS pipeline_stages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   pipeline_id UUID NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -236,16 +254,17 @@ CREATE TABLE pipeline_stages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_pipeline_stages_pipeline ON pipeline_stages(pipeline_id);
+CREATE INDEX IF NOT EXISTS idx_pipeline_stages_pipeline ON pipeline_stages(pipeline_id);
 
 ALTER TABLE pipeline_stages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage pipeline stages" ON pipeline_stages;
 CREATE POLICY "Users can manage pipeline stages" ON pipeline_stages FOR ALL
   USING (EXISTS (SELECT 1 FROM pipelines WHERE pipelines.id = pipeline_stages.pipeline_id AND pipelines.user_id = auth.uid()));
 
 -- ============================================================
 -- DEALS
 -- ============================================================
-CREATE TABLE deals (
+CREATE TABLE IF NOT EXISTS deals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   pipeline_id UUID NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
@@ -262,16 +281,17 @@ CREATE TABLE deals (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_deals_pipeline ON deals(pipeline_id);
-CREATE INDEX idx_deals_stage ON deals(stage_id);
+CREATE INDEX IF NOT EXISTS idx_deals_pipeline ON deals(pipeline_id);
+CREATE INDEX IF NOT EXISTS idx_deals_stage ON deals(stage_id);
 
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own deals" ON deals;
 CREATE POLICY "Users can manage own deals" ON deals FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- BROADCASTS
 -- ============================================================
-CREATE TABLE broadcasts (
+CREATE TABLE IF NOT EXISTS broadcasts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -292,12 +312,13 @@ CREATE TABLE broadcasts (
 );
 
 ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own broadcasts" ON broadcasts;
 CREATE POLICY "Users can manage own broadcasts" ON broadcasts FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================
 -- BROADCAST_RECIPIENTS
 -- ============================================================
-CREATE TABLE broadcast_recipients (
+CREATE TABLE IF NOT EXISTS broadcast_recipients (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   broadcast_id UUID NOT NULL REFERENCES broadcasts(id) ON DELETE CASCADE,
   contact_id UUID NOT NULL REFERENCES contacts(id),
@@ -310,9 +331,10 @@ CREATE TABLE broadcast_recipients (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_broadcast_recipients_broadcast ON broadcast_recipients(broadcast_id);
+CREATE INDEX IF NOT EXISTS idx_broadcast_recipients_broadcast ON broadcast_recipients(broadcast_id);
 
 ALTER TABLE broadcast_recipients ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage broadcast recipients" ON broadcast_recipients;
 CREATE POLICY "Users can manage broadcast recipients" ON broadcast_recipients FOR ALL
   USING (EXISTS (SELECT 1 FROM broadcasts WHERE broadcasts.id = broadcast_recipients.broadcast_id AND broadcasts.user_id = auth.uid()));
 
@@ -327,7 +349,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply to tables with updated_at
+-- Apply to tables with updated_at — drop existing triggers first to avoid conflicts
+DROP TRIGGER IF EXISTS set_updated_at ON profiles;
+DROP TRIGGER IF EXISTS set_updated_at ON contacts;
+DROP TRIGGER IF EXISTS set_updated_at ON conversations;
+DROP TRIGGER IF EXISTS set_updated_at ON whatsapp_config;
+DROP TRIGGER IF EXISTS set_updated_at ON message_templates;
+DROP TRIGGER IF EXISTS set_updated_at ON deals;
+DROP TRIGGER IF EXISTS set_updated_at ON broadcasts;
+
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON contacts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -338,22 +368,55 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON broadcasts FOR EACH ROW EXECUTE F
 
 -- ============================================================
 -- AUTO-CREATE PROFILE ON USER SIGNUP
+-- Uses SECURITY DEFINER with owner=postgres (bypasses RLS).
+-- EXCEPTION block ensures signup still succeeds even if profile
+-- insert fails — profile can be created later if needed.
 -- ============================================================
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
-  INSERT INTO profiles (user_id, full_name, email)
-  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', ''), NEW.email);
+  INSERT INTO public.profiles (user_id, full_name, email)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+    NEW.email
+  );
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'Failed to create profile for user %: %', NEW.id, SQLERRM;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
+
+ALTER FUNCTION public.handle_new_user() OWNER TO postgres;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ============================================================
--- ENABLE REALTIME for key tables
+-- ENABLE REALTIME for key tables (idempotent via DO block)
 -- ============================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'conversations'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+  END IF;
+END $$;
