@@ -22,6 +22,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./message-bubble";
 import { MessageComposer } from "./message-composer";
+import { toast } from "sonner";
 
 interface MessageThreadProps {
   conversation: Conversation | null;
@@ -29,6 +30,7 @@ interface MessageThreadProps {
   messages: Message[];
   onMessagesLoaded: (messages: Message[]) => void;
   onNewMessage: (message: Message) => void;
+  onUpdateMessage: (id: string, updates: Partial<Message>) => void;
   onStatusChange: (conversationId: string, status: ConversationStatus) => void;
 }
 
@@ -68,6 +70,7 @@ export function MessageThread({
   messages,
   onMessagesLoaded,
   onNewMessage,
+  onUpdateMessage,
   onStatusChange,
 }: MessageThreadProps) {
   const [loading, setLoading] = useState(false);
@@ -169,9 +172,11 @@ export function MessageThread({
     async (text: string) => {
       if (!conversation) return;
 
-      // Optimistic update
+      const tempId = `temp-${Date.now()}`;
+
+      // Optimistic update — shows the message immediately with "sending" status
       const optimisticMsg: Message = {
-        id: `temp-${Date.now()}`,
+        id: tempId,
         conversation_id: conversation.id,
         sender_type: "agent",
         content_type: "text",
@@ -192,14 +197,29 @@ export function MessageThread({
           }),
         });
 
+        const payload = await res.json().catch(() => ({}));
+
         if (!res.ok) {
-          console.error("Failed to send message");
+          const reason = payload?.error || `HTTP ${res.status}`;
+          console.error("Failed to send message:", reason);
+          toast.error(`Failed to send: ${reason}`);
+          // Mark the optimistic bubble as failed so the user sees what happened
+          onUpdateMessage(tempId, { status: "failed" });
+          return;
         }
+
+        // Success — the realtime INSERT event will replace the temp bubble
+        // with the real DB row. If realtime hasn't arrived yet, at least
+        // flip status to 'sent' so the UI stops showing "sending".
+        onUpdateMessage(tempId, { status: "sent" });
       } catch (err) {
         console.error("Failed to send message:", err);
+        const reason = err instanceof Error ? err.message : "network error";
+        toast.error(`Failed to send: ${reason}`);
+        onUpdateMessage(tempId, { status: "failed" });
       }
     },
-    [conversation, onNewMessage]
+    [conversation, onNewMessage, onUpdateMessage]
   );
 
   const handleStatusChange = useCallback(
