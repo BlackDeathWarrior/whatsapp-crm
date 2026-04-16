@@ -16,43 +16,79 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient();
-
-  const fetchProfile = useCallback(
-    async (userId: string) => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, avatar_url")
-        .eq("id", userId)
-        .single();
-
-      if (data) {
-        setProfile(data);
-      }
-    },
-    [supabase]
-  );
-
   useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    const supabase = createClient();
+    let mounted = true;
 
-      setUser(user);
-
-      if (user) {
-        await fetchProfile(user.id);
+    // Safety net: if something hangs, surface it instead of an infinite spinner.
+    const safetyTimer = setTimeout(() => {
+      if (mounted) {
+        console.warn("[useAuth] getUser() timed out after 10s, clearing loading state");
+        setLoading(false);
       }
+    }, 10000);
 
-      setLoading(false);
+    const fetchProfile = async (userId: string) => {
+      try {
+        // profiles.user_id (NOT profiles.id) references auth.users.id
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name, email, avatar_url")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (error) {
+          console.error("[useAuth] fetchProfile error:", {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          });
+          return;
+        }
+
+        if (data && mounted) {
+          setProfile(data);
+        }
+      } catch (err) {
+        console.error("[useAuth] fetchProfile threw:", err);
+      }
     };
 
-    getUser();
+    const init = async () => {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
+
+        if (error) {
+          // AuthSessionMissingError is expected when not logged in — don't log as error
+          if (error.name !== "AuthSessionMissingError") {
+            console.error("[useAuth] getUser error:", error.message);
+          }
+        }
+
+        if (!mounted) return;
+        setUser(user);
+
+        if (user) {
+          await fetchProfile(user.id);
+        }
+      } catch (err) {
+        console.error("[useAuth] init threw:", err);
+      } finally {
+        if (mounted) setLoading(false);
+        clearTimeout(safetyTimer);
+      }
+    };
+
+    init();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
       const currentUser = session?.user ?? null;
       setUser(currentUser);
 
@@ -66,16 +102,21 @@ export function useAuth() {
     });
 
     return () => {
+      mounted = false;
+      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
-  }, [supabase, fetchProfile]);
+    // Intentionally run once on mount — createClient() is a singleton
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const signOut = useCallback(async () => {
+    const supabase = createClient();
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
     window.location.href = "/login";
-  }, [supabase]);
+  }, []);
 
   return { user, profile, loading, signOut };
 }
