@@ -101,36 +101,61 @@ export function MessageThread({
     return { expired, remaining };
   }, [messages]);
 
-  const fetchMessages = useCallback(async () => {
-    if (!conversation) return;
-    setLoading(true);
+  // Store latest callback in a ref so fetchMessages doesn't need to
+  // depend on `onMessagesLoaded` — otherwise parent re-renders cause
+  // fetchMessages to change → useEffect re-fires → refetch → realtime
+  // UPDATE on conversations.unread_count → parent re-renders → LOOP.
+  const onMessagesLoadedRef = useRef(onMessagesLoaded);
+  onMessagesLoadedRef.current = onMessagesLoaded;
 
-    const supabase = createClient();
-
-    const { data, error } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("conversation_id", conversation.id)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      console.error("Failed to fetch messages:", error);
-    } else {
-      onMessagesLoaded(data ?? []);
-    }
-
-    // Reset unread count
-    await supabase
-      .from("conversations")
-      .update({ unread_count: 0 })
-      .eq("id", conversation.id);
-
-    setLoading(false);
-  }, [conversation, onMessagesLoaded]);
+  const conversationId = conversation?.id;
+  const hasUnread = (conversation?.unread_count ?? 0) > 0;
 
   useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+    if (!conversationId) return;
+
+    const supabase = createClient();
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Failed to fetch messages:", error);
+      } else {
+        onMessagesLoadedRef.current(data ?? []);
+      }
+
+      // Only issue the unread_count reset when there's actually something
+      // to reset. Unconditional updates fire a realtime UPDATE event every
+      // time, which — combined with the parent's conversation-event handler
+      // — used to retrigger this effect in a loop.
+      if (hasUnread) {
+        await supabase
+          .from("conversations")
+          .update({ unread_count: 0 })
+          .eq("id", conversationId);
+      }
+
+      if (!cancelled) setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Re-fetch only when the selected conversation changes. `hasUnread`
+    // is used inside but is a boolean derived from conversation; the
+    // conversationId dep is the real trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
