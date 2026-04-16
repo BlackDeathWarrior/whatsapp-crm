@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils'
+import {
+  sanitizePhoneForMeta,
+  isValidE164,
+  phoneVariants,
+  isRecipientNotAllowedError,
+} from '@/lib/whatsapp/phone-utils'
 
 interface BroadcastResult {
   phone: string
@@ -77,30 +82,55 @@ export async function POST(request: Request) {
         continue
       }
 
-      try {
-        const result = await sendTemplateMessage(
-          accessToken,
-          config.phone_number_id,
-          sanitized,
-          template_name,
-          template_params || [],
-          template_language || 'en_US'
-        )
+      // Correct sendTemplateMessage signature is:
+      //   (phoneNumberId, accessToken, to, templateName, language?, params?)
+      // Previously the args were passed in the wrong order (accessToken first,
+      // params before language), which made Meta reject every broadcast.
+      //
+      // Retry with phone variants on "not in allowed list" so numbers that
+      // differ only in a trunk-prefix 0 still reach recipients.
+      const variants = phoneVariants(sanitized)
+      let sentMessageId: string | null = null
+      let lastError: string | null = null
 
+      for (const variant of variants) {
+        try {
+          const result = await sendTemplateMessage(
+            config.phone_number_id,
+            accessToken,
+            variant,
+            template_name,
+            template_language || 'en_US',
+            template_params || []
+          )
+          sentMessageId = result.messageId
+          lastError = null
+          break
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error'
+          if (!isRecipientNotAllowedError(errorMessage)) {
+            lastError = errorMessage
+            break // unrelated error — stop retrying
+          }
+          lastError = errorMessage
+          // retry with next variant
+        }
+      }
+
+      if (sentMessageId) {
         results.push({
           phone,
           status: 'sent',
-          whatsapp_message_id: result.messageId,
+          whatsapp_message_id: sentMessageId,
         })
         sentCount++
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error'
-        console.error(`Failed to send broadcast to ${phone}:`, error)
+      } else {
+        console.error(`Failed to send broadcast to ${phone}:`, lastError)
         results.push({
           phone,
           status: 'failed',
-          error: errorMessage,
+          error: lastError || 'Unknown error',
         })
         failedCount++
       }

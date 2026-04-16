@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils'
+import {
+  sanitizePhoneForMeta,
+  isValidE164,
+  phoneVariants,
+  isRecipientNotAllowedError,
+} from '@/lib/whatsapp/phone-utils'
 
 export async function POST(request: Request) {
   try {
@@ -99,41 +104,79 @@ export async function POST(request: Request) {
 
     const accessToken = decrypt(config.access_token)
 
-    // Send via Meta API
-    // Function signatures are:
-    //   sendTextMessage(phoneNumberId, accessToken, to, text)
-    //   sendTemplateMessage(phoneNumberId, accessToken, to, templateName, language?, params?)
-    // The args were previously swapped (accessToken before phoneNumberId),
-    // causing Meta to reject every send.
-    let waMessageId: string
+    // Send via Meta API — retry with phone-number variants if Meta rejects
+    // with "recipient not in allowed list" (common in sandbox / when a
+    // number was registered with/without a trunk 0). If an alternate
+    // format succeeds, we persist it back to the contact row so the
+    // next send goes through on the first attempt.
+    let waMessageId = ''
+    let workingPhone = sanitizedPhone
 
-    try {
+    const attempt = async (phone: string): Promise<string> => {
       if (message_type === 'template') {
         const result = await sendTemplateMessage(
           config.phone_number_id,
           accessToken,
-          sanitizedPhone,
+          phone,
           template_name,
-          undefined, // use default language (en_US)
+          undefined, // default language (en_US)
           template_params || []
         )
-        waMessageId = result.messageId
-      } else {
-        const result = await sendTextMessage(
-          config.phone_number_id,
-          accessToken,
-          sanitizedPhone,
-          content_text
-        )
-        waMessageId = result.messageId
+        return result.messageId
       }
+      const result = await sendTextMessage(
+        config.phone_number_id,
+        accessToken,
+        phone,
+        content_text
+      )
+      return result.messageId
+    }
+
+    try {
+      const variants = phoneVariants(sanitizedPhone)
+      let lastError: unknown = null
+
+      for (const variant of variants) {
+        try {
+          waMessageId = await attempt(variant)
+          workingPhone = variant
+          lastError = null
+          break
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          // Only retry when the failure is specifically that the
+          // recipient isn't in Meta's allowed list. Any other error
+          // (bad token, invalid template, etc.) bubbles up immediately.
+          if (!isRecipientNotAllowedError(message)) {
+            throw err
+          }
+          lastError = err
+          console.warn(`[whatsapp/send] variant "${variant}" rejected by Meta, trying next…`)
+        }
+      }
+
+      if (lastError) throw lastError
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown Meta API error'
-      console.error('Meta API send failed:', message)
+      console.error('Meta API send failed for all variants:', message)
       return NextResponse.json(
         { error: `Meta API error: ${message}` },
         { status: 502 }
       )
+    }
+
+    // If a non-original variant succeeded, update the contact so future
+    // sends go straight through. sanitizePhoneForMeta on workingPhone
+    // will yield workingPhone itself, so re-storing preserves it.
+    if (workingPhone !== sanitizedPhone) {
+      console.log(
+        `[whatsapp/send] Auto-corrected contact phone: ${sanitizedPhone} → ${workingPhone}`
+      )
+      await supabase
+        .from('contacts')
+        .update({ phone: workingPhone })
+        .eq('id', contact.id)
     }
 
     // Insert message into DB — field names MUST match the messages schema
