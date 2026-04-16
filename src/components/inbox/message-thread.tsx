@@ -1,0 +1,330 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
+import type { Conversation, Message, Contact, ConversationStatus } from "@/types";
+import {
+  MessageSquare,
+  ChevronDown,
+  UserPlus,
+  Clock,
+} from "lucide-react";
+import { format, isToday, isYesterday, differenceInHours } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { MessageBubble } from "./message-bubble";
+import { MessageComposer } from "./message-composer";
+
+interface MessageThreadProps {
+  conversation: Conversation | null;
+  contact: Contact | null;
+  messages: Message[];
+  onMessagesLoaded: (messages: Message[]) => void;
+  onNewMessage: (message: Message) => void;
+  onStatusChange: (conversationId: string, status: ConversationStatus) => void;
+}
+
+function formatDateSeparator(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isToday(date)) return "Today";
+  if (isYesterday(date)) return "Yesterday";
+  return format(date, "MMMM d, yyyy");
+}
+
+function groupMessagesByDate(messages: Message[]) {
+  const groups: { date: string; messages: Message[] }[] = [];
+  let currentDate = "";
+
+  for (const msg of messages) {
+    const day = format(new Date(msg.created_at), "yyyy-MM-dd");
+    if (day !== currentDate) {
+      currentDate = day;
+      groups.push({ date: msg.created_at, messages: [msg] });
+    } else {
+      groups[groups.length - 1].messages.push(msg);
+    }
+  }
+
+  return groups;
+}
+
+const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string }[] = [
+  { label: "Open", value: "open", color: "text-emerald-400" },
+  { label: "Pending", value: "pending", color: "text-amber-400" },
+  { label: "Closed", value: "closed", color: "text-slate-400" },
+];
+
+export function MessageThread({
+  conversation,
+  contact,
+  messages,
+  onMessagesLoaded,
+  onNewMessage,
+  onStatusChange,
+}: MessageThreadProps) {
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+
+  // 24-hour session timer
+  const sessionInfo = useMemo(() => {
+    if (!messages.length) return { expired: false, remaining: "" };
+
+    // Find last customer message
+    const lastCustomerMsg = [...messages]
+      .reverse()
+      .find((m) => m.sender_type === "customer");
+
+    if (!lastCustomerMsg) return { expired: true, remaining: "No customer messages" };
+
+    const hoursSince = differenceInHours(new Date(), new Date(lastCustomerMsg.created_at));
+    const expired = hoursSince >= 24;
+
+    if (expired) {
+      return { expired: true, remaining: "Expired" };
+    }
+
+    const hoursLeft = 24 - hoursSince;
+    const remaining =
+      hoursLeft >= 1
+        ? `${Math.floor(hoursLeft)}h remaining`
+        : `${Math.floor(hoursLeft * 60)}m remaining`;
+
+    return { expired, remaining };
+  }, [messages]);
+
+  const fetchMessages = useCallback(async () => {
+    if (!conversation) return;
+    setLoading(true);
+
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("conversation_id", conversation.id)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Failed to fetch messages:", error);
+    } else {
+      onMessagesLoaded(data ?? []);
+    }
+
+    // Reset unread count
+    await supabase
+      .from("conversations")
+      .update({ unread_count: 0 })
+      .eq("id", conversation.id);
+
+    setLoading(false);
+  }, [conversation, onMessagesLoaded]);
+
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    if (scrollRef.current) {
+      const el = scrollRef.current;
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = useCallback(
+    async (text: string) => {
+      if (!conversation) return;
+
+      // Optimistic update
+      const optimisticMsg: Message = {
+        id: `temp-${Date.now()}`,
+        conversation_id: conversation.id,
+        sender_type: "agent",
+        content_type: "text",
+        content_text: text,
+        status: "sending",
+        created_at: new Date().toISOString(),
+      };
+      onNewMessage(optimisticMsg);
+
+      try {
+        const res = await fetch("/api/whatsapp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversation_id: conversation.id,
+            message_type: "text",
+            content_text: text,
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("Failed to send message");
+        }
+      } catch (err) {
+        console.error("Failed to send message:", err);
+      }
+    },
+    [conversation, onNewMessage]
+  );
+
+  const handleStatusChange = useCallback(
+    async (status: ConversationStatus) => {
+      if (!conversation) return;
+
+      const supabase = createClient();
+      await supabase
+        .from("conversations")
+        .update({ status })
+        .eq("id", conversation.id);
+
+      onStatusChange(conversation.id, status);
+    },
+    [conversation, onStatusChange]
+  );
+
+  const handleOpenTemplates = useCallback(() => {
+    setTemplateModalOpen(true);
+    // Template modal implementation would go here
+  }, []);
+
+  // Empty state
+  if (!conversation || !contact) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center bg-slate-950">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-800">
+          <MessageSquare className="h-8 w-8 text-slate-600" />
+        </div>
+        <h3 className="mt-4 text-sm font-medium text-slate-400">
+          Select a conversation
+        </h3>
+        <p className="mt-1 text-xs text-slate-600">
+          Choose a conversation from the left to start messaging
+        </p>
+      </div>
+    );
+  }
+
+  const displayName = contact.name || contact.phone;
+  const messageGroups = groupMessagesByDate(messages);
+  const currentStatus = STATUS_OPTIONS.find(
+    (s) => s.value === conversation.status
+  );
+
+  return (
+    <div className="flex flex-1 flex-col bg-slate-950">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
+            {displayName.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">{displayName}</h2>
+            <p className="text-xs text-slate-400">{contact.phone}</p>
+          </div>
+          {/* Session timer badge */}
+          <Badge
+            variant="outline"
+            className={cn(
+              "ml-2 gap-1 border-slate-700 text-[10px]",
+              sessionInfo.expired ? "text-red-400" : "text-emerald-400"
+            )}
+          >
+            <Clock className="h-3 w-3" />
+            {sessionInfo.remaining}
+          </Badge>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Status dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className={cn(
+                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-slate-800",
+                  currentStatus?.color ?? "text-slate-400"
+                )}>
+                {currentStatus?.label ?? "Status"}
+                <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="border-slate-700 bg-slate-800"
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => handleStatusChange(opt.value)}
+                  className={cn("text-sm", opt.color)}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Assign button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 text-xs text-slate-400 hover:text-white"
+          >
+            <UserPlus className="h-3 w-3" />
+            Assign
+          </Button>
+        </div>
+      </div>
+
+      {/* Messages Area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <p className="text-sm text-slate-500">No messages yet</p>
+            <p className="text-xs text-slate-600">
+              Send a template to start the conversation
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {messageGroups.map((group) => (
+              <div key={group.date}>
+                {/* Date separator */}
+                <div className="mb-4 flex items-center justify-center">
+                  <span className="rounded-full bg-slate-800 px-3 py-1 text-[10px] font-medium text-slate-400">
+                    {formatDateSeparator(group.date)}
+                  </span>
+                </div>
+                {/* Messages */}
+                <div className="space-y-2">
+                  {group.messages.map((msg) => (
+                    <MessageBubble key={msg.id} message={msg} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Composer */}
+      <MessageComposer
+        conversationId={conversation.id}
+        sessionExpired={sessionInfo.expired}
+        onSend={handleSend}
+        onOpenTemplates={handleOpenTemplates}
+      />
+    </div>
+  );
+}

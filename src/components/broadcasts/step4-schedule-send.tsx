@@ -1,0 +1,256 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { MessageTemplate } from '@/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { ArrowLeft, Send, Clock, Loader2, Users, Lock } from 'lucide-react';
+
+interface AudienceConfig {
+  type: string;
+  tagIds?: string[];
+  csvContacts?: { phone: string; name?: string }[];
+}
+
+interface Step4Props {
+  name: string;
+  onNameChange: (name: string) => void;
+  template: MessageTemplate;
+  audience: AudienceConfig;
+  onSend: () => void;
+  onBack: () => void;
+  isProcessing: boolean;
+  progress: number;
+}
+
+export function Step4ScheduleSend({
+  name,
+  onNameChange,
+  template,
+  audience,
+  onSend,
+  onBack,
+  isProcessing,
+  progress,
+}: Step4Props) {
+  const [timing, setTiming] = useState<'now' | 'later'>('now');
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [estimatedReach, setEstimatedReach] = useState<number>(0);
+  const [loadingReach, setLoadingReach] = useState(true);
+
+  useEffect(() => {
+    async function calculateReach() {
+      setLoadingReach(true);
+      try {
+        const supabase = createClient();
+
+        if (audience.type === 'all') {
+          const { count } = await supabase
+            .from('contacts')
+            .select('*', { count: 'exact', head: true });
+          setEstimatedReach(count ?? 0);
+        } else if (audience.type === 'tags' && audience.tagIds && audience.tagIds.length > 0) {
+          const { data: contactTags } = await supabase
+            .from('contact_tags')
+            .select('contact_id')
+            .in('tag_id', audience.tagIds);
+
+          const uniqueIds = new Set((contactTags ?? []).map((ct) => ct.contact_id));
+          setEstimatedReach(uniqueIds.size);
+        } else if (audience.type === 'csv' && audience.csvContacts) {
+          setEstimatedReach(audience.csvContacts.length);
+        } else {
+          setEstimatedReach(0);
+        }
+      } finally {
+        setLoadingReach(false);
+      }
+    }
+
+    calculateReach();
+  }, [audience]);
+
+  const audienceLabel =
+    audience.type === 'all'
+      ? 'All Contacts'
+      : audience.type === 'tags'
+        ? `Tags (${audience.tagIds?.length ?? 0} selected)`
+        : audience.type === 'csv'
+          ? 'CSV Upload'
+          : 'Custom';
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-white">Review & Send</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Name your broadcast, review the details, and send.
+        </p>
+      </div>
+
+      {/* Broadcast Name */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-white">Broadcast Name</label>
+        <Input
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="e.g. Summer Sale Announcement"
+          className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500"
+        />
+      </div>
+
+      {/* Summary Card */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-3">
+        <p className="text-sm font-medium text-white">Summary</p>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-slate-400">Template</p>
+            <p className="text-white">{template.name}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Audience</p>
+            <p className="text-white">{audienceLabel}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Estimated Reach</p>
+            <div className="flex items-center gap-1.5">
+              {loadingReach ? (
+                <Loader2 className="h-3 w-3 animate-spin text-emerald-500" />
+              ) : (
+                <>
+                  <Users className="h-3.5 w-3.5 text-emerald-400" />
+                  <p className="font-medium text-white">{estimatedReach.toLocaleString()}</p>
+                </>
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Language</p>
+            <p className="text-white">{template.language ?? 'en_US'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Delivery Timing */}
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-white">Delivery Timing</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <button
+            onClick={() => setTiming('now')}
+            className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${
+              timing === 'now'
+                ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/30'
+                : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
+            }`}
+          >
+            <Send className={`mt-0.5 h-4 w-4 ${timing === 'now' ? 'text-emerald-400' : 'text-slate-400'}`} />
+            <div>
+              <p className="text-sm font-medium text-white">Send Immediately</p>
+              <p className="mt-0.5 text-xs text-slate-400">Start sending right away</p>
+            </div>
+          </button>
+
+          <div className="relative flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/30 p-4 opacity-60">
+            <Clock className="mt-0.5 h-4 w-4 text-slate-500" />
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-slate-400">Schedule for Later</p>
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400">
+                  <Lock className="h-2.5 w-2.5" />
+                  Pro
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-500">Pick a date and time</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Processing overlay */}
+      {isProcessing && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+              <p className="text-sm font-medium text-white">Sending broadcast...</p>
+            </div>
+            <span className="text-xs font-medium text-emerald-400">{progress}%</span>
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-slate-800">
+            <div
+              className="h-1.5 rounded-full bg-emerald-500 transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between border-t border-slate-800 pt-4">
+        <Button
+          variant="outline"
+          onClick={onBack}
+          disabled={isProcessing}
+          className="border-slate-700 text-slate-300"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+
+        <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+          <DialogTrigger
+            render={
+              <Button
+                disabled={!name.trim() || isProcessing}
+                className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              />
+            }
+          >
+            <Send className="h-4 w-4" />
+            Send Broadcast
+          </DialogTrigger>
+          <DialogContent className="border-slate-700 bg-slate-900 sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-white">Confirm Broadcast</DialogTitle>
+              <DialogDescription className="text-slate-400">
+                You are about to send this broadcast to{' '}
+                <span className="font-medium text-white">{estimatedReach.toLocaleString()}</span>{' '}
+                contacts using the{' '}
+                <span className="font-medium text-white">{template.name}</span> template.
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirm(false)}
+                className="border-slate-700 text-slate-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowConfirm(false);
+                  onSend();
+                }}
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                <Send className="h-4 w-4" />
+                Confirm & Send
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  );
+}
