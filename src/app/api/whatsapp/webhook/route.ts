@@ -184,13 +184,13 @@ async function handleStatusUpdate(status: {
   timestamp: string
   recipient_id: string
 }) {
+  // The messages table schema uses `message_id` (not whatsapp_message_id)
+  // and has no `updated_at` column. Meta's status values (sent/delivered/
+  // read/failed) already match our CHECK constraint.
   const { error } = await supabaseAdmin()
     .from('messages')
-    .update({
-      status: status.status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('whatsapp_message_id', status.id)
+    .update({ status: status.status })
+    .eq('message_id', status.id)
 
   if (error) {
     console.error('Error updating message status:', error)
@@ -227,18 +227,23 @@ async function processMessage(
   )
   if (!conversation) return
 
-  // Insert message
+  // Insert message — field names MUST match the messages table schema
+  // (see supabase/migrations/001_initial_schema.sql):
+  //   conversation_id, sender_type, content_type, content_text,
+  //   media_url, template_name, message_id, status, created_at
+  // `mediaType` is intentionally unused — the schema has no media_type
+  // column; the MIME type is only used to construct the proxy URL during
+  // parseMessageContent. Silence the unused-var warning:
+  void mediaType
   const { error: msgError } = await supabaseAdmin().from('messages').insert({
     conversation_id: conversation.id,
-    user_id: userId,
-    whatsapp_message_id: message.id,
-    direction: 'inbound',
-    message_type: message.type,
+    sender_type: 'customer',
+    content_type: message.type,
     content_text: contentText,
     media_url: mediaUrl,
-    media_type: mediaType,
-    status: 'received',
-    timestamp: new Date(parseInt(message.timestamp) * 1000).toISOString(),
+    message_id: message.id,
+    status: 'delivered',
+    created_at: new Date(parseInt(message.timestamp) * 1000).toISOString(),
   })
 
   if (msgError) {
