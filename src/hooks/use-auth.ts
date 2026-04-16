@@ -20,13 +20,14 @@ export function useAuth() {
     const supabase = createClient();
     let mounted = true;
 
-    // Safety net: if something hangs, surface it instead of an infinite spinner.
+    // Safety net: 3s is plenty for localStorage reads. If it hangs here,
+    // something else is wrong (likely storage permissions in an iframe).
     const safetyTimer = setTimeout(() => {
       if (mounted) {
-        console.warn("[useAuth] getUser() timed out after 10s, clearing loading state");
+        console.warn("[useAuth] getSession() timed out after 3s, clearing loading state");
         setLoading(false);
       }
-    }, 10000);
+    }, 3000);
 
     const fetchProfile = async (userId: string) => {
       try {
@@ -57,23 +58,25 @@ export function useAuth() {
 
     const init = async () => {
       try {
+        // getSession() reads from localStorage — instant, no network call.
+        // The middleware already validates the JWT server-side with getUser()
+        // on every request, and RLS enforces authorization at the DB level,
+        // so the client can trust the local session for UI purposes.
         const {
-          data: { user },
+          data: { session },
           error,
-        } = await supabase.auth.getUser();
+        } = await supabase.auth.getSession();
 
         if (error) {
-          // AuthSessionMissingError is expected when not logged in — don't log as error
-          if (error.name !== "AuthSessionMissingError") {
-            console.error("[useAuth] getUser error:", error.message);
-          }
+          console.error("[useAuth] getSession error:", error.message);
         }
 
         if (!mounted) return;
-        setUser(user);
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
 
-        if (user) {
-          await fetchProfile(user.id);
+        if (currentUser) {
+          await fetchProfile(currentUser.id);
         }
       } catch (err) {
         console.error("[useAuth] init threw:", err);
