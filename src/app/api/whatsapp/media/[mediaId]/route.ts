@@ -48,10 +48,13 @@ export async function GET(
     const accessToken = decrypt(config.access_token)
 
     // Get the download URL from Meta
-    const mediaInfo = await getMediaUrl(mediaId, accessToken)
+    const mediaInfo = await getMediaUrl({ mediaId, accessToken })
 
     // Download the binary data
-    const { buffer, contentType } = await downloadMedia(mediaInfo.url, accessToken)
+    const { buffer, contentType } = await downloadMedia({
+      downloadUrl: mediaInfo.url,
+      accessToken,
+    })
 
     return new Response(new Uint8Array(buffer), {
       status: 200,

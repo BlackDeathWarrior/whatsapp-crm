@@ -95,14 +95,14 @@ export async function POST(request: Request) {
 
       for (const variant of variants) {
         try {
-          const result = await sendTemplateMessage(
-            config.phone_number_id,
+          const result = await sendTemplateMessage({
+            phoneNumberId: config.phone_number_id,
             accessToken,
-            variant,
-            template_name,
-            template_language || 'en_US',
-            template_params || []
-          )
+            to: variant,
+            templateName: template_name,
+            language: template_language || 'en_US',
+            params: template_params || [],
+          })
           sentMessageId = result.messageId
           lastError = null
           break

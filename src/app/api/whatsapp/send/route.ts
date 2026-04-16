@@ -114,22 +114,21 @@ export async function POST(request: Request) {
 
     const attempt = async (phone: string): Promise<string> => {
       if (message_type === 'template') {
-        const result = await sendTemplateMessage(
-          config.phone_number_id,
+        const result = await sendTemplateMessage({
+          phoneNumberId: config.phone_number_id,
           accessToken,
-          phone,
-          template_name,
-          undefined, // default language (en_US)
-          template_params || []
-        )
+          to: phone,
+          templateName: template_name,
+          params: template_params || [],
+        })
         return result.messageId
       }
-      const result = await sendTextMessage(
-        config.phone_number_id,
+      const result = await sendTextMessage({
+        phoneNumberId: config.phone_number_id,
         accessToken,
-        phone,
-        content_text
-      )
+        to: phone,
+        text: content_text,
+      })
       return result.messageId
     }
 

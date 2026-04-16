@@ -298,7 +298,7 @@ async function parseMessageContent(
     mediaId: string
   ): Promise<string | null> => {
     try {
-      await getMediaUrl(mediaId, accessToken)
+      await getMediaUrl({ mediaId, accessToken })
       return `/api/whatsapp/media/${mediaId}`
     } catch (error) {
       console.error(
