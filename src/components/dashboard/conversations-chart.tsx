@@ -106,8 +106,14 @@ function LineSvg({
   maxY: number
   ticks: number[]
 }) {
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  // Hover state: both the snapped index AND the tooltip's pixel
+  // offset inside the wrapper div. They're stored together so the
+  // tooltip positions against the chart's actual rendered pixels,
+  // not against a raw viewBox percentage. See the precision note on
+  // the onMove handler below.
+  const [hover, setHover] = useState<{ idx: number; tooltipLeftPx: number } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
 
   const chartW = VB_W - PADDING.left - PADDING.right
   const chartH = VB_H - PADDING.top - PADDING.bottom
@@ -123,40 +129,67 @@ function LineSvg({
   const incomingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.incoming)}`).join(' ')
   const outgoingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.outgoing)}`).join(' ')
 
-  // Mouse-move: snap to nearest data-point index.
+  // Mouse-move: use the SVG's current screen-CTM to map clientX
+  // back to viewBox coordinates. The previous rect-based math
+  // assumed the viewBox filled the SVG DOM box linearly, but
+  // `preserveAspectRatio="xMidYMid meet"` (the SVG default)
+  // letterboxes the content horizontally when the container is
+  // wider than the viewBox aspect — so hover snapped hundreds of
+  // pixels off on wide layouts. CTM-inverse correctly accounts for
+  // letterboxing, scaling, and any future transform changes.
   useEffect(() => {
     const svg = svgRef.current
-    if (!svg) return
+    const wrap = wrapRef.current
+    if (!svg || !wrap) return
     const onMove = (e: MouseEvent) => {
-      const rect = svg.getBoundingClientRect()
-      const xPct = (e.clientX - rect.left) / rect.width
-      const xPx = xPct * VB_W
-      if (xPx < PADDING.left - 8 || xPx > VB_W - PADDING.right + 8) {
-        setHoverIdx(null)
+      const ctm = svg.getScreenCTM()
+      if (!ctm) return
+      const pt = svg.createSVGPoint()
+      pt.x = e.clientX
+      pt.y = e.clientY
+      const local = pt.matrixTransform(ctm.inverse())
+      const xVb = local.x
+      if (xVb < PADDING.left - 8 || xVb > VB_W - PADDING.right + 8) {
+        setHover(null)
         return
       }
-      const local = xPx - PADDING.left
-      const idx = Math.round(stepX === 0 ? 0 : local / stepX)
-      setHoverIdx(Math.max(0, Math.min(data.length - 1, idx)))
+      const relative = xVb - PADDING.left
+      const idx = Math.max(
+        0,
+        Math.min(data.length - 1, Math.round(stepX === 0 ? 0 : relative / stepX)),
+      )
+      // Map the snapped data-point's viewBox x back to screen, then
+      // subtract the wrapper's left edge — that pixel offset is what
+      // the absolutely-positioned tooltip div consumes. `xFor` is
+      // inlined here so the effect deps stay stable (it's a closure
+      // that'd otherwise be a new reference every render).
+      const dataPointVbX = PADDING.left + idx * stepX
+      const dataPointPt = svg.createSVGPoint()
+      dataPointPt.x = dataPointVbX
+      dataPointPt.y = 0
+      const screen = dataPointPt.matrixTransform(ctm)
+      const wrapRect = wrap.getBoundingClientRect()
+      setHover({ idx, tooltipLeftPx: screen.x - wrapRect.left })
     }
-    const onLeave = () => setHoverIdx(null)
+    const onLeave = () => setHover(null)
     svg.addEventListener('mousemove', onMove)
     svg.addEventListener('mouseleave', onLeave)
     return () => {
       svg.removeEventListener('mousemove', onMove)
       svg.removeEventListener('mouseleave', onLeave)
     }
+    // xFor + yFor close over stepX, so stepX covers them.
   }, [data, stepX])
 
-  const hovered = hoverIdx !== null ? data[hoverIdx] : null
-  const hoverX = hoverIdx !== null ? xFor(hoverIdx) : 0
+  const hovered = hover !== null ? data[hover.idx] : null
+  const hoverX = hover !== null ? xFor(hover.idx) : 0
 
   // X-axis label strategy: show ~6 evenly-spaced labels regardless
   // of range so the axis never looks crowded.
   const labelStride = Math.max(1, Math.ceil(data.length / 6))
 
   return (
-    <div className="relative w-full">
+    <div ref={wrapRef} className="relative w-full">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
@@ -225,7 +258,7 @@ function LineSvg({
         />
 
         {/* Hover crosshair */}
-        {hoverIdx !== null && (
+        {hover !== null && (
           <g pointerEvents="none">
             <line
               x1={hoverX}
@@ -235,17 +268,20 @@ function LineSvg({
               stroke="rgb(71 85 105)"
               strokeDasharray="3 3"
             />
-            <circle cx={hoverX} cy={yFor(data[hoverIdx].incoming)} r={3.5} fill="#3b82f6" />
-            <circle cx={hoverX} cy={yFor(data[hoverIdx].outgoing)} r={3.5} fill="#10b981" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="#3b82f6" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill="#10b981" />
           </g>
         )}
       </svg>
 
-      {/* Tooltip — absolute-positioned div so we get crisp text, not SVG */}
-      {hovered && hoverIdx !== null && (
+      {/* Tooltip — absolute-positioned div so we get crisp text, not
+          SVG-rendered text. The left offset comes from the CTM-based
+          mapping so it lines up with the actual crosshair pixel, not a
+          letterboxed viewBox percentage. */}
+      {hovered && hover !== null && (
         <div
           className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-[11px] shadow-lg"
-          style={{ left: `${(hoverX / VB_W) * 100}%` }}
+          style={{ left: `${hover.tooltipLeftPx}px` }}
         >
           <div className="font-medium text-white">{longDayLabel(hovered.day)}</div>
           <div className="mt-1 flex flex-col gap-0.5">
