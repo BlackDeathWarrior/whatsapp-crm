@@ -33,7 +33,12 @@ export const AUTOMATION_TEMPLATES: Record<TemplateSlug, AutomationTemplateDefini
     slug: 'welcome_message',
     name: 'Welcome Message',
     description: 'Auto-reply to first-time contacts with a greeting.',
-    trigger_type: 'new_contact_created',
+    // first_inbound_message (added in PR #33) catches both brand-new
+    // contacts AND manually-added/imported contacts on their first-ever
+    // reply, which is what a user setting up a "welcome" automation
+    // almost always wants. new_contact_created would miss the
+    // manually-imported case.
+    trigger_type: 'first_inbound_message',
     trigger_config: {},
     steps: [
       {
