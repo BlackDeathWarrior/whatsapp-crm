@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Conversation, Message, Contact, ConversationStatus } from "@/types";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -11,6 +12,15 @@ import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 
 export default function InboxPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  /**
+   * `?c=<id>` deep-link support. Used when landing here from the
+   * dashboard's recent-conversations list so the right thread opens
+   * automatically instead of showing the empty center panel.
+   */
+  const deepLinkConvId = searchParams.get("c");
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] =
     useState<Conversation | null>(null);
@@ -19,6 +29,12 @@ export default function InboxPage() {
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
     null
   );
+
+  // Fire the deep-link auto-select exactly once per URL — subsequent
+  // list refreshes (realtime, manual refetch) must not snap the user
+  // back to the deep-linked conversation if they've already clicked
+  // elsewhere.
+  const autoSelectedForDeepLinkRef = useRef<string | null>(null);
 
   // Check WhatsApp connection status on mount
   useEffect(() => {
@@ -135,8 +151,26 @@ export default function InboxPage() {
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
       setConversations(loaded);
+      // Resolve a pending deep-link here rather than in an effect — this
+      // is an event handler, so the setState calls below are allowed by
+      // react-hooks/set-state-in-effect. Runs once per ?c=<id> URL value
+      // via the ref, so realtime refreshes of the list can't snap the
+      // user back to the deep-linked thread after they've navigated.
+      if (
+        deepLinkConvId &&
+        autoSelectedForDeepLinkRef.current !== deepLinkConvId &&
+        loaded.length > 0
+      ) {
+        autoSelectedForDeepLinkRef.current = deepLinkConvId;
+        const match = loaded.find((c) => c.id === deepLinkConvId);
+        if (match) {
+          setActiveConversation(match);
+          setActiveContact(match.contact ?? null);
+          setMessages([]);
+        }
+      }
     },
-    []
+    [deepLinkConvId]
   );
 
   const handleSelectConversation = useCallback(
@@ -149,9 +183,14 @@ export default function InboxPage() {
       setActiveConversation(conv);
       setActiveContact(conv.contact ?? null);
       setMessages([]);
+      // Reflect the selection in the URL so a refresh lands the user
+      // back in the same thread, and so copy-paste links work. Use
+      // replace() to avoid polluting browser history with every click.
+      router.replace(`/inbox?c=${conv.id}`, { scroll: false });
     },
-    [activeConversation?.id]
+    [activeConversation?.id, router]
   );
+
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
     setMessages(loaded);
