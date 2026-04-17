@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -98,6 +98,7 @@ export function TemplateManager() {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [form, setForm] = useState<TemplateFormData>(emptyForm);
 
   useEffect(() => {
@@ -176,6 +177,40 @@ export function TemplateManager() {
     }
   }
 
+  /**
+   * Pull approved templates from Meta and upsert them into the local
+   * catalog. After this runs, every local row is guaranteed to match
+   * something Meta will actually accept on send — stops users getting
+   * stuck on error #132001 "Template name does not exist".
+   */
+  async function handleSyncFromMeta() {
+    if (!user) return;
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/whatsapp/templates/sync', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || `Sync failed (HTTP ${res.status})`);
+      }
+      toast.success(
+        `Synced ${data.total} template${data.total === 1 ? '' : 's'} from Meta` +
+          (data.inserted || data.updated
+            ? ` (${data.inserted} new, ${data.updated} updated)`
+            : ''),
+      );
+      await fetchTemplates(user.id);
+    } catch (err) {
+      console.error('Template sync error:', err);
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to sync templates',
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function handleDelete(id: string) {
     try {
       const { error } = await supabase
@@ -202,21 +237,39 @@ export function TemplateManager() {
 
   return (
     <div className="space-y-4 mt-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-white">Message Templates</h2>
-          <p className="text-sm text-slate-400">Create and manage your WhatsApp message templates.</p>
+          <p className="text-sm text-slate-400">
+            Create and manage your WhatsApp message templates. Meta requires
+            every template to be approved in the WhatsApp Manager before it can
+            be sent — use &quot;Sync from Meta&quot; to pull your approved list.
+          </p>
         </div>
-        <Button
-          onClick={() => {
-            setForm(emptyForm);
-            setDialogOpen(true);
-          }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white"
-        >
-          <Plus className="size-4" />
-          New Template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleSyncFromMeta}
+            disabled={syncing}
+            className="border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800"
+            title="Pull approved templates from your Meta WhatsApp Business Account"
+          >
+            <RefreshCw
+              className={`size-4 ${syncing ? 'animate-spin' : ''}`}
+            />
+            {syncing ? 'Syncing…' : 'Sync from Meta'}
+          </Button>
+          <Button
+            onClick={() => {
+              setForm(emptyForm);
+              setDialogOpen(true);
+            }}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            <Plus className="size-4" />
+            New Template
+          </Button>
+        </div>
       </div>
 
       {templates.length === 0 ? (

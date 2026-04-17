@@ -31,7 +31,9 @@ import {
   Filter,
   Download,
   ChevronDown,
+  Trash2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   getBroadcastStatus,
   getRecipientStatus,
@@ -151,6 +153,8 @@ export default function BroadcastDetailPage() {
   const [statusFilter, setStatusFilter] = useState<RecipientStatus | 'all'>(
     'all',
   );
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -219,6 +223,26 @@ export default function BroadcastDetailPage() {
     downloadBlob(`broadcast-${safeName}-${broadcastId.slice(0, 8)}.csv`, csv);
   }
 
+  async function handleDelete() {
+    setDeleting(true);
+    const supabase = createClient();
+    // broadcast_recipients cascades on broadcasts.id (migration 001), so a
+    // single delete is sufficient — the aggregate trigger in migration 003
+    // is defined on broadcast_recipients but fires only on its own row
+    // changes, not on a cascaded drop of the parent row.
+    const { error: delErr } = await supabase
+      .from('broadcasts')
+      .delete()
+      .eq('id', broadcastId);
+    setDeleting(false);
+    if (delErr) {
+      toast.error(`Failed to delete: ${delErr.message}`);
+      return;
+    }
+    toast.success('Broadcast deleted');
+    router.push('/broadcasts');
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -250,7 +274,7 @@ export default function BroadcastDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-4">
           <Button
             variant="outline"
@@ -278,6 +302,49 @@ export default function BroadcastDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Delete — inline-confirm pattern matches the pipeline-settings
+            "Delete Pipeline" flow. Mid-send broadcasts can't be deleted
+            because orphaning in-flight Meta messages would leave the
+            funnel inconsistent. */}
+        {confirmDelete ? (
+          <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm">
+            <span className="text-red-300">Delete this broadcast?</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+              className="h-7 border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="h-7 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleting ? 'Deleting…' : 'Confirm'}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={broadcast.status === 'sending'}
+            onClick={() => setConfirmDelete(true)}
+            title={
+              broadcast.status === 'sending'
+                ? 'Cannot delete while a broadcast is actively sending'
+                : 'Delete this broadcast'
+            }
+            className="border-red-500/30 bg-transparent text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </Button>
+        )}
       </div>
 
       {/* Stats — 6 cards: Total / Sent / Delivered / Read / Replied / Failed */}
