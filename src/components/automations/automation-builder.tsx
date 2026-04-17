@@ -106,8 +106,13 @@ const ADDABLE_STEPS: AutomationStepType[] = [
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; hint: string }[] = [
   { value: "new_message_received", label: "New Message Received", hint: "Any incoming message" },
+  {
+    value: "first_inbound_message",
+    label: "First Message from Contact",
+    hint: "First time this contact ever messages you (works for manually-added contacts too)",
+  },
   { value: "keyword_match", label: "Keyword Match", hint: "Message contains specific keyword(s)" },
-  { value: "new_contact_created", label: "New Contact Created", hint: "When a contact is auto-created" },
+  { value: "new_contact_created", label: "New Contact Created", hint: "When a contact is auto-created from an incoming message" },
   { value: "conversation_assigned", label: "Conversation Assigned", hint: "When assigned to an agent" },
   { value: "tag_added", label: "Tag Added", hint: "When a tag is added to a contact" },
   { value: "time_based", label: "Time-Based", hint: "On a recurring schedule" },

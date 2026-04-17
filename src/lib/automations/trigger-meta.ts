@@ -11,6 +11,10 @@ export const TRIGGER_META: Record<AutomationTriggerType, TriggerMeta> = {
     label: 'New Message',
     pillClass: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
   },
+  first_inbound_message: {
+    label: 'First Message from Contact',
+    pillClass: 'border-teal-500/30 bg-teal-500/10 text-teal-300',
+  },
   keyword_match: {
     label: 'Keyword Match',
     pillClass: 'border-purple-500/30 bg-purple-500/10 text-purple-300',

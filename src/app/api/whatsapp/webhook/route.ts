@@ -383,6 +383,17 @@ async function processMessage(
       ? 'image'   // stickers are images
       : 'text'    // reaction, unknown → text fallback
 
+  // Determine whether this is the contact's very first inbound message
+  // BEFORE we insert, so the count is accurate. Covers the case where
+  // the contact row already exists (manual add / CSV import) but they've
+  // never messaged us before — which new_contact_created wouldn't catch.
+  const { count: priorCustomerMsgCount } = await supabaseAdmin()
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversation.id)
+    .eq('sender_type', 'customer')
+  const isFirstInboundMessage = (priorCustomerMsgCount ?? 0) === 0
+
   const { error: msgError } = await supabaseAdmin().from('messages').insert({
     conversation_id: conversation.id,
     sender_type: 'customer',
@@ -425,10 +436,20 @@ async function processMessage(
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
   const inboundText = contentText ?? message.text?.body ?? ''
-  const automationTriggers: ('new_contact_created' | 'new_message_received' | 'keyword_match')[] =
-    contactOutcome.wasCreated
-      ? ['new_contact_created', 'new_message_received', 'keyword_match']
-      : ['new_message_received', 'keyword_match']
+  const automationTriggers: (
+    | 'new_contact_created'
+    | 'first_inbound_message'
+    | 'new_message_received'
+    | 'keyword_match'
+  )[] = ['new_message_received', 'keyword_match']
+  // new_contact_created fires only when the webhook just auto-created the
+  // contact row. first_inbound_message fires whenever this is the contact's
+  // first-ever customer-sent message — a superset that also catches
+  // manually-imported contacts sending for the first time. We dispatch both
+  // so users can pick whichever semantic they want; an automation that
+  // listens to only one trigger runs only when that trigger matches.
+  if (contactOutcome.wasCreated) automationTriggers.unshift('new_contact_created')
+  if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
   for (const triggerType of automationTriggers) {
     runAutomationsForTrigger({
       userId,
