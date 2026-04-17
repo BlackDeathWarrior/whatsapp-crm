@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Broadcast, BroadcastRecipient } from '@/types';
+import { Broadcast, BroadcastRecipient, RecipientStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -14,6 +14,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   ArrowLeft,
   Loader2,
   Users,
@@ -21,6 +27,10 @@ import {
   CheckCheck,
   Eye,
   AlertCircle,
+  MessageCircle,
+  Filter,
+  Download,
+  ChevronDown,
 } from 'lucide-react';
 import {
   getBroadcastStatus,
@@ -51,6 +61,84 @@ function StatCard({ label, value, total, icon, color }: StatCardProps) {
   );
 }
 
+interface FunnelStep {
+  label: string;
+  value: number;
+  color: string;
+}
+
+/**
+ * Pure-CSS funnel chart: decreasing-width rounded bars.
+ * Width is relative to the largest step (typically Sent) so we
+ * always render a full bar at the top and proportional tails.
+ */
+function FunnelChart({ steps }: { steps: FunnelStep[] }) {
+  const max = Math.max(...steps.map((s) => s.value), 1);
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+      <h3 className="mb-4 text-sm font-medium text-white">Funnel</h3>
+      <div className="space-y-2">
+        {steps.map((step) => {
+          const pctOfMax = Math.max(5, Math.round((step.value / max) * 100));
+          const pctOfSent =
+            steps[0].value > 0
+              ? Math.round((step.value / steps[0].value) * 100)
+              : 0;
+          return (
+            <div key={step.label} className="flex items-center gap-3">
+              <span className="w-20 shrink-0 text-xs text-slate-400">
+                {step.label}
+              </span>
+              <div className="relative h-7 flex-1 rounded-full bg-slate-800">
+                <div
+                  className={`h-7 rounded-full ${step.color} transition-[width] duration-500`}
+                  style={{ width: `${pctOfMax}%` }}
+                />
+                <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-white">
+                  {step.value.toLocaleString()}
+                  <span className="ml-2 text-slate-300/80">
+                    ({pctOfSent}%)
+                  </span>
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const RECIPIENT_STATUSES: readonly RecipientStatus[] = [
+  'pending',
+  'sent',
+  'delivered',
+  'read',
+  'replied',
+  'failed',
+];
+
+/**
+ * CSV export helper — RFC 4180 quoting. Quote every field so
+ * commas/newlines/quotes round-trip cleanly.
+ */
+function toCsv(rows: string[][]): string {
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  return rows.map((r) => r.map(escape).join(',')).join('\n');
+}
+
+function downloadBlob(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export default function BroadcastDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -60,6 +148,9 @@ export default function BroadcastDetailPage() {
   const [recipients, setRecipients] = useState<BroadcastRecipient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<RecipientStatus | 'all'>(
+    'all',
+  );
 
   useEffect(() => {
     async function fetchData() {
@@ -93,6 +184,41 @@ export default function BroadcastDetailPage() {
     fetchData();
   }, [broadcastId]);
 
+  const filteredRecipients = useMemo(
+    () =>
+      statusFilter === 'all'
+        ? recipients
+        : recipients.filter((r) => r.status === statusFilter),
+    [recipients, statusFilter],
+  );
+
+  function handleExport() {
+    if (!broadcast) return;
+    const header = [
+      'Contact',
+      'Phone',
+      'Status',
+      'Sent At',
+      'Delivered At',
+      'Read At',
+      'Replied At',
+      'Error',
+    ];
+    const rows = recipients.map((r) => [
+      r.contact?.name ?? '',
+      r.contact?.phone ?? '',
+      r.status,
+      r.sent_at ?? '',
+      r.delivered_at ?? '',
+      r.read_at ?? '',
+      r.replied_at ?? '',
+      r.error_message ?? '',
+    ]);
+    const csv = toCsv([header, ...rows]);
+    const safeName = broadcast.name.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase();
+    downloadBlob(`broadcast-${safeName}-${broadcastId.slice(0, 8)}.csv`, csv);
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -113,6 +239,13 @@ export default function BroadcastDetailPage() {
   }
 
   const status = getBroadcastStatus(broadcast.status);
+
+  const funnelSteps: FunnelStep[] = [
+    { label: 'Sent', value: broadcast.sent_count, color: 'bg-emerald-500' },
+    { label: 'Delivered', value: broadcast.delivered_count, color: 'bg-teal-500' },
+    { label: 'Read', value: broadcast.read_count, color: 'bg-blue-500' },
+    { label: 'Replied', value: broadcast.replied_count, color: 'bg-indigo-500' },
+  ];
 
   return (
     <div className="space-y-6">
@@ -139,14 +272,16 @@ export default function BroadcastDetailPage() {
             <div className="mt-1 flex items-center gap-3 text-sm text-slate-400">
               <span>Template: {broadcast.template_name}</span>
               <span>-</span>
-              <span>Created {new Date(broadcast.created_at).toLocaleDateString()}</span>
+              <span>
+                Created {new Date(broadcast.created_at).toLocaleDateString()}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Stats — 6 cards: Total / Sent / Delivered / Read / Replied / Failed */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard
           label="Total Recipients"
           value={broadcast.total_recipients}
@@ -159,21 +294,28 @@ export default function BroadcastDetailPage() {
           value={broadcast.sent_count}
           total={broadcast.total_recipients}
           icon={<Send className="h-4 w-4" />}
-          color="bg-blue-500/10 text-blue-400"
+          color="bg-emerald-500/10 text-emerald-400"
         />
         <StatCard
           label="Delivered"
           value={broadcast.delivered_count}
           total={broadcast.total_recipients}
           icon={<CheckCheck className="h-4 w-4" />}
-          color="bg-emerald-500/10 text-emerald-400"
+          color="bg-teal-500/10 text-teal-400"
         />
         <StatCard
           label="Read"
           value={broadcast.read_count}
           total={broadcast.total_recipients}
           icon={<Eye className="h-4 w-4" />}
-          color="bg-emerald-500/10 text-emerald-300"
+          color="bg-blue-500/10 text-blue-400"
+        />
+        <StatCard
+          label="Replied"
+          value={broadcast.replied_count}
+          total={broadcast.total_recipients}
+          icon={<MessageCircle className="h-4 w-4" />}
+          color="bg-indigo-500/10 text-indigo-400"
         />
         <StatCard
           label="Failed"
@@ -184,60 +326,134 @@ export default function BroadcastDetailPage() {
         />
       </div>
 
+      <FunnelChart steps={funnelSteps} />
+
       {/* Recipients Table */}
       <div className="rounded-xl border border-slate-800 bg-slate-900">
-        <div className="border-b border-slate-800 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
           <h2 className="text-sm font-medium text-white">
-            Recipients ({recipients.length})
+            Recipients ({filteredRecipients.length}
+            {statusFilter !== 'all' ? ` of ${recipients.length}` : ''})
           </h2>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                  />
+                }
+              >
+                <Filter className="h-3.5 w-3.5" />
+                {statusFilter === 'all'
+                  ? 'All statuses'
+                  : getRecipientStatus(statusFilter).label}
+                <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="border-slate-700 bg-slate-900">
+                <DropdownMenuItem
+                  onClick={() => setStatusFilter('all')}
+                  className={
+                    statusFilter === 'all' ? 'text-emerald-400' : 'text-slate-300'
+                  }
+                >
+                  All statuses
+                </DropdownMenuItem>
+                {RECIPIENT_STATUSES.map((s) => (
+                  <DropdownMenuItem
+                    key={s}
+                    onClick={() => setStatusFilter(s)}
+                    className={
+                      statusFilter === s
+                        ? 'text-emerald-400'
+                        : 'text-slate-300'
+                    }
+                  >
+                    {getRecipientStatus(s).label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={recipients.length === 0}
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </Button>
+          </div>
         </div>
-        {recipients.length === 0 ? (
+
+        {filteredRecipients.length === 0 ? (
           <div className="flex h-32 items-center justify-center">
-            <p className="text-sm text-slate-400">No recipients found.</p>
+            <p className="text-sm text-slate-400">
+              {recipients.length === 0
+                ? 'No recipients found.'
+                : 'No recipients match this filter.'}
+            </p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="border-slate-800 hover:bg-transparent">
-                <TableHead className="text-slate-400">Contact</TableHead>
-                <TableHead className="text-slate-400">Phone</TableHead>
-                <TableHead className="text-slate-400">Status</TableHead>
-                <TableHead className="text-slate-400">Sent At</TableHead>
-                <TableHead className="text-slate-400">Error</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recipients.map((recipient) => {
-                const rStatus = getRecipientStatus(recipient.status);
-
-                return (
-                  <TableRow key={recipient.id} className="border-slate-800">
-                    <TableCell className="font-medium text-white">
-                      {recipient.contact?.name ?? 'Unknown'}
-                    </TableCell>
-                    <TableCell className="text-slate-300">
-                      {recipient.contact?.phone ?? '-'}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${rStatus.classes}`}
-                      >
-                        {rStatus.label}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-slate-400">
-                      {recipient.sent_at
-                        ? new Date(recipient.sent_at).toLocaleString()
-                        : '-'}
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate text-xs text-red-400">
-                      {recipient.error_message ?? '-'}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-800 hover:bg-transparent">
+                  <TableHead className="text-slate-400">Contact</TableHead>
+                  <TableHead className="text-slate-400">Phone</TableHead>
+                  <TableHead className="text-slate-400">Status</TableHead>
+                  <TableHead className="text-slate-400">Sent</TableHead>
+                  <TableHead className="text-slate-400">Delivered</TableHead>
+                  <TableHead className="text-slate-400">Read</TableHead>
+                  <TableHead className="text-slate-400">Error</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRecipients.map((recipient) => {
+                  const rStatus = getRecipientStatus(recipient.status);
+                  return (
+                    <TableRow key={recipient.id} className="border-slate-800">
+                      <TableCell className="font-medium text-white">
+                        {recipient.contact?.name ?? 'Unknown'}
+                      </TableCell>
+                      <TableCell className="text-slate-300">
+                        {recipient.contact?.phone ?? '-'}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${rStatus.classes}`}
+                        >
+                          {rStatus.label}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-slate-400">
+                        {recipient.sent_at
+                          ? new Date(recipient.sent_at).toLocaleString()
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-slate-400">
+                        {recipient.delivered_at
+                          ? new Date(recipient.delivered_at).toLocaleString()
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-slate-400">
+                        {recipient.read_at
+                          ? new Date(recipient.read_at).toLocaleString()
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate text-xs text-red-400">
+                        {recipient.error_message ?? '-'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
     </div>
