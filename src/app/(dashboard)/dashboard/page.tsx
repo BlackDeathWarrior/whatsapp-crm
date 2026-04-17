@@ -177,8 +177,14 @@ export default function DashboardPage() {
       <QuickActions />
 
       {/* Charts row */}
+      {/* items-stretch (the grid default) stretches the two columns to
+          match the tallest sibling; adding h-full on each wrapper and
+          on the inner panels makes both cards actually fill that
+          stretched height so their rounded borders line up. Without
+          this, the pipeline card rendered at its natural (shorter)
+          height while the line chart drove the row height. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div className="lg:col-span-3">
+        <div className="h-full lg:col-span-3">
           <ConversationsChart
             series={series}
             loading={seriesLoading}
@@ -186,7 +192,7 @@ export default function DashboardPage() {
             onRangeChange={handleRangeChange}
           />
         </div>
-        <div className="lg:col-span-2">
+        <div className="h-full lg:col-span-2">
           <PipelineDonut data={pipeline} loading={pipelineLoading} />
         </div>
       </div>
