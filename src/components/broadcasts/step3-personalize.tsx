@@ -111,6 +111,24 @@ export function Step3Personalize({
     return [...new Set(matches)].sort();
   }, [template.body_text]);
 
+  /**
+   * A placeholder is "unmapped" if the user hasn't picked either a
+   * static value or a field/custom-field source. Blocks Next until
+   * every placeholder has something — otherwise the broadcast would
+   * ship with empty strings and confuse recipients.
+   */
+  const unmappedKeys = useMemo(() => {
+    const missing: string[] = [];
+    for (const placeholder of placeholders) {
+      const key = placeholder.replace(/^\{\{|\}\}$/g, '');
+      const mapping = variables[key];
+      if (!mapping || !mapping.value?.trim()) {
+        missing.push(placeholder);
+      }
+    }
+    return missing;
+  }, [placeholders, variables]);
+
   function updateVariable(key: string, patch: Partial<VariableMapping>) {
     const current = variables[key] ?? { type: 'static' as VariableType, value: '' };
     onUpdate({
@@ -311,6 +329,16 @@ export function Step3Personalize({
         </div>
       </div>
 
+      {unmappedKeys.length > 0 && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          Map every placeholder before continuing — still missing{' '}
+          <span className="font-mono font-semibold">
+            {unmappedKeys.join(', ')}
+          </span>
+          . Otherwise those placeholders will ship to Meta as empty strings.
+        </div>
+      )}
+
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">
         <Button
           variant="outline"
@@ -322,7 +350,8 @@ export function Step3Personalize({
         </Button>
         <Button
           onClick={onNext}
-          className="bg-emerald-600 text-white hover:bg-emerald-700"
+          disabled={unmappedKeys.length > 0}
+          className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
         >
           Next
           <ArrowRight className="h-4 w-4" />

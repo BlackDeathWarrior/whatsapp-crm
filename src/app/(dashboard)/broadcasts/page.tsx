@@ -90,18 +90,38 @@ export default function BroadcastsPage() {
   );
 
   useEffect(() => {
-    // Start / stop the poller based on whether any row is sending.
-    if (anySending && !pollTimer.current) {
+    function startPolling() {
+      if (pollTimer.current) return;
       pollTimer.current = setInterval(fetchBroadcasts, POLL_INTERVAL_MS);
-    } else if (!anySending && pollTimer.current) {
+    }
+    function stopPolling() {
+      if (!pollTimer.current) return;
       clearInterval(pollTimer.current);
       pollTimer.current = null;
     }
-    return () => {
-      if (pollTimer.current) {
-        clearInterval(pollTimer.current);
-        pollTimer.current = null;
+
+    // Pause polling while the tab is hidden — keeps Supabase cold when
+    // the user is away, and ensures a fresh fetch the moment they
+    // refocus so they don't see stale data on return.
+    function handleVisibilityChange() {
+      if (!anySending) return;
+      if (document.visibilityState === 'hidden') {
+        stopPolling();
+      } else {
+        fetchBroadcasts();
+        startPolling();
       }
+    }
+
+    if (anySending && document.visibilityState === 'visible') {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [anySending]);
 
