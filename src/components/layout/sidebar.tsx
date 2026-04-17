@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useTotalUnread } from "@/hooks/use-total-unread";
 import {
   LayoutDashboard,
   MessageSquare,
@@ -31,6 +32,7 @@ const bottomNavItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
+  const totalUnread = useTotalUnread();
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-slate-800 bg-slate-900">
@@ -50,6 +52,13 @@ export function Sidebar() {
               pathname === item.href ||
               (item.href !== "/dashboard" && pathname.startsWith(item.href));
 
+            // Green dot on the Inbox entry when there are unread
+            // conversations AND the user isn't currently in /inbox (they'd
+            // be seeing the unread badges on the conversation list there,
+            // so the sidebar dot would be redundant).
+            const showUnreadDot =
+              item.href === "/inbox" && totalUnread > 0 && !isActive;
+
             return (
               <li key={item.href}>
                 <Link
@@ -62,7 +71,16 @@ export function Sidebar() {
                   )}
                 >
                   <item.icon className="h-4 w-4" />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {showUnreadDot && (
+                    <span
+                      aria-label={`${totalUnread} unread conversation${totalUnread === 1 ? "" : "s"}`}
+                      className="relative flex h-2 w-2"
+                    >
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                    </span>
+                  )}
                 </Link>
               </li>
             );
