@@ -189,6 +189,12 @@ export interface BroadcastRecipient {
   read_at?: string;
   replied_at?: string;
   error_message?: string;
+  /**
+   * Meta's message id, persisted when the broadcast send succeeds so
+   * the webhook can mirror status updates back onto the recipient row.
+   * Added in migration 003.
+   */
+  whatsapp_message_id?: string;
   created_at: string;
   contact?: Contact;
 }
