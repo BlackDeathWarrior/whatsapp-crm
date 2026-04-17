@@ -221,7 +221,18 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
 
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.error(body?.error ?? "Save failed")
+        // If the server blocked activation with validation issues,
+        // surface the first concrete problem so the user can fix it
+        // without opening DevTools for the full array.
+        const firstIssue: { path?: string; message?: string } | undefined =
+          body?.issues?.[0]
+        if (firstIssue?.message) {
+          toast.error(firstIssue.message, {
+            description: firstIssue.path ? `at ${firstIssue.path}` : undefined,
+          })
+        } else {
+          toast.error(body?.error ?? "Save failed")
+        }
         return
       }
       toast.success(isEditing ? "Automation saved" : "Automation created")
