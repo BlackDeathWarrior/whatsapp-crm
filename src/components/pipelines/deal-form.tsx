@@ -79,7 +79,9 @@ export function DealForm({
       setTitle(deal.title);
       setValue(String(deal.value ?? ""));
       setCurrency(deal.currency || "USD");
-      setContactId(deal.contact_id);
+      // contact_id is nullable when the contact has been deleted
+      // (migration 004: ON DELETE SET NULL). "" means "no selection".
+      setContactId(deal.contact_id ?? "");
       setStageId(deal.stage_id);
       setAssignedTo(deal.assigned_to ?? "");
       setExpectedCloseDate(deal.expected_close_date ?? "");

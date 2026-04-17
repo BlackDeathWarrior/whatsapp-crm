@@ -141,7 +141,11 @@ export interface Deal {
   user_id: string;
   pipeline_id: string;
   stage_id: string;
-  contact_id: string;
+  /**
+   * Nullable after migration 004 — becomes NULL when the referenced
+   * contact is deleted (ON DELETE SET NULL). History preserved.
+   */
+  contact_id: string | null;
   conversation_id?: string;
   assigned_to?: string;
   title: string;
@@ -182,7 +186,12 @@ export interface Broadcast {
 export interface BroadcastRecipient {
   id: string;
   broadcast_id: string;
-  contact_id: string;
+  /**
+   * Nullable after migration 004 — becomes NULL when the referenced
+   * contact is deleted (ON DELETE SET NULL). History preserved; the
+   * UI renders "Unknown" for orphaned rows.
+   */
+  contact_id: string | null;
   status: RecipientStatus;
   sent_at?: string;
   delivered_at?: string;
