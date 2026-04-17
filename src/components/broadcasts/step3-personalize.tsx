@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
-import { MessageTemplate } from '@/types';
+import { useEffect, useMemo, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { Contact, CustomField, MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -11,10 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Eye } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, Loader2 } from 'lucide-react';
+
+type VariableType = 'static' | 'field' | 'custom_field';
 
 interface VariableMapping {
-  type: 'static' | 'field';
+  type: VariableType;
   value: string;
 }
 
@@ -33,34 +36,102 @@ const contactFields = [
   { value: 'company', label: 'Company' },
 ];
 
-const sampleContact = {
+const SAMPLE_CONTACT: Contact = {
+  id: 'sample',
+  user_id: '',
   name: 'John Doe',
   phone: '+1234567890',
   email: 'john@example.com',
   company: 'Acme Corp',
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
 };
 
-export function Step3Personalize({ template, variables, onUpdate, onNext, onBack }: Step3Props) {
-  // Extract {{1}}, {{2}}, etc. from body_text
+export function Step3Personalize({
+  template,
+  variables,
+  onUpdate,
+  onNext,
+  onBack,
+}: Step3Props) {
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [loadingFields, setLoadingFields] = useState(true);
+  const [firstContact, setFirstContact] = useState<Contact | null>(null);
+  const [firstContactCustomValues, setFirstContactCustomValues] = useState<
+    Map<string, string>
+  >(new Map());
+  const [loadingPreview, setLoadingPreview] = useState(true);
+
+  // Load user's custom fields + a representative contact for the
+  // live preview. Fall back to sample data if no contacts exist yet.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const [fieldsRes, contactRes] = await Promise.all([
+        supabase.from('custom_fields').select('*').order('field_name'),
+        supabase
+          .from('contacts')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      if (cancelled) return;
+
+      setCustomFields(fieldsRes.data ?? []);
+      setLoadingFields(false);
+
+      const contact = contactRes.data ?? null;
+      setFirstContact(contact);
+
+      if (contact) {
+        const { data: customVals } = await supabase
+          .from('contact_custom_values')
+          .select('custom_field_id, value')
+          .eq('contact_id', contact.id);
+        if (!cancelled) {
+          const map = new Map<string, string>();
+          for (const row of customVals ?? []) {
+            map.set(row.custom_field_id, row.value ?? '');
+          }
+          setFirstContactCustomValues(map);
+        }
+      }
+      setLoadingPreview(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const placeholders = useMemo(() => {
     const matches = template.body_text.match(/\{\{(\d+)\}\}/g);
     if (!matches) return [];
     return [...new Set(matches)].sort();
   }, [template.body_text]);
 
-  function updateVariable(key: string, field: Partial<VariableMapping>) {
-    const current = variables[key] ?? { type: 'static', value: '' };
+  function updateVariable(key: string, patch: Partial<VariableMapping>) {
+    const current = variables[key] ?? { type: 'static' as VariableType, value: '' };
     onUpdate({
       ...variables,
-      [key]: { ...current, ...field },
+      [key]: { ...current, ...patch },
     });
   }
 
-  // Generate preview with sample data
+  /**
+   * Substitute placeholders using the first real contact where
+   * possible. Placeholders keyed by "{{N}}" map to variable key "N".
+   */
   const previewText = useMemo(() => {
+    const contact = firstContact ?? SAMPLE_CONTACT;
+    const customValues = firstContact
+      ? firstContactCustomValues
+      : new Map<string, string>();
+
     let text = template.body_text;
     for (const placeholder of placeholders) {
-      const key = placeholder;
+      const key = placeholder.replace(/^\{\{|\}\}$/g, '');
       const mapping = variables[key];
       let replacement = placeholder;
 
@@ -68,34 +139,59 @@ export function Step3Personalize({ template, variables, onUpdate, onNext, onBack
         if (mapping.type === 'static' && mapping.value) {
           replacement = mapping.value;
         } else if (mapping.type === 'field' && mapping.value) {
-          replacement = sampleContact[mapping.value as keyof typeof sampleContact] ?? placeholder;
+          const fieldMap: Record<string, string | undefined> = {
+            name: contact.name,
+            phone: contact.phone,
+            email: contact.email,
+            company: contact.company,
+          };
+          replacement = fieldMap[mapping.value] ?? placeholder;
+        } else if (mapping.type === 'custom_field' && mapping.value) {
+          replacement = customValues.get(mapping.value) || placeholder;
         }
       }
       text = text.replaceAll(placeholder, replacement);
     }
     return text;
-  }, [template.body_text, variables, placeholders]);
+  }, [
+    template.body_text,
+    variables,
+    placeholders,
+    firstContact,
+    firstContactCustomValues,
+  ]);
+
+  const previewLabel = firstContact
+    ? firstContact.name || firstContact.phone
+    : 'sample data';
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-white">Personalize Message</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Map template variables to contact fields or static values.
+          Map template variables to contact fields, custom fields, or static
+          values.
         </p>
       </div>
 
       {placeholders.length === 0 ? (
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 text-center">
-          <p className="text-sm text-slate-400">This template has no variables to personalize.</p>
+          <p className="text-sm text-slate-400">
+            This template has no variables to personalize.
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
           {placeholders.map((placeholder) => {
-            const mapping = variables[placeholder] ?? { type: 'static', value: '' };
+            const key = placeholder.replace(/^\{\{|\}\}$/g, '');
+            const mapping = variables[key] ?? { type: 'static', value: '' };
 
             return (
-              <div key={placeholder} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+              <div
+                key={placeholder}
+                className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"
+              >
                 <div className="mb-3 flex items-center gap-2">
                   <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-mono font-medium text-emerald-400">
                     {placeholder}
@@ -110,7 +206,10 @@ export function Step3Personalize({ template, variables, onUpdate, onNext, onBack
                     <Select
                       value={mapping.type}
                       onValueChange={(val) =>
-                        updateVariable(placeholder, { type: val as 'static' | 'field', value: '' })
+                        updateVariable(key, {
+                          type: val as VariableType,
+                          value: '',
+                        })
                       }
                     >
                       <SelectTrigger className="w-full border-slate-700 bg-slate-800 text-white">
@@ -119,6 +218,9 @@ export function Step3Personalize({ template, variables, onUpdate, onNext, onBack
                       <SelectContent className="border-slate-700 bg-slate-800">
                         <SelectItem value="static">Static Value</SelectItem>
                         <SelectItem value="field">Contact Field</SelectItem>
+                        <SelectItem value="custom_field">
+                          Custom Field
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -130,14 +232,18 @@ export function Step3Personalize({ template, variables, onUpdate, onNext, onBack
                     {mapping.type === 'static' ? (
                       <Input
                         value={mapping.value}
-                        onChange={(e) => updateVariable(placeholder, { value: e.target.value })}
+                        onChange={(e) =>
+                          updateVariable(key, { value: e.target.value })
+                        }
                         placeholder="Enter value..."
                         className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500"
                       />
-                    ) : (
+                    ) : mapping.type === 'field' ? (
                       <Select
                         value={mapping.value || undefined}
-                        onValueChange={(val) => updateVariable(placeholder, { value: val || '' })}
+                        onValueChange={(val) =>
+                          updateVariable(key, { value: val || '' })
+                        }
                       >
                         <SelectTrigger className="w-full border-slate-700 bg-slate-800 text-white">
                           <SelectValue placeholder="Select field..." />
@@ -146,6 +252,32 @@ export function Step3Personalize({ template, variables, onUpdate, onNext, onBack
                           {contactFields.map((field) => (
                             <SelectItem key={field.value} value={field.value}>
                               {field.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Select
+                        value={mapping.value || undefined}
+                        onValueChange={(val) =>
+                          updateVariable(key, { value: val || '' })
+                        }
+                      >
+                        <SelectTrigger className="w-full border-slate-700 bg-slate-800 text-white">
+                          <SelectValue
+                            placeholder={
+                              loadingFields
+                                ? 'Loading…'
+                                : customFields.length === 0
+                                  ? 'No custom fields'
+                                  : 'Select custom field…'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent className="border-slate-700 bg-slate-800">
+                          {customFields.map((f) => (
+                            <SelectItem key={f.id} value={f.id}>
+                              {f.field_name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -159,20 +291,32 @@ export function Step3Personalize({ template, variables, onUpdate, onNext, onBack
         </div>
       )}
 
-      {/* Preview */}
+      {/* Live Preview — rendered as a WhatsApp-style bubble so the user
+          sees approximately what the recipient will see. */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
         <div className="mb-3 flex items-center gap-2">
           <Eye className="h-4 w-4 text-emerald-400" />
-          <p className="text-sm font-medium text-white">Preview</p>
-          <span className="text-xs text-slate-500">(with sample data)</span>
+          <p className="text-sm font-medium text-white">Live Preview</p>
+          <span className="text-xs text-slate-500">({previewLabel})</span>
+          {loadingPreview && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" />
+          )}
         </div>
-        <div className="rounded-lg bg-slate-800/50 p-3">
-          <p className="whitespace-pre-wrap text-sm text-slate-200">{previewText}</p>
+        <div className="rounded-lg bg-[#0e1a12] p-3">
+          <div className="ml-auto max-w-[85%] rounded-lg bg-emerald-700/30 px-3 py-2 shadow-sm">
+            <p className="whitespace-pre-wrap text-sm text-emerald-50">
+              {previewText}
+            </p>
+          </div>
         </div>
       </div>
 
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">
-        <Button variant="outline" onClick={onBack} className="border-slate-700 text-slate-300">
+        <Button
+          variant="outline"
+          onClick={onBack}
+          className="border-slate-700 text-slate-300"
+        >
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
