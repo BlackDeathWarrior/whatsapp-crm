@@ -52,13 +52,22 @@ type SendInput =
 async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
 
+  // Scope the contact lookup by user_id. The engine uses the
+  // service-role client (bypassing RLS), and the public
+  // /api/automations/engine endpoint accepts contact_id from the
+  // request body — without this filter, an authenticated user could
+  // fire their own automations against another tenant's contact UUID
+  // and send via their own WhatsApp config to that contact's phone.
+  // Practical risk is low (UUIDs are unguessable) but the check is
+  // cheap defense-in-depth.
   const { data: contact, error: contactErr } = await db
     .from('contacts')
     .select('id, phone')
     .eq('id', input.contactId)
+    .eq('user_id', input.userId)
     .maybeSingle()
   if (contactErr || !contact?.phone) {
-    throw new Error('contact phone missing')
+    throw new Error('contact not found for this user')
   }
 
   const sanitized = sanitizePhoneForMeta(contact.phone)
