@@ -12,7 +12,7 @@ interface PipelineDonutProps {
 
 export function PipelineDonut({ data, loading }: PipelineDonutProps) {
   return (
-    <section className="flex flex-col rounded-xl border border-slate-800 bg-slate-900">
+    <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900">
       <header className="border-b border-slate-800 px-5 py-4">
         <h2 className="text-sm font-semibold text-white">Pipeline Value</h2>
         <p className="mt-0.5 text-xs text-slate-500">
