@@ -179,20 +179,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     } else if (audience.type === 'custom_field' && audience.customField) {
       contacts = await resolveCustomFieldAudience(supabase, audience.customField);
     } else if (audience.type === 'csv' && audience.csvContacts) {
-      // CSV path — contacts are synthesized client-side. Note the
-      // synthesized ids (`csv-N`) are NOT real DB ids; the send flow
-      // still works because the broadcast_recipients insert uses
-      // contact_id. For CSV we skip the recipient row path entirely
-      // at the API boundary (out of scope of this refactor — keeping
-      // prior behavior).
-      return audience.csvContacts.map((c, i) => ({
-        id: `csv-${i}`,
-        user_id: '',
-        phone: c.phone,
-        name: c.name,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }));
+      contacts = await upsertCsvContacts(supabase, audience.csvContacts);
     }
 
     // Apply exclude tags (works across all contact-derived audience
@@ -207,6 +194,84 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     }
 
     return contacts;
+  }
+
+  /**
+   * CSV uploads arrive as raw phone/name pairs, not DB rows. Before we
+   * can insert broadcast_recipients (whose contact_id FKs contacts.id),
+   * we need real contacts.id UUIDs. So: look up each CSV phone in the
+   * caller's contacts table; insert any that don't exist; return the
+   * resolved set.
+   *
+   * Pre-existing implementation synthesized `csv-N` strings as
+   * contact_id, which failed the UUID cast on insert — every CSV
+   * broadcast silently created zero recipients.
+   */
+  async function upsertCsvContacts(
+    supabase: ReturnType<typeof createClient>,
+    csvRows: { phone: string; name?: string }[],
+  ): Promise<Contact[]> {
+    if (csvRows.length === 0) return [];
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) {
+      throw new Error('You are not signed in.');
+    }
+
+    // De-duplicate by phone within the CSV (users can paste duplicates).
+    const uniqueByPhone = new Map<string, { phone: string; name?: string }>();
+    for (const row of csvRows) {
+      if (row.phone) uniqueByPhone.set(row.phone, row);
+    }
+    const phones = [...uniqueByPhone.keys()];
+
+    // Single round-trip lookup of existing contacts by phone.
+    const { data: existing, error: lookupErr } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('user_id', user.id)
+      .in('phone', phones);
+    if (lookupErr) {
+      throw new Error(`Failed to look up CSV contacts: ${lookupErr.message}`);
+    }
+
+    const byPhone = new Map<string, Contact>();
+    for (const c of (existing ?? []) as Contact[]) {
+      if (c.phone) byPhone.set(c.phone, c);
+    }
+
+    // Insert only missing contacts, in one batch per 200 rows (PostgREST
+    // has a default payload cap — 200 keeps individual requests small).
+    const missing = phones
+      .filter((p) => !byPhone.has(p))
+      .map((phone) => ({
+        user_id: user.id,
+        phone,
+        name: uniqueByPhone.get(phone)?.name ?? null,
+      }));
+
+    const INSERT_CHUNK = 200;
+    for (let i = 0; i < missing.length; i += INSERT_CHUNK) {
+      const chunk = missing.slice(i, i + INSERT_CHUNK);
+      const { data: inserted, error: insertErr } = await supabase
+        .from('contacts')
+        .insert(chunk)
+        .select();
+      if (insertErr) {
+        throw new Error(`Failed to create CSV contacts: ${insertErr.message}`);
+      }
+      for (const c of (inserted ?? []) as Contact[]) {
+        if (c.phone) byPhone.set(c.phone, c);
+      }
+    }
+
+    // Preserve input order so analytics roughly matches the CSV order.
+    return phones
+      .map((p) => byPhone.get(p))
+      .filter((c): c is Contact => Boolean(c));
   }
 
   async function resolveCustomFieldAudience(
@@ -317,7 +382,21 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           .from('broadcast_recipients')
           .insert(batch);
         if (recipientError) {
-          console.error('Failed to insert recipient batch:', recipientError);
+          // Previous impl logged and marched on — the broadcast then ran
+          // with an incomplete recipient set, so webhook status updates
+          // couldn't find some rows and the aggregate counts drifted.
+          // Flip the broadcast to failed so the user sees the problem
+          // immediately, then throw to abort the send loop.
+          await supabase
+            .from('broadcasts')
+            .update({
+              status: 'failed',
+              failed_count: contacts.length,
+            })
+            .eq('id', broadcast.id);
+          throw new Error(
+            `Failed to insert recipient batch ${i / INSERT_BATCH_SIZE + 1}: ${recipientError.message}`,
+          );
         }
       }
 

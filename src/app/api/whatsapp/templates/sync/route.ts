@@ -125,33 +125,47 @@ export async function POST() {
 
     const accessToken = decrypt(config.access_token)
 
-    // Pull up to 100 templates. Meta paginates via `paging.next`; for
-    // now we take page 1, which covers realistic small-business use.
-    // A follow-up can loop through paging.next if someone has more
-    // than 100 templates (rare — Meta caps new templates per account).
-    const url = `${META_API_BASE}/${config.waba_id}/message_templates?limit=100&fields=id,name,language,status,category,components`
-    const metaRes = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
+    // Paginate through every template Meta has for this WABA. Meta
+    // returns at most 100 per page; `paging.next` is a full URL. Cap
+    // at 20 pages (2k templates) as a safety against infinite loops
+    // from a misbehaving upstream.
+    const metaTemplates: MetaTemplate[] = []
+    let nextUrl:
+      | string
+      | null = `${META_API_BASE}/${config.waba_id}/message_templates?limit=100&fields=id,name,language,status,category,components`
+    const PAGE_CAP = 20
+    let pageCount = 0
 
-    if (!metaRes.ok) {
-      let metaErr = `Meta API error: ${metaRes.status}`
-      try {
-        const body = await metaRes.json()
-        if (body?.error?.message) metaErr = body.error.message
-      } catch {
-        // response wasn't JSON — keep the fallback
+    while (nextUrl && pageCount < PAGE_CAP) {
+      pageCount++
+      const metaRes: Response = await fetch(nextUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+
+      if (!metaRes.ok) {
+        let metaErr = `Meta API error: ${metaRes.status}`
+        try {
+          const body = await metaRes.json()
+          if (body?.error?.message) metaErr = body.error.message
+        } catch {
+          // response wasn't JSON — keep the fallback
+        }
+        return NextResponse.json({ error: metaErr }, { status: 502 })
       }
-      return NextResponse.json({ error: metaErr }, { status: 502 })
-    }
 
-    const metaBody: { data?: MetaTemplate[] } = await metaRes.json()
-    const metaTemplates = metaBody.data ?? []
+      const metaBody: {
+        data?: MetaTemplate[]
+        paging?: { next?: string }
+      } = await metaRes.json()
+      if (metaBody.data) metaTemplates.push(...metaBody.data)
+      nextUrl = metaBody.paging?.next ?? null
+    }
 
     // For each Meta template: upsert by (user_id, name, language).
     // No UNIQUE constraint on that triple, so we match manually.
     let inserted = 0
     let updated = 0
+    const errors: { name: string; language: string; message: string }[] = []
 
     for (const t of metaTemplates) {
       const body = (t.components ?? []).find((c) => c.type === 'BODY')
@@ -171,7 +185,7 @@ export async function POST() {
         updated_at: new Date().toISOString(),
       }
 
-      const { data: existing } = await supabase
+      const { data: existing, error: lookupErr } = await supabase
         .from('message_templates')
         .select('id')
         .eq('user_id', user.id)
@@ -179,23 +193,52 @@ export async function POST() {
         .eq('language', t.language)
         .maybeSingle()
 
+      if (lookupErr) {
+        errors.push({
+          name: t.name,
+          language: t.language,
+          message: lookupErr.message,
+        })
+        continue
+      }
+
       if (existing?.id) {
-        await supabase
+        const { error: updErr } = await supabase
           .from('message_templates')
           .update(row)
           .eq('id', existing.id)
-        updated++
+        if (updErr) {
+          errors.push({
+            name: t.name,
+            language: t.language,
+            message: updErr.message,
+          })
+        } else {
+          updated++
+        }
       } else {
-        await supabase.from('message_templates').insert(row)
-        inserted++
+        const { error: insErr } = await supabase
+          .from('message_templates')
+          .insert(row)
+        if (insErr) {
+          errors.push({
+            name: t.name,
+            language: t.language,
+            message: insErr.message,
+          })
+        } else {
+          inserted++
+        }
       }
     }
 
     return NextResponse.json({
-      success: true,
+      success: errors.length === 0,
       total: metaTemplates.length,
       inserted,
       updated,
+      errors,
+      truncated: pageCount >= PAGE_CAP && nextUrl !== null,
     })
   } catch (error) {
     console.error('Error syncing WhatsApp templates:', error)

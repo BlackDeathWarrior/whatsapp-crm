@@ -200,6 +200,22 @@ export function TemplateManager() {
             ? ` (${data.inserted} new, ${data.updated} updated)`
             : ''),
       );
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        // Surface per-template failures so users don't trust a green
+        // toast that hides silent drift.
+        const preview = data.errors.slice(0, 3).map(
+          (e: { name: string; language: string; message: string }) =>
+            `${e.name} (${e.language})`,
+        );
+        const suffix =
+          data.errors.length > 3 ? `, +${data.errors.length - 3} more` : '';
+        toast.error(`Failed to sync: ${preview.join(', ')}${suffix}`);
+      }
+      if (data.truncated) {
+        toast.warning(
+          'Hit Meta pagination cap — more templates may exist. Contact support if this persists.',
+        );
+      }
       await fetchTemplates(user.id);
     } catch (err) {
       console.error('Template sync error:', err);
