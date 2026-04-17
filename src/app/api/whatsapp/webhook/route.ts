@@ -4,6 +4,7 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
+import { runAutomationsForTrigger } from '@/lib/automations/engine'
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -345,12 +346,24 @@ async function processMessage(
   )
 
   // Find or create contact
-  const contactRecord = await findOrCreateContact(
+  const contactOutcome = await findOrCreateContact(
     userId,
     senderPhone,
     contactName
   )
-  if (!contactRecord) return
+  if (!contactOutcome) return
+  const contactRecord = contactOutcome.contact
+  // Fire new_contact_created automations for genuinely-new contacts.
+  // Fire-and-forget — the engine never throws, and webhook latency
+  // must not be tied to automation execution.
+  if (contactOutcome.wasCreated) {
+    runAutomationsForTrigger({
+      userId,
+      triggerType: 'new_contact_created',
+      contactId: contactRecord.id,
+      context: { message_text: message.text?.body },
+    }).catch((err) => console.error('[automations] dispatch failed:', err))
+  }
 
   // Find or create conversation
   const conversation = await findOrCreateConversation(
@@ -416,6 +429,22 @@ async function processMessage(
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(userId, contactRecord.id)
+
+  // Fire any automations that watch inbound messages (new_message_received
+  // + keyword_match — the engine filters by keyword internally). Kept
+  // fire-and-forget so a slow/failing automation never blocks the webhook.
+  const inboundText = contentText ?? message.text?.body ?? ''
+  for (const triggerType of ['new_message_received', 'keyword_match'] as const) {
+    runAutomationsForTrigger({
+      userId,
+      triggerType,
+      contactId: contactRecord.id,
+      context: {
+        message_text: inboundText,
+        conversation_id: conversation.id,
+      },
+    }).catch((err) => console.error('[automations] dispatch failed:', err))
+  }
 }
 
 async function parseMessageContent(
@@ -537,11 +566,21 @@ async function parseMessageContent(
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ContactRow = any
+
+interface ContactOutcome {
+  contact: ContactRow
+  /** True when this call created the row; drives new_contact_created
+   *  automation dispatch in processMessage. */
+  wasCreated: boolean
+}
+
 async function findOrCreateContact(
   userId: string,
   phone: string,
   name: string
-) {
+): Promise<ContactOutcome | null> {
   // Look up existing contacts for this user
   const { data: contacts, error: contactsError } = await supabaseAdmin()
     .from('contacts')
@@ -554,8 +593,7 @@ async function findOrCreateContact(
   }
 
   // Use phonesMatch for flexible matching
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const existingContact = contacts?.find((c: any) => phonesMatch(c.phone, phone))
+  const existingContact = contacts?.find((c: ContactRow) => phonesMatch(c.phone, phone))
 
   if (existingContact) {
     // Update name if it changed
@@ -565,7 +603,7 @@ async function findOrCreateContact(
         .update({ name, updated_at: new Date().toISOString() })
         .eq('id', existingContact.id)
     }
-    return existingContact
+    return { contact: existingContact, wasCreated: false }
   }
 
   // Create new contact
@@ -584,7 +622,7 @@ async function findOrCreateContact(
     return null
   }
 
-  return newContact
+  return { contact: newContact, wasCreated: true }
 }
 
 async function findOrCreateConversation(userId: string, contactId: string) {
