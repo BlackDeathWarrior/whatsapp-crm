@@ -114,6 +114,10 @@ export function MessageThread({
   const conversationId = conversation?.id;
   const hasUnread = (conversation?.unread_count ?? 0) > 0;
 
+  // Fetch messages whenever the selected conversation changes. Kept
+  // separate from the unread-reset effect so that incoming messages
+  // arriving while the thread is open don't trigger a full refetch —
+  // they only flip hasUnread, which only the reset effect listens to.
   useEffect(() => {
     if (!conversationId) return;
 
@@ -137,28 +141,34 @@ export function MessageThread({
         onMessagesLoadedRef.current(data ?? []);
       }
 
-      // Only issue the unread_count reset when there's actually something
-      // to reset. Unconditional updates fire a realtime UPDATE event every
-      // time, which — combined with the parent's conversation-event handler
-      // — used to retrigger this effect in a loop.
-      if (hasUnread) {
-        await supabase
-          .from("conversations")
-          .update({ unread_count: 0 })
-          .eq("id", conversationId);
-      }
-
       if (!cancelled) setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-    // Re-fetch only when the selected conversation changes. `hasUnread`
-    // is used inside but is a boolean derived from conversation; the
-    // conversationId dep is the real trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
+
+  // Reset the server-side unread_count to 0 whenever an unread count
+  // surfaces on the active conversation — covers both (a) opening a
+  // conversation that had unread messages and (b) new messages arriving
+  // while the user is already viewing the thread (webhook server-bumps
+  // unread_count to N+1; the realtime UPDATE propagates it into the
+  // client, which re-runs this effect and flips it back to 0).
+  //
+  // Guarding on hasUnread prevents the eq-update loop: once unread_count
+  // is 0 the condition is false, so no further UPDATE is issued.
+  useEffect(() => {
+    if (!conversationId || !hasUnread) return;
+    const supabase = createClient();
+    supabase
+      .from("conversations")
+      .update({ unread_count: 0 })
+      .eq("id", conversationId)
+      .then(({ error }) => {
+        if (error) console.error("Failed to reset unread_count:", error);
+      });
+  }, [conversationId, hasUnread]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
