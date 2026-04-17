@@ -6,6 +6,10 @@ import {
   replaceSteps,
   type BuilderStepInput,
 } from '@/lib/automations/steps-tree'
+import {
+  validateStepsForActivation,
+  validateTriggerForActivation,
+} from '@/lib/automations/validate'
 
 async function requireUser() {
   const supabase = await createClient()
@@ -51,10 +55,11 @@ export async function PATCH(
 
   const admin = supabaseAdmin()
 
-  // Ownership check before we touch anything.
+  // Ownership check before we touch anything. Load the fields we need
+  // to compute the post-patch "effective" state for validation.
   const { data: existing } = await admin
     .from('automations')
-    .select('id, user_id')
+    .select('id, user_id, is_active, trigger_type, trigger_config')
     .eq('id', id)
     .maybeSingle()
   if (!existing || existing.user_id !== user.id) {
@@ -70,6 +75,33 @@ export async function PATCH(
     'is_active',
   ] as const) {
     if (k in body) update[k] = body[k]
+  }
+
+  // If this PATCH leaves the automation active (either explicitly
+  // activating it OR editing an already-active one), validate the
+  // merged configuration first. Activation is the natural gate — drafts
+  // are still allowed to be incomplete.
+  const willBeActive =
+    typeof update.is_active === 'boolean' ? update.is_active : existing.is_active
+  if (willBeActive) {
+    const mergedTriggerType = (update.trigger_type ?? existing.trigger_type) as string
+    const mergedTriggerConfig = update.trigger_config ?? existing.trigger_config
+    const mergedSteps = Array.isArray(body.steps)
+      ? (body.steps as { step_type: string; step_config: Record<string, unknown> }[])
+      : await loadStepsTree(id)
+    const issues = [
+      ...validateTriggerForActivation(mergedTriggerType, mergedTriggerConfig),
+      ...validateStepsForActivation(mergedSteps),
+    ]
+    if (issues.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Cannot keep automation active with invalid configuration',
+          issues,
+        },
+        { status: 400 },
+      )
+    }
   }
 
   if (Object.keys(update).length > 0) {
