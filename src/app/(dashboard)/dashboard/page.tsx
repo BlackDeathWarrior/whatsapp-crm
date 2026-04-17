@@ -84,7 +84,10 @@ export default function DashboardPage() {
       .catch((err) => console.error('[dashboard] response time failed:', err))
       .finally(() => setResponseTimeLoading(false))
 
-    void loadActivity(db, 20)
+    // Fetch up to 50 so the biggest page-size option in the feed
+    // (50 rows) is already in memory — switching sizes then becomes
+    // a pure client-side slice with no extra round trip.
+    void loadActivity(db, 50)
       .then((a) => setActivity(a))
       .catch((err) => console.error('[dashboard] activity failed:', err))
       .finally(() => setActivityLoading(false))
