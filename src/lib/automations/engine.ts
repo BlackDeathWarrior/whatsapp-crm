@@ -6,6 +6,7 @@ import type {
   ConditionStepConfig,
   KeywordMatchTriggerConfig,
   SendMessageStepConfig,
+  SendTemplateStepConfig,
   SendWebhookStepConfig,
   TagStepConfig,
   UpdateContactFieldStepConfig,
@@ -14,6 +15,7 @@ import type {
   AssignConversationStepConfig,
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
+import { engineSendText, engineSendTemplate } from './meta-send'
 
 // ------------------------------------------------------------
 // Public API
@@ -296,29 +298,38 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
     case 'send_message': {
       const cfg = step.step_config as SendMessageStepConfig
       if (!args.contactId) throw new Error('send_message needs a contact')
-      const { data: conv } = await db
-        .from('conversations')
-        .select('id, user_id')
-        .eq('user_id', args.automation.user_id)
-        .eq('contact_id', args.contactId)
-        .maybeSingle()
-      if (!conv) throw new Error('no conversation for contact')
-      await db.from('messages').insert({
-        conversation_id: conv.id,
-        sender_type: 'bot',
-        content_type: 'text',
-        content_text: interpolate(cfg.text, args),
-        status: 'sending',
+      const text = interpolate(cfg.text, args)
+      if (!text.trim()) throw new Error('send_message has empty text')
+      const conversationId = await resolveConversationId(args)
+      const { whatsapp_message_id } = await engineSendText({
+        userId: args.automation.user_id,
+        conversationId,
+        contactId: args.contactId,
+        text,
       })
-      return 'message queued'
+      return `sent via Meta (${whatsapp_message_id})`
     }
 
-    case 'send_template':
-      // Template sending requires Meta API credentials; recorded but
-      // not actually dispatched here — the dedicated broadcasts flow
-      // owns Meta calls. Leave as a noop success so the automation
-      // progresses; real send-via-Meta is tracked as follow-up work.
-      return 'template send recorded'
+    case 'send_template': {
+      const cfg = step.step_config as SendTemplateStepConfig
+      if (!args.contactId) throw new Error('send_template needs a contact')
+      if (!cfg.template_name) throw new Error('send_template needs template_name')
+      const conversationId = await resolveConversationId(args)
+      const params = cfg.variables
+        ? Object.keys(cfg.variables)
+            .sort()
+            .map((k) => String(cfg.variables![k]))
+        : []
+      const { whatsapp_message_id } = await engineSendTemplate({
+        userId: args.automation.user_id,
+        conversationId,
+        contactId: args.contactId,
+        templateName: cfg.template_name,
+        language: cfg.language,
+        params,
+      })
+      return `template sent via Meta (${whatsapp_message_id})`
+    }
 
     case 'add_tag': {
       const cfg = step.step_config as TagStepConfig
@@ -424,6 +435,28 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
+
+/**
+ * Pick the conversation a send-type step should use. Prefer the id the
+ * webhook handed us (it's the one that just got the inbound message);
+ * fall back to the contact's conversation for resumed/wait paths and
+ * manual engine POSTs. Throws if none exists — send steps have
+ * no meaningful target without a conversation.
+ */
+async function resolveConversationId(args: ExecuteArgs): Promise<string> {
+  const fromCtx = args.context.conversation_id
+  if (fromCtx) return fromCtx
+  if (!args.contactId) throw new Error('cannot resolve conversation: no contact')
+  const { data, error } = await supabaseAdmin()
+    .from('conversations')
+    .select('id')
+    .eq('user_id', args.automation.user_id)
+    .eq('contact_id', args.contactId)
+    .maybeSingle()
+  if (error) throw new Error(`conversation lookup failed: ${error.message}`)
+  if (!data?.id) throw new Error('no conversation for contact')
+  return data.id as string
+}
 
 function triggerMatches(automation: Automation, ctx: AutomationContext | undefined): boolean {
   if (automation.trigger_type !== 'keyword_match') return true

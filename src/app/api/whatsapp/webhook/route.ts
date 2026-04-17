@@ -353,17 +353,6 @@ async function processMessage(
   )
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
-  // Fire new_contact_created automations for genuinely-new contacts.
-  // Fire-and-forget — the engine never throws, and webhook latency
-  // must not be tied to automation execution.
-  if (contactOutcome.wasCreated) {
-    runAutomationsForTrigger({
-      userId,
-      triggerType: 'new_contact_created',
-      contactId: contactRecord.id,
-      context: { message_text: message.text?.body },
-    }).catch((err) => console.error('[automations] dispatch failed:', err))
-  }
 
   // Find or create conversation
   const conversation = await findOrCreateConversation(
@@ -430,11 +419,17 @@ async function processMessage(
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(userId, contactRecord.id)
 
-  // Fire any automations that watch inbound messages (new_message_received
-  // + keyword_match — the engine filters by keyword internally). Kept
-  // fire-and-forget so a slow/failing automation never blocks the webhook.
+  // Fire any automations that react to this webhook event. All dispatches
+  // run here (not earlier) so the contact, conversation, and inbound
+  // message all exist before any step — including send_message — runs.
+  // Fire-and-forget: a slow or failing automation must not block the
+  // webhook's 200 OK response to Meta.
   const inboundText = contentText ?? message.text?.body ?? ''
-  for (const triggerType of ['new_message_received', 'keyword_match'] as const) {
+  const automationTriggers: ('new_contact_created' | 'new_message_received' | 'keyword_match')[] =
+    contactOutcome.wasCreated
+      ? ['new_contact_created', 'new_message_received', 'keyword_match']
+      : ['new_message_received', 'keyword_match']
+  for (const triggerType of automationTriggers) {
     runAutomationsForTrigger({
       userId,
       triggerType,
