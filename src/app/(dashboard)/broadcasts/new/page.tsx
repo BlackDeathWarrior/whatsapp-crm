@@ -59,7 +59,11 @@ export default function NewBroadcastPage() {
       });
       router.push(`/broadcasts/${broadcastId}`);
     } catch (err) {
+      // Previously swallowed with console.error — the wizard would
+      // just no-op, leaving the user confused. Surface the reason.
+      const message = err instanceof Error ? err.message : 'Broadcast failed';
       console.error('Broadcast failed:', err);
+      toast.error(message);
     }
   }
 

@@ -249,6 +249,19 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     const supabase = createClient();
 
     try {
+      // ── Step 0: Resolve current user ──────────────────────────────
+      // broadcasts.user_id is NOT NULL + guarded by RLS
+      // (auth.uid() = user_id). Without this, the INSERT below was
+      // silently failing with 23502 / 42501 — the wizard would
+      // no-op with no feedback.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) {
+        throw new Error('You are not signed in.');
+      }
+
       // ── Step 1: Resolve audience contacts ─────────────────────────
       setProgress(5);
       const contacts = await resolveAudience(payload.audience);
@@ -262,6 +275,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       const { data: broadcast, error: broadcastError } = await supabase
         .from('broadcasts')
         .insert({
+          user_id: user.id,
           name: payload.name,
           template_name: payload.template.name,
           template_language: payload.template.language ?? 'en_US',
@@ -284,7 +298,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         .single();
 
       if (broadcastError || !broadcast) {
-        throw new Error(`Failed to create broadcast: ${broadcastError?.message}`);
+        throw new Error(
+          `Failed to create broadcast: ${broadcastError?.message ?? 'unknown error'}`,
+        );
       }
 
       // ── Step 3: Insert recipient rows ─────────────────────────────
