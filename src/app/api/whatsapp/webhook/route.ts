@@ -179,22 +179,110 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
   }
 }
 
+// Ordered forward-only: a webhook replay must never regress a recipient
+// from `read` back to `sent`. Index into this array gives the "level".
+const RECIPIENT_STATUS_ORDER = [
+  'pending',
+  'sent',
+  'delivered',
+  'read',
+  'replied',
+  'failed',
+] as const
+
+function recipientStatusLevel(s: string): number {
+  const idx = (RECIPIENT_STATUS_ORDER as readonly string[]).indexOf(s)
+  return idx < 0 ? 0 : idx
+}
+
 async function handleStatusUpdate(status: {
   id: string
   status: string
   timestamp: string
   recipient_id: string
 }) {
-  // The messages table schema uses `message_id` (not whatsapp_message_id)
-  // and has no `updated_at` column. Meta's status values (sent/delivered/
-  // read/failed) already match our CHECK constraint.
-  const { error } = await supabaseAdmin()
+  // 1) Mirror onto messages (legacy behavior) — Meta's status values
+  //    already match the CHECK constraint on messages.status.
+  const { error: msgErr } = await supabaseAdmin()
     .from('messages')
     .update({ status: status.status })
     .eq('message_id', status.id)
 
-  if (error) {
-    console.error('Error updating message status:', error)
+  if (msgErr) {
+    console.error('Error updating message status:', msgErr)
+  }
+
+  // 2) Mirror onto broadcast_recipients via whatsapp_message_id
+  //    (added in migration 003). The aggregate trigger on
+  //    broadcast_recipients re-derives the parent broadcast's
+  //    sent/delivered/read/failed counts automatically.
+  const tsIso = new Date(parseInt(status.timestamp) * 1000).toISOString()
+
+  const { data: recipient, error: recFetchErr } = await supabaseAdmin()
+    .from('broadcast_recipients')
+    .select('id, status')
+    .eq('whatsapp_message_id', status.id)
+    .maybeSingle()
+
+  if (recFetchErr) {
+    console.error('Error fetching broadcast recipient:', recFetchErr)
+    return
+  }
+  if (!recipient) return // message wasn't part of a broadcast — fine
+
+  // Forward-only status guard: only advance.
+  const currentLevel = recipientStatusLevel(recipient.status)
+  const incomingLevel = recipientStatusLevel(status.status)
+  if (incomingLevel <= currentLevel) return
+
+  const update: Record<string, unknown> = { status: status.status }
+  if (status.status === 'sent' && !('sent_at' in update)) update.sent_at = tsIso
+  if (status.status === 'delivered') update.delivered_at = tsIso
+  if (status.status === 'read') update.read_at = tsIso
+
+  const { error: recUpdateErr } = await supabaseAdmin()
+    .from('broadcast_recipients')
+    .update(update)
+    .eq('id', recipient.id)
+
+  if (recUpdateErr) {
+    console.error('Error updating broadcast recipient status:', recUpdateErr)
+  }
+}
+
+/**
+ * If an inbound message's sender is on a still-unreplied
+ * broadcast_recipients row, flip it to `replied` so the reply count
+ * advances on the parent broadcast.
+ *
+ * Runs on a best-effort basis — failures here must not break the
+ * main inbound-message flow, so errors are swallowed with a log.
+ */
+async function flagBroadcastReplyIfAny(userId: string, contactId: string) {
+  try {
+    // Most recent outbound broadcast that hasn't been replied to yet.
+    const { data: recs, error } = await supabaseAdmin()
+      .from('broadcast_recipients')
+      .select('id, status, broadcast_id, broadcasts!inner(user_id)')
+      .eq('contact_id', contactId)
+      .eq('broadcasts.user_id', userId)
+      .in('status', ['sent', 'delivered', 'read'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (error || !recs || recs.length === 0) return
+
+    const row = recs[0]
+    const { error: updErr } = await supabaseAdmin()
+      .from('broadcast_recipients')
+      .update({ status: 'replied', replied_at: new Date().toISOString() })
+      .eq('id', row.id)
+
+    if (updErr) {
+      console.error('Error marking broadcast recipient replied:', updErr)
+    }
+  } catch (err) {
+    console.error('flagBroadcastReplyIfAny failed:', err)
   }
 }
 
@@ -280,6 +368,11 @@ async function processMessage(
   if (convError) {
     console.error('Error updating conversation:', convError)
   }
+
+  // If this contact was a recent broadcast recipient, flag the reply
+  // so the broadcast's `replied_count` advances (via the aggregate
+  // trigger installed in migration 003).
+  await flagBroadcastReplyIfAny(userId, contactRecord.id)
 }
 
 async function parseMessageContent(

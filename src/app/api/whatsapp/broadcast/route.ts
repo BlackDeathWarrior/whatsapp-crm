@@ -16,6 +16,33 @@ interface BroadcastResult {
   error?: string
 }
 
+/**
+ * Two input shapes are accepted:
+ *
+ *   NEW (preferred — supports per-recipient variable substitution):
+ *     {
+ *       recipients: Array<{ phone: string; params: string[] }>,
+ *       template_name, template_language
+ *     }
+ *
+ *   LEGACY (all phones receive the same params — kept so existing
+ *   callers don't break):
+ *     {
+ *       phone_numbers: string[],
+ *       template_params: string[],
+ *       template_name, template_language
+ *     }
+ *
+ * Previous implementation only supported the legacy shape, and the
+ * sending hook was forced to ship every batch with `templateParams[0]`
+ * — meaning every recipient got contact-0's personalization. The new
+ * shape is what actually fixes that.
+ */
+interface NewRecipient {
+  phone: string
+  params?: string[]
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
@@ -26,18 +53,36 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
-    const { phone_numbers, template_name, template_language, template_params } = body
+    const {
+      recipients: newRecipients,
+      phone_numbers,
+      template_name,
+      template_language,
+      template_params,
+    } = body
 
-    if (!phone_numbers || !Array.isArray(phone_numbers) || phone_numbers.length === 0) {
+    // Normalize to a list of {phone, params} regardless of shape.
+    let recipients: NewRecipient[]
+    if (Array.isArray(newRecipients) && newRecipients.length > 0) {
+      recipients = newRecipients
+    } else if (Array.isArray(phone_numbers) && phone_numbers.length > 0) {
+      const shared: string[] = Array.isArray(template_params)
+        ? template_params
+        : []
+      recipients = phone_numbers.map((phone: string) => ({
+        phone,
+        params: shared,
+      }))
+    } else {
       return NextResponse.json(
-        { error: 'phone_numbers array is required and must not be empty' },
+        {
+          error:
+            'Provide either `recipients` (preferred) or `phone_numbers` — must be a non-empty array',
+        },
         { status: 400 }
       )
     }
@@ -49,7 +94,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Fetch and decrypt WhatsApp config
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
       .select('*')
@@ -58,7 +102,10 @@ export async function POST(request: Request) {
 
     if (configError || !config) {
       return NextResponse.json(
-        { error: 'WhatsApp not configured. Please set up your WhatsApp integration first.' },
+        {
+          error:
+            'WhatsApp not configured. Please set up your WhatsApp integration first.',
+        },
         { status: 400 }
       )
     }
@@ -69,12 +116,12 @@ export async function POST(request: Request) {
     let sentCount = 0
     let failedCount = 0
 
-    for (const phone of phone_numbers) {
-      const sanitized = sanitizePhoneForMeta(phone)
+    for (const recipient of recipients) {
+      const sanitized = sanitizePhoneForMeta(recipient.phone)
 
       if (!isValidE164(sanitized)) {
         results.push({
-          phone,
+          phone: recipient.phone,
           status: 'failed',
           error: 'Invalid phone number format',
         })
@@ -82,13 +129,8 @@ export async function POST(request: Request) {
         continue
       }
 
-      // Correct sendTemplateMessage signature is:
-      //   (phoneNumberId, accessToken, to, templateName, language?, params?)
-      // Previously the args were passed in the wrong order (accessToken first,
-      // params before language), which made Meta reject every broadcast.
-      //
-      // Retry with phone variants on "not in allowed list" so numbers that
-      // differ only in a trunk-prefix 0 still reach recipients.
+      // Retry with phone variants on "not in allowed list" so numbers
+      // that differ only in a trunk-prefix 0 still reach recipients.
       const variants = phoneVariants(sanitized)
       let sentMessageId: string | null = null
       let lastError: string | null = null
@@ -101,7 +143,7 @@ export async function POST(request: Request) {
             to: variant,
             templateName: template_name,
             language: template_language || 'en_US',
-            params: template_params || [],
+            params: recipient.params ?? [],
           })
           sentMessageId = result.messageId
           lastError = null
@@ -111,7 +153,7 @@ export async function POST(request: Request) {
             error instanceof Error ? error.message : 'Unknown error'
           if (!isRecipientNotAllowedError(errorMessage)) {
             lastError = errorMessage
-            break // unrelated error — stop retrying
+            break
           }
           lastError = errorMessage
           // retry with next variant
@@ -120,15 +162,18 @@ export async function POST(request: Request) {
 
       if (sentMessageId) {
         results.push({
-          phone,
+          phone: recipient.phone,
           status: 'sent',
           whatsapp_message_id: sentMessageId,
         })
         sentCount++
       } else {
-        console.error(`Failed to send broadcast to ${phone}:`, lastError)
+        console.error(
+          `Failed to send broadcast to ${recipient.phone}:`,
+          lastError
+        )
         results.push({
-          phone,
+          phone: recipient.phone,
           status: 'failed',
           error: lastError || 'Unknown error',
         })
@@ -138,7 +183,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      total: phone_numbers.length,
+      total: recipients.length,
       sent: sentCount,
       failed: failedCount,
       results,

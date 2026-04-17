@@ -14,14 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Radio, Plus, Loader2 } from 'lucide-react';
-
-const statusConfig: Record<string, { label: string; classes: string }> = {
-  draft: { label: 'Draft', classes: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
-  scheduled: { label: 'Scheduled', classes: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  sending: { label: 'Sending', classes: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
-  sent: { label: 'Sent', classes: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  failed: { label: 'Failed', classes: 'bg-red-500/10 text-red-400 border-red-500/20' },
-};
+import { getBroadcastStatus } from '@/lib/broadcast-status';
 
 export default function BroadcastsPage() {
   const router = useRouter();
@@ -120,7 +113,7 @@ export default function BroadcastsPage() {
             </TableHeader>
             <TableBody>
               {broadcasts.map((broadcast) => {
-                const status = statusConfig[broadcast.status] ?? statusConfig.draft;
+                const status = getBroadcastStatus(broadcast.status);
                 return (
                   <TableRow
                     key={broadcast.id}

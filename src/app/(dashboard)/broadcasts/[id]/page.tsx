@@ -22,23 +22,10 @@ import {
   Eye,
   AlertCircle,
 } from 'lucide-react';
-
-const statusConfig: Record<string, { label: string; classes: string }> = {
-  draft: { label: 'Draft', classes: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
-  scheduled: { label: 'Scheduled', classes: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  sending: { label: 'Sending', classes: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
-  sent: { label: 'Sent', classes: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  failed: { label: 'Failed', classes: 'bg-red-500/10 text-red-400 border-red-500/20' },
-};
-
-const recipientStatusConfig: Record<string, { label: string; classes: string }> = {
-  pending: { label: 'Pending', classes: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
-  sent: { label: 'Sent', classes: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  delivered: { label: 'Delivered', classes: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  read: { label: 'Read', classes: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' },
-  replied: { label: 'Replied', classes: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-  failed: { label: 'Failed', classes: 'bg-red-500/10 text-red-400 border-red-500/20' },
-};
+import {
+  getBroadcastStatus,
+  getRecipientStatus,
+} from '@/lib/broadcast-status';
 
 interface StatCardProps {
   label: string;
@@ -125,7 +112,7 @@ export default function BroadcastDetailPage() {
     );
   }
 
-  const status = statusConfig[broadcast.status] ?? statusConfig.draft;
+  const status = getBroadcastStatus(broadcast.status);
 
   return (
     <div className="space-y-6">
@@ -221,8 +208,7 @@ export default function BroadcastDetailPage() {
             </TableHeader>
             <TableBody>
               {recipients.map((recipient) => {
-                const rStatus =
-                  recipientStatusConfig[recipient.status] ?? recipientStatusConfig.pending;
+                const rStatus = getRecipientStatus(recipient.status);
 
                 return (
                   <TableRow key={recipient.id} className="border-slate-800">
