@@ -28,10 +28,16 @@ export default function NewBroadcastPage() {
   const [audience, setAudience] = useState<{
     type: 'all' | 'tags' | 'custom_field' | 'csv';
     tagIds?: string[];
+    customField?: {
+      fieldId: string;
+      operator: 'is' | 'is_not' | 'contains';
+      value: string;
+    };
     csvContacts?: { phone: string; name?: string }[];
+    excludeTagIds?: string[];
   }>({ type: 'all' });
   const [variables, setVariables] = useState<
-    Record<string, { type: 'static' | 'field'; value: string }>
+    Record<string, { type: 'static' | 'field' | 'custom_field'; value: string }>
   >({});
   const [name, setName] = useState('');
 
@@ -43,9 +49,11 @@ export default function NewBroadcastPage() {
         name,
         template,
         audience: {
-          type: audience.type === 'custom_field' ? 'all' : audience.type,
+          type: audience.type,
           tagIds: audience.tagIds,
+          customField: audience.customField,
           csvContacts: audience.csvContacts,
+          excludeTagIds: audience.excludeTagIds,
         },
         variables,
       });
