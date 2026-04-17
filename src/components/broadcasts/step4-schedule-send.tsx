@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Send, Clock, Loader2, Users, Lock } from 'lucide-react';
+import { ArrowLeft, Send, Clock, Loader2, Users, Lock, Save } from 'lucide-react';
 
 interface AudienceConfig {
   type: string;
@@ -28,6 +28,7 @@ interface Step4Props {
   template: MessageTemplate;
   audience: AudienceConfig;
   onSend: () => void;
+  onSaveDraft?: () => void;
   onBack: () => void;
   isProcessing: boolean;
   progress: number;
@@ -39,6 +40,7 @@ export function Step4ScheduleSend({
   template,
   audience,
   onSend,
+  onSaveDraft,
   onBack,
   isProcessing,
   progress,
@@ -195,7 +197,7 @@ export function Step4ScheduleSend({
         </div>
       )}
 
-      <div className="flex items-center justify-between border-t border-slate-800 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-4">
         <Button
           variant="outline"
           onClick={onBack}
@@ -206,7 +208,20 @@ export function Step4ScheduleSend({
           Back
         </Button>
 
-        <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <div className="flex items-center gap-2">
+          {onSaveDraft && (
+            <Button
+              variant="outline"
+              onClick={onSaveDraft}
+              disabled={!name.trim() || isProcessing}
+              className="border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              Save as Draft
+            </Button>
+          )}
+
+          <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
           <DialogTrigger
             render={
               <Button
@@ -250,6 +265,7 @@ export function Step4ScheduleSend({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
     </div>
   );
