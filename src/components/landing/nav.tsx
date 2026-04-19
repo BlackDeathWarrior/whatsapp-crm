@@ -19,6 +19,7 @@ const LINKS = [
   { href: '#features', label: 'Features' },
   { href: '#how-it-works', label: 'How it works' },
   { href: '#self-host', label: 'Self-host' },
+  { href: '/docs', label: 'Docs' },
   { href: '#faq', label: 'FAQ' },
 ]
 

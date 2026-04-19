@@ -1,4 +1,5 @@
-import { ArrowRight, Server } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowRight, BookOpen, Server } from 'lucide-react'
 import { Section, SectionHeader } from './section'
 import { GithubIcon } from './github-icon'
 
@@ -62,6 +63,17 @@ export function OpenSource() {
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
         </a>
+      </div>
+
+      <div className="mx-auto mt-6 flex max-w-5xl items-center justify-center">
+        <Link
+          href="/docs"
+          className="group inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-5 py-3 text-sm font-medium text-slate-200 transition-colors hover:border-slate-700 hover:bg-slate-900/70 hover:text-white"
+        >
+          <BookOpen className="h-4 w-4 text-emerald-400" />
+          Read the full documentation
+          <ArrowRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-200" />
+        </Link>
       </div>
     </Section>
   )
