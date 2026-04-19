@@ -246,12 +246,14 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-slate-950">
-      {/* Top bar */}
-      <header className="flex flex-shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-900/80 px-4 py-3">
+      {/* Top bar. At sub-sm widths the "Active" label is hidden and the
+          switch moves to the right of the save button, so the name input
+          gets maximum width. */}
+      <header className="flex flex-shrink-0 items-center gap-2 border-b border-slate-800 bg-slate-900/80 px-3 py-3 sm:gap-3 sm:px-4">
         <button
           type="button"
           onClick={() => router.push("/automations")}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
           aria-label="Back to automations"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -260,13 +262,14 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
           value={state.name}
           onChange={(e) => patchTop("name", e.target.value)}
           placeholder="Untitled automation"
-          className="flex-1 rounded-md bg-transparent px-2 py-1 text-base font-semibold text-white placeholder:text-slate-500 focus:bg-slate-800 focus:outline-none"
+          className="min-w-0 flex-1 rounded-md bg-transparent px-2 py-1 text-sm font-semibold text-white placeholder:text-slate-500 focus:bg-slate-800 focus:outline-none sm:text-base"
         />
         <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span>Active</span>
+          <span className="hidden sm:inline">Active</span>
           <Switch
             checked={state.is_active}
             onCheckedChange={(v) => patchTop("is_active", !!v)}
+            aria-label="Active"
           />
         </div>
         <Button
@@ -322,7 +325,9 @@ function TriggerCard({
 }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="z-10 w-80">
+    // Card width: full on mobile, fixed 320px on sm+. The canvas wrapper
+    // (max-w-2xl + px-4) keeps this tidy on tablet/desktop.
+    <div className="z-10 w-full max-w-[320px] sm:w-80">
       <div className="rounded-lg border border-slate-800 border-l-4 border-l-blue-500 bg-slate-900 shadow-lg">
         <button
           type="button"
@@ -518,7 +523,12 @@ function StepRenderer({
   const Icon = meta.icon
   const expanded = props.expandedId === step.cid
   const isCondition = step.step_type === "condition"
-  const width = isCondition ? "w-[400px]" : "w-80"
+  // Card widths on mobile fill the full canvas column (max-w-2xl px-4
+  // still keeps them reasonable). On sm+ the original fixed widths
+  // come back so the flow visual stays recognisable.
+  const width = isCondition
+    ? "w-full max-w-[400px] sm:w-[400px]"
+    : "w-full max-w-[320px] sm:w-80"
 
   return (
     <>
@@ -623,7 +633,10 @@ function ConditionBranches({
     { kind: "branch", parentCid: step.cid, branch: "no", index: 0 },
   ]
   return (
-    <div className="mt-3 grid grid-cols-2 gap-3">
+    // Stack Yes/No vertically on mobile — two columns at 375px would
+    // cram each branch to ~170px which is too narrow for the nested
+    // cards. Two-column grid returns on sm+.
+    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
       <BranchColumn label="Yes" color="text-emerald-400">
         <StepList {...props} steps={yes} parentPath={yesPath} />
       </BranchColumn>
