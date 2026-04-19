@@ -3,37 +3,8 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Section, SectionHeader } from './section'
+import { FAQ_ITEMS } from '@/lib/seo/faq-data'
 import { cn } from '@/lib/utils'
-
-// Answering real objections a small-business owner has before signing
-// up. Order matters — setup friction is usually the #1 concern, cost
-// #2, data ownership #3.
-const QA = [
-  {
-    q: 'Do I need my own WhatsApp Business API access?',
-    a: "Yes. WaCRM plugs into your existing Meta WhatsApp Business setup — you bring the phone number and access token, we provide the CRM tooling around it. Any Meta-approved BSP (Business Solution Provider) works.",
-  },
-  {
-    q: 'Can my whole team share one WhatsApp number?',
-    a: 'Yes. Assign conversations to specific agents, track who is responding to what, and hand off threads without losing context. All your agents work from a single shared inbox.',
-  },
-  {
-    q: 'How fast is setup?',
-    a: 'Most teams are live in under 30 minutes once their WhatsApp Business number has been approved by Meta. Paste your credentials in Settings, import contacts if you have them, and start replying.',
-  },
-  {
-    q: 'Who owns the data?',
-    a: 'You do. Everything lives in your own Supabase project — contacts, conversations, deals, automation logs. Export it anytime; there is no lock-in on the data layer.',
-  },
-  {
-    q: 'Can I send bulk messages and automated replies?',
-    a: 'Yes. Broadcasts send Meta-approved templates to segmented contact lists with delivery tracking. Automations run no-code flows triggered by new contacts, keywords, tag changes, and more.',
-  },
-  {
-    q: 'What about message templates?',
-    a: 'Templates you create in Meta are synced automatically. Use them from the inbox, broadcasts, or inside an automation step.',
-  },
-]
 
 export function FAQ() {
   const [openIdx, setOpenIdx] = useState<number | null>(0)
@@ -46,7 +17,7 @@ export function FAQ() {
       />
 
       <div className="mx-auto max-w-3xl divide-y divide-slate-800 rounded-xl border border-slate-800 bg-slate-900/40">
-        {QA.map((item, i) => {
+        {FAQ_ITEMS.map((item, i) => {
           const isOpen = openIdx === i
           return (
             <div key={item.q}>
