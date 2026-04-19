@@ -211,14 +211,14 @@ export default function BroadcastsPage() {
             <TableHeader>
               <TableRow className="border-slate-800 hover:bg-transparent">
                 <TableHead className="text-slate-400">Name</TableHead>
-                <TableHead className="text-slate-400">Template</TableHead>
-                <TableHead className="text-slate-400 text-right">
+                <TableHead className="hidden text-slate-400 md:table-cell">Template</TableHead>
+                <TableHead className="hidden text-right text-slate-400 sm:table-cell">
                   Recipients
                 </TableHead>
-                <TableHead className="text-slate-400">Delivery</TableHead>
-                <TableHead className="text-slate-400">Read</TableHead>
+                <TableHead className="hidden text-slate-400 lg:table-cell">Delivery</TableHead>
+                <TableHead className="hidden text-slate-400 lg:table-cell">Read</TableHead>
                 <TableHead className="text-slate-400">Status</TableHead>
-                <TableHead className="text-slate-400">Date</TableHead>
+                <TableHead className="hidden text-slate-400 sm:table-cell">Date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -233,20 +233,20 @@ export default function BroadcastsPage() {
                     <TableCell className="font-medium text-white">
                       {broadcast.name}
                     </TableCell>
-                    <TableCell className="text-slate-300">
+                    <TableCell className="hidden text-slate-300 md:table-cell">
                       {broadcast.template_name}
                     </TableCell>
-                    <TableCell className="text-right text-slate-300 tabular-nums">
+                    <TableCell className="hidden text-right text-slate-300 tabular-nums sm:table-cell">
                       {broadcast.total_recipients}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <RateCell
                         value={broadcast.delivered_count}
                         total={broadcast.total_recipients}
                         color="bg-emerald-500"
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <RateCell
                         value={broadcast.read_count}
                         total={broadcast.total_recipients}
@@ -266,7 +266,7 @@ export default function BroadcastsPage() {
                         {status.label}
                       </span>
                     </TableCell>
-                    <TableCell className="text-slate-400">
+                    <TableCell className="hidden text-slate-400 sm:table-cell">
                       {new Date(broadcast.created_at).toLocaleDateString()}
                     </TableCell>
                   </TableRow>
