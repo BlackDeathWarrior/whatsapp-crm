@@ -37,6 +37,7 @@ export function Footer() {
               external: true,
             },
             { href: '#self-host', label: 'Self-host' },
+            { href: '/docs', label: 'Docs' },
             {
               href: 'https://www.hostinger.com/web-apps-hosting',
               label: 'Deploy on Hostinger',
