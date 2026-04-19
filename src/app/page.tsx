@@ -12,11 +12,22 @@ import { InboxMock } from '@/components/landing/mock/inbox-mock'
 import { PipelineMock } from '@/components/landing/mock/pipeline-mock'
 import { AutomationMock } from '@/components/landing/mock/automation-mock'
 import { AnalyticsMock } from '@/components/landing/mock/analytics-mock'
+import { JsonLd } from '@/components/seo/json-ld'
+import { landingPageLd } from '@/lib/seo/structured-data'
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE } from '@/lib/seo/site-config'
 
+// Landing-specific metadata. Most fields are inherited from the root
+// layout's metadata — we override title (so the hero copy shows in
+// SERPs / tab titles) and set an explicit canonical for "/" to avoid
+// trailing-slash duplicate-content signals.
 export const metadata: Metadata = {
-  title: 'WaCRM — Run your WhatsApp business from one inbox',
-  description:
-    'Shared inbox, contact hub, sales pipelines, broadcasts, and no-code automations for WhatsApp. Built on the official WhatsApp Business API.',
+  title: {
+    absolute: `${SITE_NAME} — ${SITE_TAGLINE}`,
+  },
+  description: SITE_DESCRIPTION,
+  alternates: {
+    canonical: '/',
+  },
 }
 
 // Marketing landing. Visible at / for everyone (auth redirect that
@@ -25,6 +36,9 @@ export const metadata: Metadata = {
 export default function LandingPage() {
   return (
     <div className="bg-slate-950 text-slate-100">
+      {/* JSON-LD — WebSite, Organization, SoftwareApplication, FAQPage.
+          Emitted before any visible content so crawlers hit it first. */}
+      <JsonLd data={landingPageLd()} />
       <LandingNav />
       <main>
         <Hero />
