@@ -34,25 +34,17 @@ Copy the result into `AUTOMATION_CRON_SECRET` in your deployment env.
 
 ## 2. Schedule the pinger
 
-### Option A — cron on the same VPS (Hostinger)
+### Option A — hPanel cron (Hostinger Managed Node.js)
 
-```bash
-crontab -e
+hPanel → **Advanced → Cron Jobs** → add a new job set to every minute
+(`* * * * *`). Command:
+
+```
+curl -s -H "x-cron-secret: <AUTOMATION_CRON_SECRET>" https://crm.example.com/api/automations/cron > /dev/null
 ```
 
-```cron
-* * * * * curl -s -H "x-cron-secret: $AUTOMATION_CRON_SECRET" https://crm.example.com/api/automations/cron > /dev/null
-```
-
-Export the secret into the cron environment. The simplest way is to add
-it to the user's shell profile and wrap the command:
-
-```cron
-* * * * * bash -lc 'curl -s -H "x-cron-secret: $AUTOMATION_CRON_SECRET" https://crm.example.com/api/automations/cron > /dev/null'
-```
-
-Or, for a more disciplined setup, use a `systemd` timer with
-`EnvironmentFile=/etc/wacrm.env`.
+Paste the literal secret — hPanel cron jobs don't inherit the Node app's
+environment variables.
 
 ### Option B — external pinger
 

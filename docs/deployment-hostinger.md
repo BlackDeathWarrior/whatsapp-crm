@@ -1,158 +1,153 @@
 # Deploy on Hostinger
 
-Hostinger's **VPS Hosting** plans are the recommended way to run WaCRM in
-production: you get a dedicated Node.js process, predictable pricing, and
-Hostinger's `hPanel` handles SSL and firewalls for you.
+Hostinger's **[Managed Node.js Hosting](https://www.hostinger.com/web-apps-hosting)**
+is the recommended way to run WaCRM in production: Hostinger patches the
+OS and the Node runtime, handles SSL, and gives you a Git-based deploy
+flow from hPanel. You deploy from your fork without ever opening an SSH
+session if you don't want to.
 
-This walkthrough uses a VPS running Ubuntu 24.04.
+This walkthrough assumes you have already completed
+[getting-started](./getting-started.md), [supabase-setup](./supabase-setup.md),
+and [whatsapp-setup](./whatsapp-setup.md) — i.e., your fork builds locally
+and you have your Supabase + Meta credentials ready.
 
-## 1. Provision the VPS
+## 1. Buy a Managed Node.js plan
 
-1. Sign up at <https://www.hostinger.com/vps-hosting> and pick a plan. The
-   **KVM 2** tier (2 vCPU / 8 GB RAM) is a comfortable starting point.
-2. During the setup wizard:
-   - **OS template** → Ubuntu 24.04 (plain, not the managed Node template —
-     we install what we need manually).
-   - **Location** → region closest to your users.
-   - **SSH key** → upload your public key (`~/.ssh/id_ed25519.pub` or
-     similar) so you can SSH in passwordless.
-3. Wait for provisioning. In hPanel you will see the IPv4 address and
-   root credentials.
+1. Sign up at <https://www.hostinger.com/web-apps-hosting> and choose a
+   Node.js plan that gives you enough memory for `npm run build` (2 GB+
+   recommended).
+2. During the onboarding wizard, pick the **Node.js** stack and the region
+   closest to your users.
+3. Finish setup until you land in **hPanel**.
 
-## 2. SSH in and install dependencies
+## 2. Create the app in hPanel
 
-```bash
-ssh root@<your-ip>
+In hPanel, open the hosting plan and go to **Websites → Create / Manage**
+and pick the **Node.js** application option, then:
 
-# Create a non-root user for the app
-adduser wacrm
-usermod -aG sudo wacrm
-rsync --archive --chown=wacrm:wacrm ~/.ssh /home/wacrm
+- **Application name** — `wacrm`.
+- **Application root** — accept the default (e.g., `domains/yourdomain/public_html`).
+- **Application URL** — the domain or subdomain you want to use (e.g.,
+  `crm.example.com`). You can attach a domain now or later under
+  **Domains**.
+- **Node.js version** — 20 or newer.
+- **Application startup file / command** — Next.js uses `npm start` once
+  it is built, so set:
+  - Start command: `npm start`
+  - Alternatively: `node node_modules/next/dist/bin/next start -p $PORT`
 
-# Switch user
-su - wacrm
+Save the app. hPanel provisions a container and shows you the app's
+control page.
 
-# Install Node.js 20 LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs git
+## 3. Connect your GitHub fork
 
-# Install PM2 for process management
-sudo npm install --global pm2
-```
+In hPanel → **Git**:
 
-## 3. Clone your fork
+1. **Create repository** → paste your fork's HTTPS URL
+   (e.g., `https://github.com/<your-username>/wacrm.git`).
+2. Pick the branch you want to deploy (usually `main`).
+3. Set the deploy path to the **Application root** from step 2.
 
-```bash
-cd ~
-git clone https://github.com/<your-username>/wacrm.git
-cd wacrm
-npm ci
-```
+Alternative: if you prefer ZIP uploads, use **File Manager** instead —
+upload the repo contents into the application root. Git-based deploy is
+simpler because redeploying is one click.
 
-## 4. Configure env vars
+## 4. Install dependencies and build
 
-Create `/home/wacrm/wacrm/.env.local` with the values from
-[environment-variables.md](./environment-variables.md). Make sure
-`NEXT_PUBLIC_SITE_URL` is set to the exact public URL you will use
-(e.g., `https://crm.example.com`).
+hPanel's Node.js app page exposes a **Run NPM install** button and a
+terminal. Either works:
 
-```bash
-chmod 600 .env.local
-```
+- **Button flow**:
+  1. Click **Run NPM install**. Wait for it to finish.
+  2. Click **Run NPM Build** (or execute `npm run build` from the app
+     terminal).
+- **Terminal flow**:
+  ```bash
+  npm ci
+  npm run build
+  ```
 
-## 5. Build and start with PM2
+> Next.js expects `NEXT_PUBLIC_*` variables to be present **at build
+> time**, so set env vars (step 5) **before** running the build.
 
-```bash
-npm run build
-pm2 start npm --name wacrm -- start
-pm2 save
-pm2 startup systemd -u wacrm --hp /home/wacrm
-# Follow the command PM2 prints — it enables auto-start on reboot.
-```
+## 5. Configure environment variables
 
-WaCRM is now listening on `127.0.0.1:3000`.
+In hPanel → **Node.js app → Environment variables**, add every value from
+[environment-variables.md](./environment-variables.md):
 
-## 6. Front with nginx + SSL
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ENCRYPTION_KEY`
+- `META_APP_SECRET`
+- `NEXT_PUBLIC_SITE_URL` — set to `https://<your-domain>` (with the
+  scheme, without a trailing slash).
+- `AUTOMATION_CRON_SECRET` — if you plan to use Wait steps
+  ([automations-and-cron.md](./automations-and-cron.md)).
 
-Point your domain's `A` record at the VPS IP. Then:
+Save, then **re-run the build** so the new `NEXT_PUBLIC_*` values get
+baked into the client bundle.
 
-```bash
-sudo apt-get install -y nginx certbot python3-certbot-nginx
-```
+## 6. Start the app
 
-Create `/etc/nginx/sites-available/wacrm`:
+From the app page, click **Restart application** (or run the equivalent
+from the terminal). hPanel boots `npm start` behind its own reverse proxy
+on the domain you configured. Hit the URL in a browser — you should land
+on the WaCRM marketing page.
 
-```nginx
-server {
-    server_name crm.example.com;
+SSL is provisioned automatically. If you used a subdomain, Hostinger's
+AutoSSL usually takes a minute or two; until then the site may serve the
+plain-HTTP version.
 
-    client_max_body_size 25m;  # WhatsApp media upload ceiling
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    listen 80;
-}
-```
-
-Enable and issue a cert:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/wacrm /etc/nginx/sites-enabled/wacrm
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d crm.example.com
-```
-
-Certbot writes the 443 block, enables HTTP→HTTPS redirect, and schedules
-renewals in `systemd`.
-
-## 7. Firewall
-
-hPanel → **Firewall**: allow inbound 22 (SSH), 80, 443. Everything else
-stays closed.
-
-## 8. Update the Meta webhook
+## 7. Update the Meta webhook
 
 Back in **Meta for Developers → WhatsApp → Configuration**, change the
-callback URL to `https://crm.example.com/api/whatsapp/webhook` and re-verify.
+callback URL to `https://<your-domain>/api/whatsapp/webhook` and re-verify.
 
-## 9. Schedule the automation cron
+## 8. Schedule the automations cron
 
-Follow [automations-and-cron.md](./automations-and-cron.md) to drain
-pending executions. A simple `cron` entry on the same VPS works:
+If you use the Wait step in any automation, schedule the cron drain.
 
-```bash
-crontab -e
-```
+- **Inside hPanel** — open **Advanced → Cron Jobs** and add:
+  ```
+  * * * * * curl -s -H "x-cron-secret: <AUTOMATION_CRON_SECRET>" https://<your-domain>/api/automations/cron > /dev/null
+  ```
+  Paste the literal secret here (cron jobs in hPanel don't read app env
+  vars) or store it in a file the cron reads.
+- **Outside** — any uptime monitor (UptimeRobot, Better Stack, GitHub
+  Actions) can hit the URL once a minute. See
+  [automations-and-cron.md](./automations-and-cron.md) for detail.
 
-```cron
-* * * * * curl -s -H "x-cron-secret: $AUTOMATION_CRON_SECRET" https://crm.example.com/api/automations/cron > /dev/null
-```
+## 9. Deploying updates
 
-Load `AUTOMATION_CRON_SECRET` into the cron environment via
-`/etc/environment` or an `EnvironmentFile=` in a `systemd` unit.
+Two options:
 
-## 10. Deploying updates
+- **Click-deploy**: push to your fork, then hit **Pull** in hPanel → Git
+  and **Restart application**.
+- **Terminal**:
+  ```bash
+  cd <application-root>
+  git pull
+  npm ci
+  npm run build
+  # then restart from the Node.js app page
+  ```
 
-```bash
-ssh wacrm@<your-ip>
-cd ~/wacrm
-git pull
-npm ci
-npm run build
-pm2 reload wacrm
-```
+If the database schema changed, apply any new SQL files from
+`supabase/migrations/` in the Supabase SQL editor first — migrations are
+idempotent.
 
-`pm2 reload` performs a zero-downtime restart. If the database schema
-changed, apply any new SQL files from `supabase/migrations/` in the
-Supabase SQL editor first — migrations are idempotent.
+## When to reach for a VPS instead
+
+Managed Node.js covers most WaCRM deploys. Consider
+[Hostinger VPS](https://www.hostinger.com/vps-hosting) if you need:
+
+- Long-running background workers beyond what the single Next.js process
+  gives you.
+- System-level cron behaviour you can't replicate from hPanel.
+- Custom binaries (e.g., ffmpeg) for media transforms.
+
+Otherwise, Managed Node.js is the fast path.
 
 ## Where to go next
 
