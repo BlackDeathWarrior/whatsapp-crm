@@ -13,7 +13,7 @@ docs walk you from a freshly forked repo to a production deploy.
    phone number, wire the webhook.
 4. **[Environment variables](./environment-variables.md)** — the full reference.
 5. **[Deploy on Hostinger](./deployment-hostinger.md)** — recommended hosting
-   walkthrough (Node.js VPS).
+   walkthrough (Managed Node.js Hosting).
 6. **[Automations cron](./automations-and-cron.md)** — schedule the pending
    executions drain so waits and delays fire.
 7. **[Troubleshooting](./troubleshooting.md)** — the usual suspects.
@@ -26,8 +26,8 @@ docs walk you from a freshly forked repo to a production deploy.
   WhatsApp Business app.
 - A WhatsApp phone number that is **not** already tied to the regular
   WhatsApp or WhatsApp Business mobile apps.
-- A [Hostinger](https://www.hostinger.com/vps-hosting) VPS plan (or any Node
-  host that supports long-running Node.js 20+ processes).
+- A [Hostinger Managed Node.js Hosting](https://www.hostinger.com/web-apps-hosting)
+  plan (or any Node host that runs long-running Node.js 20+ processes).
 
 ## Stack at a glance
 
@@ -35,7 +35,7 @@ docs walk you from a freshly forked repo to a production deploy.
 - **Database + auth + storage** — Supabase (Postgres + RLS).
 - **WhatsApp transport** — Meta Cloud API (official WhatsApp Business API).
 - **Encryption** — AES-256-CBC for per-user access tokens.
-- **Scheduler** — external cron that pings `GET /api/automations/cron`.
+- **Scheduler** — cron (or any pinger) that hits `GET /api/automations/cron`.
 
 ## Getting help
 

@@ -48,8 +48,9 @@ AUTOMATION_CRON_SECRET=generate-a-long-random-string
 ## Security checklist
 
 - Never commit `.env.local`. The repo already ignores it.
-- On Hostinger / any VPS, set env vars via the platform's **Environment**
-  panel rather than writing them into a tracked file on disk.
+- On Hostinger Managed Node.js (and any other host), set env vars via the
+  platform's **Environment variables** panel rather than writing them
+  into a tracked file on disk.
 - Rotate `SUPABASE_SERVICE_ROLE_KEY` if it leaks — Supabase lets you
   regenerate it under Project Settings → API.
 - Treat `ENCRYPTION_KEY` like a database master key. Losing it means

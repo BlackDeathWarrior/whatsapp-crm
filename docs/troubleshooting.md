@@ -96,23 +96,32 @@ up. Either consolidate to one deploy or route the webhook to exactly one.
 
 ## Deploy
 
-### `502 Bad Gateway` from nginx
+### `502 Bad Gateway` or "Application not running" from Hostinger
 
-- `pm2 status` — is the `wacrm` process up?
-- `pm2 logs wacrm` — is the Node process crashing on boot (usually a
-  missing env var)?
-- `sudo nginx -t` — is the nginx config valid?
+- Open the Node.js app page in hPanel and confirm the status is **Started**.
+- Check the app log viewer for a crash on boot — almost always a missing
+  env var. Re-save your env vars, re-run the build, and restart.
+- Confirm the **Application startup command** is `npm start` (or
+  equivalent) and that a build has actually run (`.next/` exists in the
+  application root).
 
-### Meta webhook works until the cert renews
+### Env var changes don't take effect in the browser
 
-Certbot renews in-place and reloads nginx. If you see a certificate error
-right after renewal, restart nginx (`sudo systemctl restart nginx`) and
-check `/var/log/letsencrypt/letsencrypt.log` for the last renew attempt.
+`NEXT_PUBLIC_*` values are baked into the client bundle at build time.
+After changing any of them, re-run `npm run build` (hPanel's **Run NPM
+Build** button works) and restart the app.
+
+### Meta webhook suddenly stops after a domain change
+
+Hostinger provisions a new SSL certificate when you attach a new domain
+or subdomain. Until it is issued, the webhook URL serves plain HTTP and
+Meta rejects it. Wait for AutoSSL to complete (minutes), then re-verify
+the webhook in Meta.
 
 ## Still stuck?
 
 Open an issue with:
 
-- Environment (local / Hostinger / other).
-- The exact error from server logs (`pm2 logs wacrm` or Next's dev output).
+- Environment (local / Hostinger Managed Node.js / other).
+- The exact error from the app log viewer in hPanel or Next's dev output.
 - What you were trying to do when it happened.

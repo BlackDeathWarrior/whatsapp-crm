@@ -3,7 +3,7 @@ import { Section, SectionHeader } from './section'
 import { GithubIcon } from './github-icon'
 
 const REPO_URL = 'https://github.com/ArnasDon/wacrm'
-const HOSTINGER_URL = 'https://www.hostinger.com/vps-hosting'
+const HOSTINGER_URL = 'https://www.hostinger.com/web-apps-hosting'
 
 export function OpenSource() {
   return (
@@ -11,7 +11,7 @@ export function OpenSource() {
       <SectionHeader
         eyebrow="Open source"
         title="Fork it, brand it, host it"
-        description="WaCRM is a template you can take and make your own. Grab the source on GitHub and self-host — we recommend Hostinger for a one-click Node.js VPS."
+        description="WaCRM is a template you can take and make your own. Grab the source on GitHub and self-host — we recommend Hostinger Managed Node.js Hosting for a zero-ops deploy."
       />
 
       <div className="mx-auto grid max-w-5xl grid-cols-1 gap-5 md:grid-cols-2">
@@ -53,11 +53,12 @@ export function OpenSource() {
             </span>
           </h3>
           <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
-            Best fit for this template — spin up a Node.js VPS, point it at
-            your forked repo, and WaCRM is live in a few minutes.
+            Best fit for this template — connect your forked repo to
+            Managed Node.js Hosting and WaCRM is live in a few minutes. No
+            servers to patch.
           </p>
           <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 transition-colors group-hover:text-emerald-300">
-            Get Hostinger VPS
+            Managed Node.js Hosting
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
         </a>
