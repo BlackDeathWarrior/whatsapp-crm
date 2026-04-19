@@ -9,6 +9,7 @@ import {
   ChevronDown,
   UserPlus,
   Clock,
+  ArrowLeft,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,13 @@ interface MessageThreadProps {
   onNewMessage: (message: Message) => void;
   onUpdateMessage: (id: string, updates: Partial<Message>) => void;
   onStatusChange: (conversationId: string, status: ConversationStatus) => void;
+  /**
+   * On mobile, the thread is shown full-screen with the conversation list
+   * hidden. This callback lets the page deselect the active conversation
+   * and reveal the list again. Rendered as a back-arrow in the header on
+   * mobile only.
+   */
+  onBack?: () => void;
 }
 
 function formatDateSeparator(dateStr: string): string {
@@ -72,6 +80,7 @@ export function MessageThread({
   onNewMessage,
   onUpdateMessage,
   onStatusChange,
+  onBack,
 }: MessageThreadProps) {
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -278,20 +287,33 @@ export function MessageThread({
   return (
     <div className="flex flex-1 flex-col bg-slate-950">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-900 px-3 py-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          {/* Back-to-list button — mobile only. Hidden on lg+ where the
+              conversation list is always visible next to the thread. */}
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to conversations"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-slate-300 hover:bg-slate-800 hover:text-white lg:hidden"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
             {displayName.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <h2 className="text-sm font-semibold text-white">{displayName}</h2>
-            <p className="text-xs text-slate-400">{contact.phone}</p>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-white">{displayName}</h2>
+            <p className="truncate text-xs text-slate-400">{contact.phone}</p>
           </div>
-          {/* Session timer badge */}
+          {/* Session timer badge — hidden on the narrowest phones so
+              the name + back arrow keep their room. */}
           <Badge
             variant="outline"
             className={cn(
-              "ml-2 gap-1 border-slate-700 text-[10px]",
+              "ml-1 hidden gap-1 border-slate-700 text-[10px] sm:inline-flex sm:ml-2",
               sessionInfo.expired ? "text-red-400" : "text-emerald-400"
             )}
           >

@@ -10,6 +10,7 @@ import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function InboxPage() {
   const router = useRouter();
@@ -191,6 +192,19 @@ export default function InboxPage() {
     [activeConversation?.id, router]
   );
 
+  // Mobile "back" — deselect the conversation so the list pane comes
+  // back. Also clears the ?c= param so a refresh lands on the list
+  // instead of re-opening the thread the user just backed out of.
+  const handleCloseConversation = useCallback(() => {
+    setActiveConversation(null);
+    setActiveContact(null);
+    setMessages([]);
+    // Clearing the ref lets the deep-link auto-selector fire again if
+    // the user later visits /inbox?c=<same-id> — desirable UX.
+    autoSelectedForDeepLinkRef.current = null;
+    router.replace("/inbox", { scroll: false });
+  }, [router]);
+
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
     setMessages(loaded);
@@ -224,8 +238,15 @@ export default function InboxPage() {
     [activeConversation]
   );
 
+  // On mobile (<lg) we show a SINGLE pane — either the list or the
+  // thread — rather than cramming both side-by-side. Selecting a
+  // conversation slides the thread in; the thread's back button pops
+  // it back to the list. On lg+ both panes render side-by-side as
+  // before, unchanged.
+  const hasActiveConv = !!activeConversation;
+
   return (
-    <div className="-m-6 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden">
+    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (
@@ -238,26 +259,46 @@ export default function InboxPage() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left panel: Conversation list */}
-        <ConversationList
-          activeConversationId={activeConversation?.id ?? null}
-          onSelect={handleSelectConversation}
-          conversations={conversations}
-          onConversationsLoaded={handleConversationsLoaded}
-        />
+        {/* Left panel: Conversation list.
+            Hidden on mobile when a conversation is selected so the
+            thread can occupy the full width. Always visible on lg+. */}
+        <div
+          className={cn(
+            "flex h-full flex-1 lg:flex-none",
+            hasActiveConv ? "hidden lg:flex" : "flex",
+          )}
+        >
+          <ConversationList
+            activeConversationId={activeConversation?.id ?? null}
+            onSelect={handleSelectConversation}
+            conversations={conversations}
+            onConversationsLoaded={handleConversationsLoaded}
+          />
+        </div>
 
-        {/* Center panel: Message thread */}
-        <MessageThread
-          conversation={activeConversation}
-          contact={activeContact}
-          messages={messages}
-          onMessagesLoaded={handleMessagesLoaded}
-          onNewMessage={handleNewMessage}
-          onUpdateMessage={handleUpdateMessage}
-          onStatusChange={handleStatusChange}
-        />
+        {/* Center panel: Message thread.
+            Hidden on mobile when no conversation is selected so the
+            list can occupy the full width. Always visible on lg+
+            (shows its own empty-state if no thread is picked yet). */}
+        <div
+          className={cn(
+            "flex h-full flex-1 lg:flex",
+            hasActiveConv ? "flex" : "hidden lg:flex",
+          )}
+        >
+          <MessageThread
+            conversation={activeConversation}
+            contact={activeContact}
+            messages={messages}
+            onMessagesLoaded={handleMessagesLoaded}
+            onNewMessage={handleNewMessage}
+            onUpdateMessage={handleUpdateMessage}
+            onStatusChange={handleStatusChange}
+            onBack={handleCloseConversation}
+          />
+        </div>
 
-        {/* Right panel: Contact sidebar (hidden on small screens) */}
+        {/* Right panel: Contact sidebar — desktop only. */}
         <div className="hidden lg:block">
           <ContactSidebar contact={activeContact} />
         </div>
