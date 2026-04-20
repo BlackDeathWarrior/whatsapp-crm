@@ -1,22 +1,27 @@
-# Contributing to WaCRM
+# Using WaCRM
 
-Thanks for the interest. This document is the short version; anything not
-answered here, open a draft PR or an issue and we'll figure it out together.
+WaCRM is a **template repository**, not a collaborative product. The
+expected flow is:
 
-## Before you start
+1. **Fork** it to your own GitHub account or organisation.
+2. **Deploy** the fork — see [`docs/`](./docs/README.md).
+3. **Customise** your fork. Rebrand, add the features you need, remove
+   the ones you don't, swap hosting, change the schema.
 
-- **Security issues do not belong in public issues** — see
-  [SECURITY.md](./.github/SECURITY.md) for the private disclosure flow.
-- For anything non-trivial, open an issue first so we can agree on the
-  approach before you write the code. Small fixes and typo-level PRs can
-  skip this step.
+You **don't** need to send changes back upstream. The fact that your
+fork diverges is the whole point — the upstream is deliberately
+opinionated about stack, UX, and scope, and your fork is where those
+opinions become yours.
 
-## Dev loop
+## Fork and run
 
 ```bash
-git clone https://github.com/<your-fork>/wacrm.git
+# 1. Fork on GitHub: https://github.com/ArnasDon/wacrm → Fork
+# 2. Clone your fork
+git clone https://github.com/<your-username>/wacrm.git
 cd wacrm
-cp .env.local.example .env.local   # fill in your Supabase + Meta creds
+
+cp .env.local.example .env.local   # fill in Supabase + Meta creds
 npm install
 npm run dev
 ```
@@ -24,7 +29,84 @@ npm run dev
 Full setup (Supabase migrations, WhatsApp Business API, deploy) lives in
 [`docs/`](./docs/README.md).
 
-### Scripts you'll use
+## Keeping your fork up to date
+
+Pull in upstream bug fixes and security patches periodically:
+
+```bash
+git remote add upstream https://github.com/ArnasDon/wacrm.git  # once
+git fetch upstream
+git checkout main
+git merge upstream/main     # or: git rebase upstream/main
+# Resolve any conflicts (likely in areas you've customised), then push
+git push origin main
+```
+
+If you've made heavy local customisations, rebasing can surface
+conflicts every time you pull. Pinning to a specific upstream tag and
+updating on your schedule is a valid alternative.
+
+## Reporting bugs in the upstream template
+
+If you find a bug in the upstream code — not one you introduced in your
+fork — please file it using the
+[bug report](https://github.com/ArnasDon/wacrm/issues/new?template=bug_report.yml)
+template. Including the commit SHA, the runtime (Hostinger / Vercel /
+local / other), and logs will get to a fix fastest.
+
+## Reporting security issues
+
+**Do not file security issues publicly.** Follow the private flow in
+[SECURITY.md](./.github/SECURITY.md).
+
+## Upstream pull requests
+
+Not the primary flow, but welcome in specific cases:
+
+- **Security fixes** — always welcome, please follow SECURITY.md first
+  for disclosure.
+- **Bug fixes** that match upstream intent (crash, correctness,
+  documentation errors, typos) — land quickly.
+- **Small improvements** (accessibility, obvious UX nits) — usually
+  welcome, open an issue first to check alignment.
+
+Less likely to land:
+
+- **New features.** The template's scope is intentionally narrow. A
+  "great idea for a CRM" is often a great idea for *your* CRM — i.e.
+  your fork — but would dilute the template for the next forker.
+- **Stack changes** (different ORM, different UI kit, different auth
+  provider). These belong in a fork, not upstream.
+- **Opinionated refactors** without a concrete correctness or
+  performance motivation.
+
+If you do send a PR, the usual rules apply:
+
+- Branch off the latest `main` (don't push to a merged branch — commits
+  end up orphaned).
+- Run `npm run typecheck` and `npm run format` locally first.
+- Fill in the PR template, especially the **Test plan**.
+- One logical change per PR.
+- Commit-message first line is imperative + terse; the body explains
+  the *why*, the diff shows the *what*.
+
+Expect a review within a few days. PRs opened without an issue may be
+closed — open the issue first to align.
+
+## If you maintain a public fork
+
+- Rebrand. The WaCRM name, favicon, and `wacrm.tech` URL belong to the
+  upstream project; please swap them for your own before putting your
+  deployment in front of users.
+- Keep the MIT [`LICENSE`](./LICENSE) file — that's how the template's
+  permissions travel with the code. Attribution in a `README` section
+  is appreciated but not required.
+- You are free to re-license additions to your fork however you like.
+
+## Dev-loop reference
+
+Even if you never send a PR upstream, these are the scripts you'll use
+in your fork:
 
 | Command | What it does |
 | --- | --- |
@@ -32,45 +114,11 @@ Full setup (Supabase migrations, WhatsApp Business API, deploy) lives in
 | `npm run build` | Production build. Next also runs its own typecheck here. |
 | `npm run typecheck` | `tsc --noEmit`. Fast TS-only pass. |
 | `npm run lint` | ESLint. |
-| `npm run format` | Prettier write. Run before committing. |
-
-CI on every PR runs lint (non-blocking today), typecheck, and build.
-
-## PR style
-
-- **One logical change per PR.** A bug fix and a refactor in the same PR
-  makes review harder and rollback riskier.
-- Branch off the latest `main`. Don't push new commits to a merged branch —
-  they end up orphaned.
-- Commit messages: first line is a short, imperative summary (`fix(inbox):
-  drop messages on URL change`). Body explains the *why*; the diff shows the
-  *what*.
-- Run `npm run typecheck` and `npm run format` locally before opening the
-  PR — saves a round trip on CI.
-- Fill in the [pull-request template](./.github/pull_request_template.md). A
-  "Test plan" section the reviewer can actually tick off goes a long way.
-- Update relevant docs in [`docs/`](./docs/README.md) when you change
-  behaviour a forker needs to know about.
-
-## Code style
-
-- TypeScript, strict. No `any` unless there's a good reason + a comment.
-- Prefer server components; mark client components with `"use client"` only
-  when they genuinely need interactivity, state, or browser APIs.
-- `@/` alias for every internal import. Relative imports are used only
-  inside the same subfolder.
-- No new dependencies without a note in the PR body explaining why; we try
-  to keep the install lean.
-
-## Review process
-
-- @ArnasDon is the sole code owner today (see
-  [.github/CODEOWNERS](./.github/CODEOWNERS)) and reviews every PR.
-- Expect a response within a few days. Friendly ping after a week.
-- Reviews are collaborative — "this looks wrong" means "let's talk about
-  it", not "we're not merging this".
+| `npm run format` | Prettier write. |
+| `npm run format:check` | Prettier in check-only mode. Useful in CI. |
 
 ## Licensing
 
-By contributing, you agree your contribution is licensed under the
-[MIT License](./LICENSE), the same license as the rest of the project.
+This template is MIT ([`LICENSE`](./LICENSE)). Anything you contribute
+upstream is assumed to be MIT too. Your fork's additions are yours to
+license however you like.
