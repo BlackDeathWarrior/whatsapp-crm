@@ -94,28 +94,23 @@ export function MessageComposer({
           <LayoutTemplate className="h-4 w-4" />
         </Button>
 
-        <div className="relative flex-1">
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              sessionExpired
-                ? "Session expired - use a template"
-                : "Type a message... (Shift+Enter for new line)"
-            }
-            disabled={sessionExpired}
-            rows={1}
-            className={cn(
-              "w-full resize-none rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-emerald-500/50",
-              sessionExpired && "cursor-not-allowed opacity-50"
-            )}
-          />
-          <p className="mt-1 text-[10px] text-slate-600">
-            Type &apos;/&apos; for quick replies
-          </p>
-        </div>
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          placeholder={
+            sessionExpired
+              ? "Session expired - use a template"
+              : "Type a message... (Shift+Enter for new line)"
+          }
+          disabled={sessionExpired}
+          rows={1}
+          className={cn(
+            "flex-1 resize-none rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-emerald-500/50",
+            sessionExpired && "cursor-not-allowed opacity-50"
+          )}
+        />
 
         <Button
           size="sm"
@@ -126,6 +121,13 @@ export function MessageComposer({
           <Send className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Hint sits outside the flex row so its height doesn't push
+          `items-end` buttons below the textarea. Indented to line up
+          under the textarea left edge (w-9 button + gap-2 = 44px). */}
+      <p className="mt-1 pl-11 text-[10px] text-slate-600">
+        Type &apos;/&apos; for quick replies
+      </p>
     </div>
   );
 }
