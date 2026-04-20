@@ -49,9 +49,14 @@ const ORDER: Record<string, { order: number; section: string; description: strin
     section: 'Deploy',
     description: 'Schedule the drain so Wait steps resume on time.',
   },
-  troubleshooting: {
+  architecture: {
     order: 7,
-    section: 'Operate',
+    section: 'Reference',
+    description: 'Stack, folder layout, request lifecycle.',
+  },
+  troubleshooting: {
+    order: 8,
+    section: 'Reference',
     description: 'The usual suspects when something breaks.',
   },
 }
