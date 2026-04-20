@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
-import { decrypt } from '@/lib/whatsapp/encryption'
+import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -115,6 +115,26 @@ export async function POST(request: Request) {
     }
 
     const accessToken = decrypt(config.access_token)
+
+    // Self-heal legacy CBC-encrypted tokens. Fire-and-forget: we
+    // return from the send without waiting, so a failed upgrade just
+    // means the next send tries again. The upgrade is idempotent —
+    // concurrent sends both produce valid GCM ciphertexts of the same
+    // plaintext, last write wins.
+    if (isLegacyFormat(config.access_token)) {
+      void supabase
+        .from('whatsapp_config')
+        .update({ access_token: encrypt(accessToken) })
+        .eq('id', config.id)
+        .then(({ error }) => {
+          if (error) {
+            console.warn(
+              '[whatsapp/send] access_token GCM upgrade failed:',
+              error.message,
+            )
+          }
+        })
+    }
 
     // Send via Meta API — retry with phone-number variants if Meta rejects
     // with "recipient not in allowed list" (common in sandbox / when a
