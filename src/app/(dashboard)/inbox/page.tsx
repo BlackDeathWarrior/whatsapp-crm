@@ -163,6 +163,16 @@ export default function InboxPage() {
         loaded.length > 0
       ) {
         autoSelectedForDeepLinkRef.current = deepLinkConvId;
+        // If the deep-linked conversation is already the active one
+        // (e.g. because the user clicked it in the list and we
+        // router.replace()'d the URL, which made the ConversationList
+        // refetch and land us back here), do NOT re-apply it. Doing so
+        // would setMessages([]) on a thread whose messages have
+        // already been loaded by MessageThread — and because
+        // conversationId didn't change, MessageThread wouldn't
+        // refetch. The thread would read "No messages yet" until a
+        // full page reload rehydrated state from scratch.
+        if (activeConversation?.id === deepLinkConvId) return;
         const match = loaded.find((c) => c.id === deepLinkConvId);
         if (match) {
           setActiveConversation(match);
@@ -171,7 +181,7 @@ export default function InboxPage() {
         }
       }
     },
-    [deepLinkConvId]
+    [deepLinkConvId, activeConversation?.id]
   );
 
   const handleSelectConversation = useCallback(
@@ -184,6 +194,14 @@ export default function InboxPage() {
       setActiveConversation(conv);
       setActiveContact(conv.contact ?? null);
       setMessages([]);
+      // Record the selection on the deep-link ref BEFORE we change the
+      // URL. The router.replace below flips `deepLinkConvId`, which can
+      // in turn cause ConversationList to refetch and eventually call
+      // handleConversationsLoaded again. Without this line, the ref
+      // still points at the previous value, the auto-select block
+      // sees `ref !== deepLinkConvId`, fires a second time, and
+      // clobbers the messages MessageThread just fetched.
+      autoSelectedForDeepLinkRef.current = conv.id;
       // Reflect the selection in the URL so a refresh lands the user
       // back in the same thread, and so copy-paste links work. Use
       // replace() to avoid polluting browser history with every click.
