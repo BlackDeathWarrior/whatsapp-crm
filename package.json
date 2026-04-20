@@ -2,6 +2,31 @@
   "name": "wacrm",
   "version": "0.1.0",
   "private": true,
+  "description": "Self-hostable WhatsApp CRM built on Next.js and Supabase — shared inbox, contacts, sales pipelines, broadcasts, and no-code automations.",
+  "license": "MIT",
+  "author": "Arnas Donauskas",
+  "homepage": "https://wacrm.tech",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArnasDon/wacrm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ArnasDon/wacrm/issues"
+  },
+  "keywords": [
+    "crm",
+    "whatsapp",
+    "whatsapp-business-api",
+    "nextjs",
+    "supabase",
+    "automation",
+    "broadcast",
+    "self-hosted",
+    "template"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
