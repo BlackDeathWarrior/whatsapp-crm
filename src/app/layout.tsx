@@ -70,7 +70,6 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [{ url: "/icon" }],
-    shortcut: ["/favicon.ico"],
   },
   formatDetection: {
     email: false,
