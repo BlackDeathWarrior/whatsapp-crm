@@ -50,9 +50,11 @@ Set `NEXT_PUBLIC_SITE_URL` **and** add the same origin to Supabase →
 - The callback URL must be reachable without auth. Test it yourself:
   `curl 'https://crm.example.com/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=<token>&hub.challenge=test'`
   should return `test`.
-- If you set `META_APP_SECRET`, check the app secret matches — a bad
-  secret causes 401s on inbound webhooks, but verification itself does
-  not use it.
+- `META_APP_SECRET` must be set on the deployment (it's required —
+  without it, every inbound POST gets a 401). If it's set but wrong,
+  you'll also see 401s for every POST while the initial subscribe
+  handshake (which doesn't use it) works. Double-check the value
+  matches Meta → App Settings → Basic → App Secret exactly.
 
 ### Messages go out but nothing comes in
 

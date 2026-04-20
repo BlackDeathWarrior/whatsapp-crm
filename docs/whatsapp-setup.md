@@ -83,11 +83,14 @@ Under the webhook config, **Subscribe to** at minimum:
 `message_template_status_update` keeps Meta-approved template statuses in
 sync on the broadcast UI.
 
-## 6. Signature verification (recommended)
+## 6. Signature verification (required)
 
 Set `META_APP_SECRET` to your app's **App Secret** (Meta for Developers →
-App Settings → Basic). When present, WaCRM validates the `X-Hub-Signature-256`
-header on every inbound webhook and drops unsigned or forged calls.
+App Settings → Basic). WaCRM validates the `X-Hub-Signature-256` HMAC
+on every inbound webhook and **rejects every request if the env var is
+not set** — anyone who knew the webhook URL could otherwise spoof
+messages and status updates. Configure it before pointing the webhook
+at a deployed instance.
 
 ## 7. Send a test message
 

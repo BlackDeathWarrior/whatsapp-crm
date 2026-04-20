@@ -11,11 +11,12 @@ import crypto from 'node:crypto'
  * Reference:
  *   https://developers.facebook.com/docs/graph-api/webhooks/getting-started#verify-payloads
  *
- * Rollout behavior:
- *   If `META_APP_SECRET` is unset, we **fail open** with a loud warning
- *   log. This avoids breaking existing deployments at the moment this
- *   code ships — operators can set the env var on their next deploy.
- *   Once the env var is set, verification is strict.
+ * Contract:
+ *   `META_APP_SECRET` is **required**. If it's missing we fail closed —
+ *   every request is rejected until the operator configures the
+ *   secret. A previous version fell open with a warning log, which is
+ *   unsafe for a public template: anyone who forgets the env var would
+ *   be running a fully spoofable webhook.
  */
 export function verifyMetaWebhookSignature(
   rawBody: string,
@@ -23,11 +24,12 @@ export function verifyMetaWebhookSignature(
 ): boolean {
   const secret = process.env.META_APP_SECRET
   if (!secret) {
-    console.warn(
-      '[webhook] META_APP_SECRET not set — skipping signature verification. ' +
-        'Set the env var to harden against spoofed webhook POSTs.',
+    console.error(
+      '[webhook] META_APP_SECRET is not set — rejecting request. ' +
+        'Configure the env var (Meta → App Settings → Basic → App Secret) ' +
+        'to enable signature verification.',
     )
-    return true
+    return false
   }
 
   if (!signatureHeader) return false
