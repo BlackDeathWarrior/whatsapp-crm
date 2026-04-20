@@ -27,12 +27,17 @@ export function useRealtime({
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  // Store latest callbacks in refs to avoid re-subscribing
+  // Store latest callbacks in refs to avoid re-subscribing when the
+  // parent re-renders with fresh closures. Assigned inside an effect
+  // so the mutation doesn't happen during render (React 19's refs
+  // rule) — subscribers only read `.current` inside async Realtime
+  // callbacks, which always run after the render that updates it.
   const onMessageRef = useRef(onMessageEvent);
-  onMessageRef.current = onMessageEvent;
-
   const onConversationRef = useRef(onConversationEvent);
-  onConversationRef.current = onConversationEvent;
+  useEffect(() => {
+    onMessageRef.current = onMessageEvent;
+    onConversationRef.current = onConversationEvent;
+  });
 
   useEffect(() => {
     if (!enabled) return;

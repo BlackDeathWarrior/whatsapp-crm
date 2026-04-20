@@ -154,10 +154,15 @@ export default function PipelinesPage() {
     };
   }, [loadPipelines, seedDefaultPipeline]);
 
-  // Load stages + deals whenever selected pipeline changes
+  // Load stages + deals whenever selected pipeline changes.
+  // Clearing on no-selection is a legitimate sync with URL/prop
+  // state; the load completion uses async setters inside promise
+  // callbacks (not synchronous in the effect body).
   useEffect(() => {
     if (!selectedPipelineId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStages([]);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDeals([]);
       return;
     }

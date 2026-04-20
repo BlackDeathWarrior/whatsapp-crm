@@ -117,8 +117,13 @@ export function MessageThread({
   // depend on `onMessagesLoaded` — otherwise parent re-renders cause
   // fetchMessages to change → useEffect re-fires → refetch → realtime
   // UPDATE on conversations.unread_count → parent re-renders → LOOP.
+  // The ref is written inside an effect so the mutation doesn't happen
+  // during render (React 19 refs rule); consumers only read `.current`
+  // inside the async fetch completion, which runs after the render.
   const onMessagesLoadedRef = useRef(onMessagesLoaded);
-  onMessagesLoadedRef.current = onMessagesLoaded;
+  useEffect(() => {
+    onMessagesLoadedRef.current = onMessagesLoaded;
+  });
 
   const conversationId = conversation?.id;
   const hasUnread = (conversation?.unread_count ?? 0) > 0;

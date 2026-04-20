@@ -54,8 +54,14 @@ export function ConversationList({
   // conversations fetch. That extra refetch was the trigger for the
   // deep-link auto-select running a second time and wiping the active
   // thread's messages.
+  // Mutation lives in an effect (not render) per React 19's refs rule;
+  // the fetch runs once on mount so it's fine to read the slightly
+  // older value — the very next render updates the ref for any
+  // subsequent async completion.
   const onConversationsLoadedRef = useRef(onConversationsLoaded);
-  onConversationsLoadedRef.current = onConversationsLoaded;
+  useEffect(() => {
+    onConversationsLoadedRef.current = onConversationsLoaded;
+  });
 
   useEffect(() => {
     const supabase = createClient();

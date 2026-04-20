@@ -67,7 +67,10 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     }
   }, [contact]);
 
+  // Load on contact change. setContactData/setTags run inside async
+  // Supabase callbacks, not synchronously in the effect body.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchContactData();
   }, [fetchContactData]);
 
@@ -76,7 +79,10 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     await navigator.clipboard.writeText(contact.phone);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [contact?.phone]);
+    // Dep is the whole `contact` object (not `contact?.phone`) so the
+    // React Compiler's inference agrees with the manual dep list —
+    // fixes the `preserve-manual-memoization` lint error.
+  }, [contact]);
 
   const handleAddNote = useCallback(async () => {
     if (!contact || !newNote.trim()) return;

@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Settings, MessageSquare, Tag, User } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -21,22 +20,15 @@ function isTabValue(v: string | null): v is TabValue {
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = (() => {
-    const q = searchParams.get('tab');
-    return isTabValue(q) ? q : 'profile';
-  })();
 
-  const [tab, setTab] = useState<TabValue>(initialTab);
-
-  // Keep the URL in sync with the active tab so the user-menu deep links
-  // work and the tab is bookmarkable / shareable.
-  useEffect(() => {
-    const q = searchParams.get('tab');
-    if (isTabValue(q) && q !== tab) setTab(q);
-  }, [searchParams, tab]);
+  // The URL is the single source of truth for the active tab — no
+  // local state, no sync effect. A previous revision duplicated this
+  // into `useState` + a sync effect, which tripped React 19's
+  // set-state-in-effect rule and was also redundant.
+  const queryTab = searchParams.get('tab');
+  const tab: TabValue = isTabValue(queryTab) ? queryTab : 'profile';
 
   const onChange = (next: TabValue) => {
-    setTab(next);
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', next);
     router.replace(`/settings?${params.toString()}`, { scroll: false });

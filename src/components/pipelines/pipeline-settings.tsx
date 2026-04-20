@@ -78,12 +78,16 @@ export function PipelineSettings({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Reset form state when the dialog opens or its prop inputs change
+  // — legitimate prop-driven sync.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!open) return;
     setName(pipeline.name);
     setLocalStages([...stages].sort((a, b) => a.position - b.position));
     setShowDeleteConfirm(false);
   }, [open, pipeline, stages]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),

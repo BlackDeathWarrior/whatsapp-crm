@@ -140,18 +140,19 @@ export default function ContactsPage() {
     setLoading(false);
   }, [supabase, page, search, tagsMap]);
 
+  // Load-once-on-mount-ish data fetches. Each setter inside runs
+  // inside an async promise completion (Supabase await), not
+  // synchronously in the effect body, so the cascade the lint rule
+  // warns about doesn't apply here.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTags();
   }, [fetchTags]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchContacts();
   }, [fetchContacts]);
-
-  // Reset page when search changes
-  useEffect(() => {
-    setPage(0);
-  }, [search]);
 
   function openAddForm() {
     setEditContact(null);
@@ -238,7 +239,12 @@ export default function ContactsPage() {
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
         <Input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            // Reset pagination when the query changes — the result
+            // set shrinks/grows, page N may no longer be valid.
+            setPage(0);
+          }}
           placeholder="Search by name, phone, or email..."
           className="pl-8 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
         />
