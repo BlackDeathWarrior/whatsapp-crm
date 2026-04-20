@@ -15,8 +15,21 @@ import {
   Zap,
   Settings,
   LogOut,
+  User,
   X,
 } from "lucide-react";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -180,26 +193,70 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
         {/* User section */}
         <div className="shrink-0 border-t border-slate-800 p-3">
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-sm font-medium text-emerald-500">
-              {profile?.full_name?.charAt(0)?.toUpperCase() ?? "U"}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">
-                {profile?.full_name ?? "User"}
-              </p>
-              <p className="truncate text-xs text-slate-400">
-                {profile?.email ?? ""}
-              </p>
-            </div>
-            <button
-              onClick={signOut}
-              className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-              title="Sign out"
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-slate-800/60 focus:bg-slate-800/60 focus:outline-none data-popup-open:bg-slate-800/60">
+              <Avatar className="size-8 shrink-0">
+                {profile?.avatar_url ? (
+                  <AvatarImage
+                    src={profile.avatar_url}
+                    alt={profile.full_name ?? "Avatar"}
+                  />
+                ) : null}
+                <AvatarFallback className="bg-emerald-500/10 text-sm font-medium text-emerald-500">
+                  {profile?.full_name?.charAt(0)?.toUpperCase() ??
+                    profile?.email?.charAt(0)?.toUpperCase() ??
+                    "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-white">
+                  {profile?.full_name ?? "User"}
+                </p>
+                <p className="truncate text-xs text-slate-400">
+                  {profile?.email ?? ""}
+                </p>
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              side="top"
+              sideOffset={6}
+              className="min-w-56 bg-slate-900 text-slate-100 ring-slate-700"
             >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
+              <DropdownMenuItem
+                render={
+                  <Link
+                    href="/settings?tab=profile"
+                    onClick={onClose}
+                    className="text-slate-200 focus:bg-slate-800 focus:text-white"
+                  />
+                }
+              >
+                <User className="size-4" />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                render={
+                  <Link
+                    href="/settings?tab=whatsapp"
+                    onClick={onClose}
+                    className="text-slate-200 focus:bg-slate-800 focus:text-white"
+                  />
+                }
+              >
+                <Settings className="size-4" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-slate-800" />
+              <DropdownMenuItem
+                onClick={signOut}
+                className="text-slate-200 focus:bg-slate-800 focus:text-white"
+              >
+                <LogOut className="size-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
     </>
