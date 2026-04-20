@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus } from "@/types";
@@ -46,32 +46,49 @@ export function ConversationList({
   const [filter, setFilter] = useState<ConversationStatus | "all">("all");
   const [loading, setLoading] = useState(true);
 
-  const fetchConversations = useCallback(async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("conversations")
-      .select("*, contact:contacts(*)")
-      .order("last_message_at", { ascending: false });
-
-    if (error) {
-      // Supabase errors have non-enumerable properties — log fields explicitly
-      console.error("Failed to fetch conversations:", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
-      setLoading(false);
-      return;
-    }
-
-    onConversationsLoaded(data ?? []);
-    setLoading(false);
-  }, [onConversationsLoaded]);
+  // Keep the latest callback in a ref so the fetch effect below can
+  // have a stable, empty-dep identity. Previously the fetch useCallback
+  // depended on `onConversationsLoaded`, which depends on the parent's
+  // `deepLinkConvId` — so every URL change (including one the parent
+  // triggered via router.replace after a click) caused a fresh
+  // conversations fetch. That extra refetch was the trigger for the
+  // deep-link auto-select running a second time and wiping the active
+  // thread's messages.
+  const onConversationsLoadedRef = useRef(onConversationsLoaded);
+  onConversationsLoadedRef.current = onConversationsLoaded;
 
   useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+    const supabase = createClient();
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("*, contact:contacts(*)")
+        .order("last_message_at", { ascending: false });
+
+      if (cancelled) return;
+
+      if (error) {
+        // Supabase errors have non-enumerable properties — log fields explicitly
+        console.error("Failed to fetch conversations:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        });
+        setLoading(false);
+        return;
+      }
+
+      onConversationsLoadedRef.current(data ?? []);
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     let result = conversations;
