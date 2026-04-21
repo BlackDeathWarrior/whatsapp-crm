@@ -71,7 +71,10 @@ export function DealForm({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Reset when opening
+  // Reset the form fields every time the sheet opens or its input
+  // props change. This is a legitimate prop-driven sync; the rule is
+  // over-cautious here, hence the block-level disable.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!open) return;
     setConfirmDelete(false);
@@ -97,6 +100,7 @@ export function DealForm({
       setNotes("");
     }
   }, [open, deal, defaultStageId, stages]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Load supporting data once the sheet is open
   useEffect(() => {
@@ -117,8 +121,11 @@ export function DealForm({
   }, [open, supabase]);
 
   // Fetch linked conversation for the selected contact (newest open one).
+  // Clearing on no-selection is sync with prop state; the populated
+  // case runs setLinkedConversation inside the async fetch callback.
   useEffect(() => {
     if (!open || !contactId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLinkedConversation(null);
       return;
     }
