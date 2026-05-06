@@ -1,6 +1,6 @@
 # WaCRM
 
-> Self-hostable WhatsApp CRM template — shared inbox, contacts, sales
+> Self-hostable WhatsApp® CRM template — shared inbox, contacts, sales
 > pipelines, broadcasts, and no-code automations. Fork it, brand it,
 > host it.
 

@@ -75,7 +75,7 @@ emails link back correctly.
 
 ## 6. (Optional) Storage
 
-WaCRM downloads WhatsApp media through Meta's `/download` endpoint and
+WaCRM downloads WhatsApp® media through Meta's `/download` endpoint and
 currently relays it on demand rather than caching it in Supabase Storage.
 No bucket setup is required for a default install.
 

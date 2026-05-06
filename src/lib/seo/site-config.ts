@@ -11,11 +11,11 @@ export const SITE_URL =
 
 export const SITE_NAME = 'WaCRM'
 
-export const SITE_TAGLINE = 'Run your WhatsApp business from one inbox'
+export const SITE_TAGLINE = 'Run your WhatsApp® business from one inbox'
 
 /** Default description — reused by layout metadata and structured data. */
 export const SITE_DESCRIPTION =
-  'WaCRM is a WhatsApp CRM for small teams: shared inbox, contact hub, sales pipelines, broadcasts, and no-code automations — built on the official WhatsApp Business API.'
+  'WaCRM is a WhatsApp® CRM for small teams: shared inbox, contact hub, sales pipelines, broadcasts, and no-code automations — built on the official WhatsApp Business API.'
 
 /**
  * Keyword targets. Search engines largely ignore the meta keywords

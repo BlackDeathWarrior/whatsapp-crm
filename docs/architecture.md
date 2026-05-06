@@ -10,7 +10,7 @@ want to change something in your fork.
 | Rendering | **Next.js 16** (App Router) | Server components for data-fetch pages; client components where interactivity's needed. React 19. |
 | UI | **Tailwind v4** + **shadcn/base-ui** primitives | Tailwind's zero-runtime styling, shadcn patterns for composable, dark-theme-first components. |
 | Data + Auth | **Supabase** | Postgres with Row-Level Security, built-in email/password auth, Storage for avatars, Realtime for the inbox. |
-| WhatsApp | **Meta Cloud API** | Official Business API. No third-party gateway. |
+| WhatsApp® | **Meta Cloud API** | Official Business API. No third-party gateway. |
 | Encryption | `node:crypto` AES-256-GCM | Per-user WhatsApp access + verify tokens at rest. |
 | Scheduler | External HTTP pinger | Hits `GET /api/automations/cron` to drain Wait-step executions. |
 

@@ -1,6 +1,6 @@
 # WaCRM documentation
 
-WaCRM is a self-hostable WhatsApp CRM built on Next.js and Supabase. These
+WaCRM is a self-hostable WhatsApp® CRM built on Next.js and Supabase. These
 docs walk you from a freshly forked repo to a production deploy.
 
 ## Reading order
