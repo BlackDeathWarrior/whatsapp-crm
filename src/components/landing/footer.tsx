@@ -67,6 +67,11 @@ export function Footer() {
           <span>© {year} CRM Template for WhatsApp. All rights reserved.</span>
           <span>Built on the official WhatsApp Business API.</span>
         </div>
+        <div className="mx-auto w-full max-w-7xl px-6 pb-5 text-xs leading-relaxed text-slate-600">
+          WhatsApp® is a registered trademark of Meta Platforms, Inc.
+          Hostinger is not affiliated with, endorsed by, or sponsored by
+          Meta Platforms, Inc.
+        </div>
       </div>
     </footer>
   )
