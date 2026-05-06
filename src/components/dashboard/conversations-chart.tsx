@@ -87,7 +87,7 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
 
       <footer className="flex items-center gap-4 border-t border-slate-800 px-5 py-3 text-xs text-slate-400">
         <LegendDot color="#3b82f6" label="Incoming" />
-        <LegendDot color="#10b981" label="Outgoing" />
+        <LegendDot color="#7c3aed" label="Outgoing" />
       </footer>
     </section>
   )
@@ -238,11 +238,11 @@ function LineSvg({
           ) : null,
         )}
 
-        {/* Outgoing polyline (emerald) */}
+        {/* Outgoing polyline (violet) */}
         <path
           d={outgoingPath}
           fill="none"
-          stroke="#10b981"
+          stroke="#7c3aed"
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -269,7 +269,7 @@ function LineSvg({
               strokeDasharray="3 3"
             />
             <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="#3b82f6" />
-            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill="#10b981" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill="#7c3aed" />
           </g>
         )}
       </svg>
@@ -289,8 +289,8 @@ function LineSvg({
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
               {hovered.incoming} incoming
             </span>
-            <span className="flex items-center gap-1.5 text-emerald-300">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="flex items-center gap-1.5 text-violet-300">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-violet-500" />
               {hovered.outgoing} outgoing
             </span>
           </div>

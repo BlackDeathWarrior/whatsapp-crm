@@ -76,7 +76,7 @@ export default function AutomationLogsPage({
   if (!automation || logs === null) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
       </div>
     )
   }
@@ -167,7 +167,7 @@ export default function AutomationLogsPage({
 function StatusBadge({ status }: { status: AutomationLog["status"] }) {
   const classes =
     status === "success"
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+      ? "border-violet-500/30 bg-violet-500/10 text-violet-300"
       : status === "partial"
       ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
       : "border-red-500/30 bg-red-500/10 text-red-300"
@@ -190,7 +190,7 @@ function StepRow({ result }: { result: AutomationLogStepResult }) {
       <span
         className={cn(
           "mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full",
-          ok ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400",
+          ok ? "bg-violet-500/20 text-violet-400" : "bg-red-500/20 text-red-400",
         )}
         aria-hidden
       >

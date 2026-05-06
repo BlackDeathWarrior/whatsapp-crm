@@ -8,7 +8,7 @@ export function Footer() {
       <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-8 px-6 py-12 sm:grid-cols-5">
         <div className="col-span-2 sm:col-span-2">
           <Link href="/" className="flex items-center gap-2" aria-label="WaCRM home">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500">
               <MessageSquare className="h-4 w-4 text-white" />
             </span>
             <span className="text-lg font-semibold text-white">WaCRM</span>

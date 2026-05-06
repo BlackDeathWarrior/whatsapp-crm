@@ -156,7 +156,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               <Phone className="h-4 w-4 text-slate-500" />
               <span className="flex-1 text-left">{contact.phone}</span>
               {copied ? (
-                <Check className="h-3 w-3 text-emerald-400" />
+                <Check className="h-3 w-3 text-violet-400" />
               ) : (
                 <Copy className="h-3 w-3 text-slate-600" />
               )}
@@ -259,11 +259,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                   onChange={(e) => setNewNote(e.target.value)}
                   placeholder="Add a note..."
                   rows={2}
-                  className="flex-1 resize-none rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500/50"
+                  className="flex-1 resize-none rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-violet-500/50"
                 />
                 <Button
                   size="sm"
-                  className="h-auto bg-emerald-600 px-2 hover:bg-emerald-500"
+                  className="h-auto bg-violet-600 px-2 hover:bg-violet-500"
                   onClick={handleAddNote}
                   disabled={!newNote.trim() || addingNote}
                 >

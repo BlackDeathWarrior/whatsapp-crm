@@ -33,7 +33,7 @@ export function DocsShell({ pages, children }: DocsShellProps) {
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
             <Link href="/" className="flex items-center gap-2" aria-label="WaCRM home">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500">
                 <MessageSquare className="h-4 w-4 text-white" />
               </span>
               <span className="text-lg font-semibold text-white">WaCRM</span>
@@ -61,7 +61,7 @@ export function DocsShell({ pages, children }: DocsShellProps) {
             </a>
             <Link
               href="/signup"
-              className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-400"
+              className="inline-flex items-center justify-center rounded-lg bg-violet-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-violet-400"
             >
               Get started
             </Link>

@@ -12,7 +12,7 @@ export default async function DocsIndexPage() {
 
   return (
     <article className="mx-auto w-full max-w-3xl">
-      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+      <p className="text-xs font-semibold uppercase tracking-wider text-violet-400">
         Documentation
       </p>
       <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
@@ -45,7 +45,7 @@ export default async function DocsIndexPage() {
                       {p.description}
                     </p>
                   )}
-                  <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 transition-colors group-hover:text-emerald-300">
+                  <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-violet-400 transition-colors group-hover:text-violet-300">
                     Read
                     <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                   </span>
