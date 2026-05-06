@@ -39,7 +39,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Settings</h1>
         <p className="text-sm text-slate-400 mt-1">
-          Manage your profile, WhatsApp integration, message templates, and
+          Manage your profile, WhatsApp® integration, message templates, and
           tags.
         </p>
       </div>

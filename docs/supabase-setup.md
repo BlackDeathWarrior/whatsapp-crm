@@ -74,7 +74,7 @@ emails link back correctly.
 
 ## 6. (Optional) Storage
 
-The app downloads WhatsApp media through Meta's `/download` endpoint and
+The app downloads WhatsApp® media through Meta's `/download` endpoint and
 currently relays it on demand rather than caching it in Supabase Storage.
 No bucket setup is required for a default install.
 

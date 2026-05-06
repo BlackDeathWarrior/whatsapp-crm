@@ -101,7 +101,7 @@ plain-HTTP version.
 
 ## 7. Update the Meta webhook
 
-Back in **Meta for Developers → WhatsApp → Configuration**, change the
+Back in **Meta for Developers → WhatsApp® → Configuration**, change the
 callback URL to `https://<your-domain>/api/whatsapp/webhook` and re-verify.
 
 ## 8. Schedule the automations cron

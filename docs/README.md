@@ -1,6 +1,6 @@
 # Documentation
 
-A self-hostable CRM template for WhatsApp built on Next.js and Supabase.
+A self-hostable CRM template for WhatsApp® built on Next.js and Supabase.
 These docs walk you from a freshly forked repo to a production deploy.
 
 ## Reading order

@@ -56,7 +56,7 @@ AUTOMATION_CRON_SECRET=generate-a-long-random-string
 - Rotate `SUPABASE_SERVICE_ROLE_KEY` if it leaks — Supabase lets you
   regenerate it under Project Settings → API.
 - Treat `ENCRYPTION_KEY` like a database master key. Losing it means
-  connected WhatsApp accounts must reconnect; rotating it means the same.
+  connected WhatsApp® accounts must reconnect; rotating it means the same.
 
 ## Next step
 

@@ -77,7 +77,7 @@ export default async function Image() {
             maxWidth: 1000,
           }}
         >
-          <span>Run your WhatsApp business from&nbsp;</span>
+          <span>Run your WhatsApp® business from&nbsp;</span>
           <span style={{ color: '#a78bfa' }}>one inbox.</span>
         </div>
 

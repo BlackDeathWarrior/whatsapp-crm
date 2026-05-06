@@ -30,7 +30,7 @@ cp .env.local.example .env.local
 
 You cannot run `npm run dev` until **at least** `NEXT_PUBLIC_SUPABASE_URL`
 and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set. You need the full Supabase
-setup before WhatsApp features will work, so do that next.
+setup before WhatsApp® features will work, so do that next.
 
 ## 4. Set up Supabase
 

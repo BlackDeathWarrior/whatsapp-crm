@@ -1,6 +1,6 @@
 # WhatsApp setup
 
-This template talks to the official **WhatsApp Business Cloud API** (Meta). Each
+This template talks to the official **WhatsApp® Business Cloud API** (Meta). Each
 account stores its own `phone_number_id`, `waba_id`, and encrypted
 `access_token` — there is no shared app-level token. This page walks
 through getting those values and wiring the webhook.

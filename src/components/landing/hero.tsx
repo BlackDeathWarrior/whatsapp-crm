@@ -25,7 +25,7 @@ export function Hero() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1 text-xs text-slate-300">
             <ShieldCheck className="h-3.5 w-3.5 text-violet-400" />
-            Built on the official WhatsApp Business API
+            Built on the official WhatsApp® Business API
           </div>
 
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">

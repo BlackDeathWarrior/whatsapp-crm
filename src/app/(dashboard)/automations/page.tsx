@@ -159,7 +159,7 @@ export default function AutomationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Automations</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Build workflows that react to WhatsApp events automatically.
+            Build workflows that react to WhatsApp® events automatically.
           </p>
         </div>
         <Button

@@ -41,7 +41,7 @@ In Supabase → **Authentication → Providers → Email**, either:
 Set `NEXT_PUBLIC_SITE_URL` **and** add the same origin to Supabase →
 **Authentication → URL Configuration → Redirect URLs**.
 
-## WhatsApp
+## WhatsApp®
 
 ### Webhook verification fails in Meta
 
