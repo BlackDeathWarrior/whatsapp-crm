@@ -16,7 +16,7 @@ interface Action {
 }
 
 const ACTIONS: Action[] = [
-  { label: 'New Contact', href: '/contacts', icon: UserPlus, tint: 'text-emerald-400' },
+  { label: 'New Contact', href: '/contacts', icon: UserPlus, tint: 'text-violet-400' },
   { label: 'New Deal', href: '/pipelines', icon: Briefcase, tint: 'text-blue-400' },
   { label: 'New Broadcast', href: '/broadcasts/new', icon: Radio, tint: 'text-amber-400' },
   { label: 'New Automation', href: '/automations/new', icon: Zap, tint: 'text-violet-400' },

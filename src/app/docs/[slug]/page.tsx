@@ -37,7 +37,7 @@ export default async function DocPage({ params }: DocPageProps) {
 
   return (
     <article className="mx-auto w-full max-w-3xl">
-      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+      <p className="text-xs font-semibold uppercase tracking-wider text-violet-400">
         {doc.section}
       </p>
       <div

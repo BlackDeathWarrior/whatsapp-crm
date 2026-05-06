@@ -54,7 +54,7 @@ export function SectionHeader({
   return (
     <div className={cn(base, max, 'mb-12')}>
       {eyebrow && (
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-400">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-violet-400">
           {eyebrow}
         </p>
       )}

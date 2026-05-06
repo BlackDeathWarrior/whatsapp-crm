@@ -43,7 +43,7 @@ export function HowItWorks() {
               className="relative rounded-xl border border-slate-800 bg-slate-900/40 p-6"
             >
               <div className="flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
                   <Icon className="h-5 w-5" />
                 </div>
                 <span

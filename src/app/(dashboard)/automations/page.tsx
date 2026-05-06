@@ -146,7 +146,7 @@ export default function AutomationsPage() {
   if (automations === null) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
       </div>
     )
   }
@@ -164,7 +164,7 @@ export default function AutomationsPage() {
         </div>
         <Button
           onClick={() => router.push("/automations/new")}
-          className="bg-emerald-600 text-white hover:bg-emerald-700"
+          className="bg-violet-600 text-white hover:bg-violet-700"
         >
           <Plus className="h-4 w-4" />
           Create Automation
@@ -182,9 +182,9 @@ export default function AutomationsPage() {
                 <button
                   key={slug}
                   onClick={() => startFromTemplate(slug)}
-                  className="group flex flex-col items-start rounded-xl border border-slate-800 bg-slate-900 p-4 text-left transition-colors hover:border-emerald-500/50 hover:bg-slate-900/80"
+                  className="group flex flex-col items-start rounded-xl border border-slate-800 bg-slate-900 p-4 text-left transition-colors hover:border-violet-500/50 hover:bg-slate-900/80"
                 >
-                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/15">
+                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 group-hover:bg-violet-500/15">
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="text-sm font-semibold text-white">{t.name}</div>
@@ -198,8 +198,8 @@ export default function AutomationsPage() {
 
       {automations.length === 0 ? (
         <div className="flex h-48 flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-900/40">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10">
-            <Zap className="h-6 w-6 text-emerald-500" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10">
+            <Zap className="h-6 w-6 text-violet-500" />
           </div>
           <p className="mt-3 text-sm font-medium text-white">No automations yet</p>
           <p className="mt-1 text-xs text-slate-400">
@@ -275,10 +275,10 @@ function AutomationCard({
     <li className="rounded-xl border border-slate-800 bg-slate-900 transition-colors hover:border-slate-700">
       <div className="flex items-center gap-4 p-4">
         <div
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500/10"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-violet-500/10"
           aria-hidden
         >
-          <Zap className="h-5 w-5 text-emerald-400" />
+          <Zap className="h-5 w-5 text-violet-400" />
         </div>
 
         <button
@@ -292,8 +292,8 @@ function AutomationCard({
             </span>
             {automation.is_active && (
               <span className="relative flex h-2 w-2" aria-label="active">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
               </span>
             )}
           </div>

@@ -37,7 +37,7 @@ export function FeatureSpotlight({
         )}
       >
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+          <p className="text-xs font-semibold uppercase tracking-wider text-violet-400">
             {eyebrow}
           </p>
           <h3 className="mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl">
@@ -50,7 +50,7 @@ export function FeatureSpotlight({
             <ul className="mt-5 space-y-2.5">
               {bullets.map((b) => (
                 <li key={b} className="flex items-start gap-2.5 text-sm text-slate-300">
-                  <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-400" />
+                  <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-violet-400" />
                   <span>{b}</span>
                 </li>
               ))}

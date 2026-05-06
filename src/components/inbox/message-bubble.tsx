@@ -93,7 +93,7 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
   if (loading) {
     return (
       <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-slate-700">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
       </div>
     );
   }
@@ -185,7 +185,7 @@ function MessageContent({ message }: { message: Message }) {
     case "template":
       return (
         <div>
-          <span className="mb-1 inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+          <span className="mb-1 inline-flex items-center gap-1 rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] font-medium text-violet-400">
             <LayoutTemplate className="h-3 w-3" />
             Template
           </span>
@@ -226,7 +226,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         className={cn(
           "relative max-w-[75%] rounded-2xl px-3 py-2",
           isAgent
-            ? "rounded-br-md bg-emerald-600 text-white"
+            ? "rounded-br-md bg-violet-600 text-white"
             : "rounded-bl-md bg-slate-800 text-slate-100"
         )}
       >

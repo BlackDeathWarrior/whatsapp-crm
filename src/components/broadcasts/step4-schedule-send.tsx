@@ -127,10 +127,10 @@ export function Step4ScheduleSend({
             <p className="text-xs text-slate-400">Estimated Reach</p>
             <div className="flex items-center gap-1.5">
               {loadingReach ? (
-                <Loader2 className="h-3 w-3 animate-spin text-emerald-500" />
+                <Loader2 className="h-3 w-3 animate-spin text-violet-500" />
               ) : (
                 <>
-                  <Users className="h-3.5 w-3.5 text-emerald-400" />
+                  <Users className="h-3.5 w-3.5 text-violet-400" />
                   <p className="font-medium text-white">{estimatedReach.toLocaleString()}</p>
                 </>
               )}
@@ -151,11 +151,11 @@ export function Step4ScheduleSend({
             onClick={() => setTiming('now')}
             className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${
               timing === 'now'
-                ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/30'
+                ? 'border-violet-500 bg-violet-500/5 ring-1 ring-violet-500/30'
                 : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
             }`}
           >
-            <Send className={`mt-0.5 h-4 w-4 ${timing === 'now' ? 'text-emerald-400' : 'text-slate-400'}`} />
+            <Send className={`mt-0.5 h-4 w-4 ${timing === 'now' ? 'text-violet-400' : 'text-slate-400'}`} />
             <div>
               <p className="text-sm font-medium text-white">Send Immediately</p>
               <p className="mt-0.5 text-xs text-slate-400">Start sending right away</p>
@@ -180,17 +180,17 @@ export function Step4ScheduleSend({
 
       {/* Processing overlay */}
       {isProcessing && (
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+              <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
               <p className="text-sm font-medium text-white">Sending broadcast...</p>
             </div>
-            <span className="text-xs font-medium text-emerald-400">{progress}%</span>
+            <span className="text-xs font-medium text-violet-400">{progress}%</span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-slate-800">
             <div
-              className="h-1.5 rounded-full bg-emerald-500 transition-all duration-300"
+              className="h-1.5 rounded-full bg-violet-500 transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -226,7 +226,7 @@ export function Step4ScheduleSend({
             render={
               <Button
                 disabled={!name.trim() || isProcessing}
-                className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
               />
             }
           >
@@ -257,7 +257,7 @@ export function Step4ScheduleSend({
                   setShowConfirm(false);
                   onSend();
                 }}
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                className="bg-violet-600 text-white hover:bg-violet-700"
               >
                 <Send className="h-4 w-4" />
                 Confirm & Send
