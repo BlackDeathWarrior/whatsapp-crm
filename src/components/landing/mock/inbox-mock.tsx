@@ -14,7 +14,9 @@ export function InboxMock() {
         <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
         <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
         <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
-        <span className="ml-3 text-[10px] text-slate-500">Inbox — WaCRM</span>
+        <span className="ml-3 text-[10px] text-slate-500">
+          Inbox — CRM Template for WhatsApp
+        </span>
       </div>
 
       <div className="grid grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr]">
@@ -33,16 +35,16 @@ export function InboxMock() {
             <div
               key={i}
               className={`flex items-start gap-2 px-3 py-2.5 ${
-                c.active ? 'border-l-2 border-emerald-500 bg-slate-800/60' : 'border-l-2 border-transparent'
+                c.active ? 'border-l-2 border-violet-500 bg-slate-800/60' : 'border-l-2 border-transparent'
               }`}
             >
-              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-[10px] font-medium text-emerald-400">
+              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-[10px] font-medium text-violet-400">
                 {c.name[0]}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-xs font-medium text-white">{c.name}</span>
-                  {c.unread && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                  {c.unread && <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />}
                 </div>
                 <p className="truncate text-[10px] text-slate-500">{c.preview}</p>
               </div>
@@ -53,14 +55,14 @@ export function InboxMock() {
         {/* Thread */}
         <div className="flex min-h-[280px] flex-col bg-slate-950">
           <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10 text-[10px] font-medium text-emerald-400">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-500/10 text-[10px] font-medium text-violet-400">
               A
             </span>
             <div>
               <div className="text-xs font-medium text-white">Aisha</div>
               <div className="text-[10px] text-slate-500">+44 7700 900123</div>
             </div>
-            <div className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
+            <div className="ml-auto inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-300">
               Open
             </div>
           </div>
@@ -69,7 +71,7 @@ export function InboxMock() {
             <div className="mr-auto max-w-[75%] rounded-2xl rounded-bl-sm bg-slate-800 px-3 py-2 text-xs text-slate-200">
               Hi! Is the kit available in large?
             </div>
-            <div className="ml-auto max-w-[75%] rounded-2xl rounded-br-sm bg-emerald-500 px-3 py-2 text-xs text-white">
+            <div className="ml-auto max-w-[75%] rounded-2xl rounded-br-sm bg-violet-500 px-3 py-2 text-xs text-white">
               Yes — shipping today 📦
             </div>
             <div className="mr-auto max-w-[75%] rounded-2xl rounded-bl-sm bg-slate-800 px-3 py-2 text-xs text-slate-200">
@@ -85,7 +87,7 @@ export function InboxMock() {
               type="button"
               tabIndex={-1}
               aria-hidden
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500 text-white"
             >
               <MessageSquare className="h-3.5 w-3.5" />
             </button>

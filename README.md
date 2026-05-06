@@ -1,10 +1,10 @@
-# WaCRM
+# CRM Template for WhatsApp
 
-> Self-hostable WhatsApp® CRM template — shared inbox, contacts, sales
-> pipelines, broadcasts, and no-code automations. Fork it, brand it,
-> host it.
+> Self-hostable CRM template for WhatsApp® — shared inbox, contacts,
+> sales pipelines, broadcasts, and no-code automations. Fork it, brand
+> it, host it.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
 [![CI](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml/badge.svg)](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e?logo=supabase)](https://supabase.com)
@@ -28,7 +28,7 @@
 
 ## Why fork this?
 
-WaCRM is a **template**, not a product. Forking means you get:
+This is a **template**, not a product. Forking means you get:
 
 - **Full ownership** — your code, your Supabase project, your domain,
   your data. No SaaS lock-in, no seat pricing, no trust dance.

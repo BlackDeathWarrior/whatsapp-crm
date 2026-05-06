@@ -111,10 +111,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500">
               <MessageSquare className="h-4 w-4 text-white" />
             </div>
-            <span className="text-lg font-semibold text-white">WaCRM</span>
+            <span className="text-sm font-semibold text-white">
+              CRM Template for WhatsApp
+            </span>
           </Link>
           <button
             type="button"
@@ -145,7 +147,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       // Taller on mobile so fingers can hit the row reliably (≥44px).
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
                       isActive
-                        ? "bg-emerald-500/10 text-emerald-500"
+                        ? "bg-violet-500/10 text-violet-500"
                         : "text-slate-400 hover:bg-slate-800 hover:text-white",
                     )}
                   >
@@ -156,8 +158,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                         aria-label={`${totalUnread} unread conversation${totalUnread === 1 ? "" : "s"}`}
                         className="relative flex h-2 w-2"
                       >
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
                       </span>
                     )}
                   </Link>
@@ -178,7 +180,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
                       isActive
-                        ? "bg-emerald-500/10 text-emerald-500"
+                        ? "bg-violet-500/10 text-violet-500"
                         : "text-slate-400 hover:bg-slate-800 hover:text-white",
                     )}
                   >
@@ -202,7 +204,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     alt={profile.full_name ?? "Avatar"}
                   />
                 ) : null}
-                <AvatarFallback className="bg-emerald-500/10 text-sm font-medium text-emerald-500">
+                <AvatarFallback className="bg-violet-500/10 text-sm font-medium text-violet-500">
                   {profile?.full_name?.charAt(0)?.toUpperCase() ??
                     profile?.email?.charAt(0)?.toUpperCase() ??
                     "U"}

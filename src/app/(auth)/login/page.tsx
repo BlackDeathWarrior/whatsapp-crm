@@ -47,12 +47,12 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
       <Card className="w-full max-w-md border-slate-800 bg-slate-900">
         <CardHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10">
-            <MessageSquare className="h-6 w-6 text-emerald-500" />
+          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10">
+            <MessageSquare className="h-6 w-6 text-violet-500" />
           </div>
           <CardTitle className="text-xl text-white">Welcome back</CardTitle>
           <CardDescription className="text-slate-400">
-            Sign in to your WaCRM account
+            Sign in to your account
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -74,7 +74,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+                className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus-visible:border-violet-500 focus-visible:ring-violet-500/20"
               />
             </div>
 
@@ -85,7 +85,7 @@ export default function LoginPage() {
                 </Label>
                 <Link
                   href="/forgot-password"
-                  className="text-sm text-emerald-500 hover:text-emerald-400"
+                  className="text-sm text-violet-500 hover:text-violet-400"
                 >
                   Forgot password?
                 </Link>
@@ -97,14 +97,14 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+                className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus-visible:border-violet-500 focus-visible:ring-violet-500/20"
               />
             </div>
 
             <Button
               type="submit"
               disabled={loading}
-              className="mt-2 h-10 w-full bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+              className="mt-2 h-10 w-full bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50"
             >
               {loading ? "Signing in..." : "Sign in"}
             </Button>
@@ -114,7 +114,7 @@ export default function LoginPage() {
             Don&apos;t have an account?{" "}
             <Link
               href="/signup"
-              className="text-emerald-500 hover:text-emerald-400"
+              className="text-violet-500 hover:text-violet-400"
             >
               Create account
             </Link>

@@ -22,7 +22,7 @@ const ORDER: Record<string, { order: number; section: string; description: strin
   'getting-started': {
     order: 1,
     section: 'Setup',
-    description: 'Fork, install, run WaCRM locally in about 15 minutes.',
+    description: 'Fork, install, run the template locally in about 15 minutes.',
   },
   'supabase-setup': {
     order: 2,
@@ -37,12 +37,12 @@ const ORDER: Record<string, { order: number; section: string; description: strin
   'environment-variables': {
     order: 4,
     section: 'Setup',
-    description: 'Full reference for every env var WaCRM reads.',
+    description: 'Full reference for every env var the app reads.',
   },
   'deployment-hostinger': {
     order: 5,
     section: 'Deploy',
-    description: 'Ship WaCRM on Hostinger Managed Node.js Hosting.',
+    description: 'Ship the template on Hostinger Managed Node.js Hosting.',
   },
   'automations-and-cron': {
     order: 6,
@@ -71,9 +71,9 @@ const CLASSES = {
   ul: 'my-3 pl-6 list-disc marker:text-slate-500 text-slate-300 leading-relaxed space-y-1.5',
   ol: 'my-3 pl-6 list-decimal marker:text-slate-500 text-slate-300 leading-relaxed space-y-1.5',
   li: 'pl-1',
-  blockquote: 'my-4 rounded-r-lg border-l-4 border-emerald-500 bg-emerald-500/5 px-4 py-3 text-slate-200',
+  blockquote: 'my-4 rounded-r-lg border-l-4 border-violet-500 bg-violet-500/5 px-4 py-3 text-slate-200',
   hr: 'my-8 border-t border-slate-800',
-  a: 'text-emerald-400 underline decoration-transparent underline-offset-2 transition-colors hover:decoration-emerald-500/60',
+  a: 'text-violet-400 underline decoration-transparent underline-offset-2 transition-colors hover:decoration-violet-500/60',
   codespan: 'rounded-md border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[0.85em] font-mono text-slate-100',
   pre: 'my-5 overflow-x-auto rounded-lg border border-slate-800 bg-slate-900/80 p-4 text-[0.825rem] leading-relaxed font-mono text-slate-100',
   table: 'my-5 block w-full overflow-x-auto rounded-lg border border-slate-800 text-sm',

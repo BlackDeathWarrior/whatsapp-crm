@@ -52,13 +52,12 @@ export function SessionsCard() {
       <Card className="bg-slate-900/40 border-slate-800">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
-            <LogOut className="size-4 text-emerald-400" />
+            <LogOut className="size-4 text-violet-400" />
             Active sessions
           </CardTitle>
           <CardDescription className="text-slate-400">
-            Sign out of every device where you&apos;re logged in to WaCRM —
-            including this one. Useful if you lost a laptop or shared your
-            password.
+            Sign out of every device where you&apos;re logged in — including
+            this one. Useful if you lost a laptop or shared your password.
           </CardDescription>
         </CardHeader>
         <CardContent>

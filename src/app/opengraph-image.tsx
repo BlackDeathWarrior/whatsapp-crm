@@ -38,7 +38,7 @@ export default async function Image() {
           justifyContent: 'center',
           padding: 80,
           background:
-            'linear-gradient(135deg, #020617 0%, #0f172a 55%, #064e3b 100%)',
+            'linear-gradient(135deg, #020617 0%, #0f172a 55%, #2e1065 100%)',
           color: 'white',
           fontFamily: 'sans-serif',
         }}
@@ -49,7 +49,7 @@ export default async function Image() {
               width: 64,
               height: 64,
               borderRadius: 14,
-              background: '#10b981',
+              background: '#7c3aed',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -78,7 +78,7 @@ export default async function Image() {
           }}
         >
           <span>Run your WhatsApp® business from&nbsp;</span>
-          <span style={{ color: '#34d399' }}>one inbox.</span>
+          <span style={{ color: '#a78bfa' }}>one inbox.</span>
         </div>
 
         <div

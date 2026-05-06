@@ -27,7 +27,9 @@ export function AnalyticsMock() {
         <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
         <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
         <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
-        <span className="ml-3 text-[10px] text-slate-500">Dashboard — WaCRM</span>
+        <span className="ml-3 text-[10px] text-slate-500">
+          Dashboard — CRM Template for WhatsApp
+        </span>
       </div>
 
       <div className="space-y-3 p-4">
@@ -47,7 +49,7 @@ export function AnalyticsMock() {
               </div>
               <div
                 className={`text-[10px] tabular-nums ${
-                  s.positive ? 'text-emerald-400' : 'text-red-400'
+                  s.positive ? 'text-violet-400' : 'text-red-400'
                 }`}
               >
                 {s.delta}
@@ -67,7 +69,7 @@ export function AnalyticsMock() {
                 Incoming
               </span>
               <span className="inline-flex items-center gap-1 text-[9px] text-slate-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
                 Outgoing
               </span>
             </div>
@@ -89,7 +91,7 @@ export function AnalyticsMock() {
                 strokeDasharray="3 3"
               />
             ))}
-            <path d={path(outgoing)} fill="none" stroke="#10b981" strokeWidth={1.5} />
+            <path d={path(outgoing)} fill="none" stroke="#7c3aed" strokeWidth={1.5} />
             <path d={path(incoming)} fill="none" stroke="#3b82f6" strokeWidth={1.5} />
           </svg>
         </div>
