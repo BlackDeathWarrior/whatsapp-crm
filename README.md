@@ -1,4 +1,4 @@
-# CRM Template for WhatsApp
+# wacrm — CRM Template for WhatsApp
 
 > Self-hostable CRM template for WhatsApp® — shared inbox, contacts,
 > sales pipelines, broadcasts, and no-code automations. Fork it, brand
@@ -9,6 +9,11 @@
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e?logo=supabase)](https://supabase.com)
 [![Stars](https://img.shields.io/github/stars/ArnasDon/wacrm?style=social)](https://github.com/ArnasDon/wacrm/stargazers)
+
+The marketing site and self-host docs live in a separate repo:
+[ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)
+([wacrm.tech](https://wacrm.tech)). This repo is the product —
+clone or fork it to run your own CRM.
 
 ## What you get out of the box
 
@@ -56,27 +61,24 @@ cp .env.local.example .env.local   # fill in Supabase + Meta creds
 npm run dev
 ```
 
-Open <http://localhost:3000>.
-
-Full setup — Supabase migrations, WhatsApp Business API config, and
-production deploy — is in [`docs/`](./docs/README.md).
+Open <http://localhost:3000>. You'll be redirected to `/login` (or
+`/dashboard` if already signed in).
 
 ## Documentation
 
-**Setup**
-- [Getting started](./docs/getting-started.md)
-- [Supabase setup](./docs/supabase-setup.md)
-- [WhatsApp setup](./docs/whatsapp-setup.md)
-- [Environment variables](./docs/environment-variables.md)
+Full self-host documentation — Supabase migrations, WhatsApp Business
+API config, and production deploy — lives at
+**[wacrm.tech/docs](https://wacrm.tech/docs)**
+(source: [ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)).
 
-**Deploy**
-- [Deploy on Hostinger](./docs/deployment-hostinger.md)
-- [Automations cron](./docs/automations-and-cron.md)
-
-**Reference**
-- [Architecture](./docs/architecture.md) — stack, folder layout,
-  request lifecycle
-- [Troubleshooting](./docs/troubleshooting.md)
+Key pages:
+- [Getting started](https://wacrm.tech/docs/getting-started)
+- [Supabase setup](https://wacrm.tech/docs/supabase-setup)
+- [WhatsApp setup](https://wacrm.tech/docs/whatsapp-setup)
+- [Environment variables](https://wacrm.tech/docs/environment-variables)
+- [Deploy on Hostinger](https://wacrm.tech/docs/deployment-hostinger)
+- [Architecture](https://wacrm.tech/docs/architecture)
+- [Troubleshooting](https://wacrm.tech/docs/troubleshooting)
 
 ## Stack
 
