@@ -5,7 +5,7 @@
   "description": "Self-hostable CRM template for WhatsApp built on Next.js and Supabase — shared inbox, contacts, sales pipelines, broadcasts, and no-code automations.",
   "license": "MIT",
   "author": "Arnas Donauskas",
-  "homepage": "https://wacrm.tech",
+  "homepage": "https://github.com/ArnasDon/wacrm",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ArnasDon/wacrm.git"
@@ -47,7 +47,6 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^1.8.0",
-    "marked": "^18.0.2",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
