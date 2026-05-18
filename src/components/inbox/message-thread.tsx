@@ -3,7 +3,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import type { Conversation, Message, Contact, ConversationStatus } from "@/types";
+import type {
+  Conversation,
+  Message,
+  Contact,
+  ConversationStatus,
+  MessageTemplate,
+} from "@/types";
 import {
   MessageSquare,
   ChevronDown,
@@ -23,7 +29,15 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./message-bubble";
 import { MessageComposer } from "./message-composer";
+import { TemplatePicker } from "./template-picker";
 import { toast } from "sonner";
+
+function renderTemplateBody(body: string, params: string[]): string {
+  return body.replace(/\{\{(\d+)\}\}/g, (_, raw) => {
+    const idx = Number(raw) - 1;
+    return params[idx] ?? `{{${raw}}}`;
+  });
+}
 
 interface MessageThreadProps {
   conversation: Conversation | null;
@@ -263,8 +277,60 @@ export function MessageThread({
 
   const handleOpenTemplates = useCallback(() => {
     setTemplateModalOpen(true);
-    // Template modal implementation would go here
   }, []);
+
+  const handleSendTemplate = useCallback(
+    async (template: MessageTemplate, params: string[]) => {
+      if (!conversation) return;
+
+      const renderedBody = renderTemplateBody(template.body_text, params);
+      const tempId = `temp-${Date.now()}`;
+
+      const optimisticMsg: Message = {
+        id: tempId,
+        conversation_id: conversation.id,
+        sender_type: "agent",
+        content_type: "template",
+        content_text: renderedBody,
+        template_name: template.name,
+        status: "sending",
+        created_at: new Date().toISOString(),
+      };
+      onNewMessage(optimisticMsg);
+
+      try {
+        const res = await fetch("/api/whatsapp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversation_id: conversation.id,
+            message_type: "template",
+            template_name: template.name,
+            template_params: params,
+            content_text: renderedBody,
+          }),
+        });
+
+        const payload = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          const reason = payload?.error || `HTTP ${res.status}`;
+          console.error("Failed to send template:", reason);
+          toast.error(`Failed to send template: ${reason}`);
+          onUpdateMessage(tempId, { status: "failed" });
+          return;
+        }
+
+        onUpdateMessage(tempId, { status: "sent" });
+      } catch (err) {
+        console.error("Failed to send template:", err);
+        const reason = err instanceof Error ? err.message : "network error";
+        toast.error(`Failed to send template: ${reason}`);
+        onUpdateMessage(tempId, { status: "failed" });
+      }
+    },
+    [conversation, onNewMessage, onUpdateMessage],
+  );
 
   // Empty state
   if (!conversation || !contact) {
@@ -406,6 +472,12 @@ export function MessageThread({
         sessionExpired={sessionInfo.expired}
         onSend={handleSend}
         onOpenTemplates={handleOpenTemplates}
+      />
+
+      <TemplatePicker
+        open={templateModalOpen}
+        onOpenChange={setTemplateModalOpen}
+        onSelect={handleSendTemplate}
       />
     </div>
   );
