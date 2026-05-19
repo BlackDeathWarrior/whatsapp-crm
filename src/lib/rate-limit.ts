@@ -121,6 +121,10 @@ export const RATE_LIMITS = {
    *  broadcast is one call; this caps the rate at which a single user
    *  can launch campaigns, not the messages inside one. */
   broadcast: { limit: 5, windowMs: 60_000 },
+  /** Reaction add/swap/remove. More permissive than send — users
+   *  fidget with reactions and a single "swap" is actually two calls
+   *  (remove + add) under the hood. */
+  react: { limit: 120, windowMs: 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import type { Message } from "@/types";
+import type { Message, MessageReaction } from "@/types";
 import {
   Clock,
   Check,
@@ -14,9 +14,16 @@ import {
   ImageOff,
 } from "lucide-react";
 import { format } from "date-fns";
+import { ReplyQuote } from "./reply-quote";
+import { MessageReactions } from "./message-reactions";
 
 interface MessageBubbleProps {
   message: Message;
+  /** Pre-computed quote info for messages that reply to another. */
+  reply?: { authorLabel: string; preview: string } | null;
+  reactions?: MessageReaction[];
+  currentUserId?: string;
+  onToggleReaction?: (emoji: string) => void;
 }
 
 function StatusIcon({ status }: { status: Message["status"] }) {
@@ -214,7 +221,13 @@ function MessageContent({ message }: { message: Message }) {
   }
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  reply,
+  reactions,
+  currentUserId,
+  onToggleReaction,
+}: MessageBubbleProps) {
   const isAgent = message.sender_type === "agent" || message.sender_type === "bot";
   const time = format(new Date(message.created_at), "HH:mm");
 
@@ -224,22 +237,39 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     >
       <div
         className={cn(
-          "relative max-w-[75%] rounded-2xl px-3 py-2",
-          isAgent
-            ? "rounded-br-md bg-violet-600 text-white"
-            : "rounded-bl-md bg-slate-800 text-slate-100"
+          "flex max-w-[75%] flex-col",
+          isAgent ? "items-end" : "items-start",
         )}
       >
-        <MessageContent message={message} />
         <div
           className={cn(
-            "mt-1 flex items-center gap-1",
-            isAgent ? "justify-end" : "justify-start"
+            "relative rounded-2xl px-3 py-2",
+            isAgent
+              ? "rounded-br-md bg-violet-600 text-white"
+              : "rounded-bl-md bg-slate-800 text-slate-100",
           )}
         >
-          <span className="text-[10px] text-white/60">{time}</span>
-          {isAgent && <StatusIcon status={message.status} />}
+          {reply && (
+            <ReplyQuote authorLabel={reply.authorLabel} preview={reply.preview} />
+          )}
+          <MessageContent message={message} />
+          <div
+            className={cn(
+              "mt-1 flex items-center gap-1",
+              isAgent ? "justify-end" : "justify-start",
+            )}
+          >
+            <span className="text-[10px] text-white/60">{time}</span>
+            {isAgent && <StatusIcon status={message.status} />}
+          </div>
         </div>
+        {reactions && reactions.length > 0 && onToggleReaction && (
+          <MessageReactions
+            reactions={reactions}
+            currentUserId={currentUserId}
+            onToggle={onToggleReaction}
+          />
+        )}
       </div>
     </div>
   );

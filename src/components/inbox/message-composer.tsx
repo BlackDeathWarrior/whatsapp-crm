@@ -4,12 +4,22 @@ import { useState, useRef, useCallback, KeyboardEvent } from "react";
 import { Send, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ReplyQuote } from "./reply-quote";
+
+interface ReplyDraft {
+  /** Internal UUID of the message being replied to — sent back through onSend. */
+  id: string;
+  authorLabel: string;
+  preview: string;
+}
 
 interface MessageComposerProps {
   conversationId: string;
   sessionExpired: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, replyToId?: string) => void;
   onOpenTemplates: () => void;
+  replyTo?: ReplyDraft | null;
+  onClearReply?: () => void;
 }
 
 export function MessageComposer({
@@ -17,6 +27,8 @@ export function MessageComposer({
   sessionExpired,
   onSend,
   onOpenTemplates,
+  replyTo,
+  onClearReply,
 }: MessageComposerProps) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -36,7 +48,7 @@ export function MessageComposer({
 
     setSending(true);
     try {
-      onSend(trimmed);
+      onSend(trimmed, replyTo?.id);
       setText("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
@@ -44,7 +56,7 @@ export function MessageComposer({
     } finally {
       setSending(false);
     }
-  }, [text, sending, sessionExpired, onSend]);
+  }, [text, sending, sessionExpired, onSend, replyTo?.id]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -66,6 +78,15 @@ export function MessageComposer({
 
   return (
     <div className="border-t border-slate-800 bg-slate-900 p-3">
+      {replyTo && (
+        <div className="mb-2">
+          <ReplyQuote
+            authorLabel={replyTo.authorLabel}
+            preview={replyTo.preview}
+            onDismiss={onClearReply}
+          />
+        </div>
+      )}
       {sessionExpired && (
         <div className="mb-2 flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-2">
           <p className="text-xs text-amber-400">

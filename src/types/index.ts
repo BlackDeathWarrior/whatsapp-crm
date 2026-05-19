@@ -90,6 +90,19 @@ export interface Message {
   message_id?: string;
   status: MessageStatus;
   created_at: string;
+  reply_to_message_id?: string;
+}
+
+export type ReactionActor = 'customer' | 'agent';
+
+export interface MessageReaction {
+  id: string;
+  message_id: string;
+  conversation_id: string;
+  actor_type: ReactionActor;
+  actor_id?: string;
+  emoji: string;
+  created_at: string;
 }
 
 export interface WhatsAppConfig {

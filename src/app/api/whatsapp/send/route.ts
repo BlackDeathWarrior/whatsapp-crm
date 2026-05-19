@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       media_url,
       template_name,
       template_params,
+      reply_to_message_id,
     } = body
 
     if (!conversation_id || !message_type) {
@@ -136,6 +137,37 @@ export async function POST(request: Request) {
         })
     }
 
+    // Resolve the reply target (if any) to its Meta message_id, which is
+    // what `context.message_id` on the outgoing Meta payload needs. The
+    // parent must belong to this same conversation — otherwise a caller
+    // could quote messages they can't see by guessing UUIDs.
+    let contextMessageId: string | undefined
+    if (reply_to_message_id) {
+      const { data: parent, error: parentError } = await supabase
+        .from('messages')
+        .select('message_id, conversation_id')
+        .eq('id', reply_to_message_id)
+        .eq('conversation_id', conversation_id)
+        .maybeSingle()
+
+      if (parentError || !parent) {
+        return NextResponse.json(
+          { error: 'reply_to_message_id not found in this conversation' },
+          { status: 400 }
+        )
+      }
+      if (!parent.message_id) {
+        // Parent never reached Meta (still in 'sending' or 'failed') — we
+        // can't quote it on WhatsApp. Send without context rather than
+        // dropping the message entirely.
+        console.warn(
+          '[whatsapp/send] reply target has no Meta message_id; sending without context'
+        )
+      } else {
+        contextMessageId = parent.message_id
+      }
+    }
+
     // Send via Meta API — retry with phone-number variants if Meta rejects
     // with "recipient not in allowed list" (common in sandbox / when a
     // number was registered with/without a trunk 0). If an alternate
@@ -152,6 +184,7 @@ export async function POST(request: Request) {
           to: phone,
           templateName: template_name,
           params: template_params || [],
+          contextMessageId,
         })
         return result.messageId
       }
@@ -160,6 +193,7 @@ export async function POST(request: Request) {
         accessToken,
         to: phone,
         text: content_text,
+        contextMessageId,
       })
       return result.messageId
     }
@@ -225,6 +259,7 @@ export async function POST(request: Request) {
         template_name: template_name || null,
         message_id: waMessageId,
         status: 'sent',
+        reply_to_message_id: reply_to_message_id || null,
       })
       .select()
       .single()

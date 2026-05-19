@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import type {
   Conversation,
   Message,
+  MessageReaction,
   Contact,
   ConversationStatus,
   MessageTemplate,
@@ -31,9 +32,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./message-bubble";
+import { MessageActions } from "./message-actions";
 import { MessageComposer } from "./message-composer";
 import { TemplatePicker } from "./template-picker";
+import { buildReplyPreview } from "./reply-quote";
 import { toast } from "sonner";
+
+interface ReplyDraft {
+  id: string;
+  authorLabel: string;
+  preview: string;
+}
 
 function renderTemplateBody(body: string, params: string[]): string {
   return body.replace(/\{\{(\d+)\}\}/g, (_, raw) => {
@@ -109,6 +118,8 @@ export function MessageThread({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [reactions, setReactions] = useState<MessageReaction[]>([]);
+  const [replyTo, setReplyTo] = useState<ReplyDraft | null>(null);
 
   // Profiles are bounded by RLS to rows the current user is allowed to
   // see — today that's just the current user, but the dropdown keeps the
@@ -210,6 +221,89 @@ export function MessageThread({
     };
   }, [conversationId]);
 
+  // Reactions: fetch + realtime per conversation. Subscribing here (not at
+  // the page level) keeps the channel scoped to the visible conversation,
+  // matching the message fetch effect above and avoiding cross-conversation
+  // chatter on a busy inbox.
+  useEffect(() => {
+    if (!conversationId) {
+      setReactions([]);
+      return;
+    }
+    const supabase = createClient();
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("message_reactions")
+        .select("*")
+        .eq("conversation_id", conversationId);
+      if (cancelled) return;
+      if (error) {
+        console.error("Failed to fetch reactions:", error);
+        return;
+      }
+      setReactions((data as MessageReaction[]) ?? []);
+    })();
+
+    const channel = supabase
+      .channel(`reactions:${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message_reactions",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const row = payload.new as MessageReaction;
+          setReactions((prev) =>
+            prev.some((r) => r.id === row.id) ? prev : [...prev, row],
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "message_reactions",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const row = payload.new as MessageReaction;
+          setReactions((prev) => prev.map((r) => (r.id === row.id ? row : r)));
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "message_reactions",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const old = payload.old as Partial<MessageReaction>;
+          if (!old?.id) return;
+          setReactions((prev) => prev.filter((r) => r.id !== old.id));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId]);
+
+  // Clear any in-progress reply draft when the active conversation changes —
+  // a quote pulled from conversation A shouldn't bleed into conversation B.
+  useEffect(() => {
+    setReplyTo(null);
+  }, [conversationId]);
+
   // Reset the server-side unread_count to 0 whenever an unread count
   // surfaces on the active conversation — covers both (a) opening a
   // conversation that had unread messages and (b) new messages arriving
@@ -240,7 +334,7 @@ export function MessageThread({
   }, [messages]);
 
   const handleSend = useCallback(
-    async (text: string) => {
+    async (text: string, replyToId?: string) => {
       if (!conversation) return;
 
       const tempId = `temp-${Date.now()}`;
@@ -254,8 +348,10 @@ export function MessageThread({
         content_text: text,
         status: "sending",
         created_at: new Date().toISOString(),
+        reply_to_message_id: replyToId,
       };
       onNewMessage(optimisticMsg);
+      setReplyTo(null);
 
       try {
         const res = await fetch("/api/whatsapp/send", {
@@ -265,6 +361,7 @@ export function MessageThread({
             conversation_id: conversation.id,
             message_type: "text",
             content_text: text,
+            reply_to_message_id: replyToId,
           }),
         });
 
@@ -363,6 +460,132 @@ export function MessageThread({
       }
     },
     [conversation, onNewMessage, onUpdateMessage],
+  );
+
+  // Build a quick id → Message map so reply quotes can be rendered without
+  // an extra fetch — the thread already holds the full conversation.
+  const messagesById = useMemo(() => {
+    const map = new Map<string, Message>();
+    for (const m of messages) map.set(m.id, m);
+    return map;
+  }, [messages]);
+
+  // Bucket reactions by their target message_id for O(1) per-bubble lookup.
+  const reactionsByMessageId = useMemo(() => {
+    const map = new Map<string, MessageReaction[]>();
+    for (const r of reactions) {
+      const bucket = map.get(r.message_id);
+      if (bucket) bucket.push(r);
+      else map.set(r.message_id, [r]);
+    }
+    return map;
+  }, [reactions]);
+
+  const contactDisplayName = contact?.name || contact?.phone || "Customer";
+
+  // Author label for a quoted message: "You" when we sent the parent,
+  // contact name when the customer sent it.
+  const authorLabelFor = useCallback(
+    (m: Message): string => {
+      const isAgentMsg =
+        m.sender_type === "agent" || m.sender_type === "bot";
+      return isAgentMsg ? "You" : contactDisplayName;
+    },
+    [contactDisplayName],
+  );
+
+  const handleStartReply = useCallback(
+    (msg: Message) => {
+      setReplyTo({
+        id: msg.id,
+        authorLabel: authorLabelFor(msg),
+        preview: buildReplyPreview(msg),
+      });
+    },
+    [authorLabelFor],
+  );
+
+  // Toggle (called from a reaction pill click). If the user already reacted
+  // with `emoji` → send "" to remove. Otherwise send `emoji` to add/swap.
+  const handleToggleReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!user?.id) return;
+      const current = reactions.find(
+        (r) =>
+          r.message_id === messageId &&
+          r.actor_type === "agent" &&
+          r.actor_id === user.id,
+      );
+      const nextEmoji = current?.emoji === emoji ? "" : emoji;
+      await postReaction(messageId, nextEmoji);
+    },
+    // postReaction is defined below; React only needs the closure refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [reactions, user?.id],
+  );
+
+  // Add or swap to a specific emoji (called from the emoji picker bar).
+  const handleAddReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!emoji) return;
+      await postReaction(messageId, emoji);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const postReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!user?.id || !conversation) return;
+
+      // Snapshot for rollback. Optimistically update local state so the
+      // pill flips immediately.
+      const prev = reactions;
+      const own = prev.find(
+        (r) =>
+          r.message_id === messageId &&
+          r.actor_type === "agent" &&
+          r.actor_id === user.id,
+      );
+
+      let next: MessageReaction[];
+      if (emoji === "") {
+        next = prev.filter((r) => r !== own);
+      } else if (own) {
+        next = prev.map((r) => (r === own ? { ...own, emoji } : r));
+      } else {
+        next = [
+          ...prev,
+          {
+            id: `temp-${Date.now()}`,
+            message_id: messageId,
+            conversation_id: conversation.id,
+            actor_type: "agent",
+            actor_id: user.id,
+            emoji,
+            created_at: new Date().toISOString(),
+          },
+        ];
+      }
+      setReactions(next);
+
+      try {
+        const res = await fetch("/api/whatsapp/react", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message_id: messageId, emoji }),
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload?.error || `HTTP ${res.status}`);
+        }
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "network error";
+        toast.error(`Reaction failed: ${reason}`);
+        setReactions(prev);
+      }
+    },
+    [reactions, conversation, user?.id],
   );
 
   const handleAssignChange = useCallback(
@@ -560,9 +783,36 @@ export function MessageThread({
                 </div>
                 {/* Messages */}
                 <div className="space-y-2">
-                  {group.messages.map((msg) => (
-                    <MessageBubble key={msg.id} message={msg} />
-                  ))}
+                  {group.messages.map((msg) => {
+                    const parent = msg.reply_to_message_id
+                      ? messagesById.get(msg.reply_to_message_id)
+                      : null;
+                    const reply = parent
+                      ? {
+                          authorLabel: authorLabelFor(parent),
+                          preview: buildReplyPreview(parent),
+                        }
+                      : null;
+                    const msgReactions = reactionsByMessageId.get(msg.id);
+                    return (
+                      <MessageActions
+                        key={msg.id}
+                        message={msg}
+                        onReply={() => handleStartReply(msg)}
+                        onReact={(emoji) => handleAddReaction(msg.id, emoji)}
+                      >
+                        <MessageBubble
+                          message={msg}
+                          reply={reply}
+                          reactions={msgReactions}
+                          currentUserId={user?.id}
+                          onToggleReaction={(emoji) =>
+                            handleToggleReaction(msg.id, emoji)
+                          }
+                        />
+                      </MessageActions>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -576,6 +826,8 @@ export function MessageThread({
         sessionExpired={sessionInfo.expired}
         onSend={handleSend}
         onOpenTemplates={handleOpenTemplates}
+        replyTo={replyTo}
+        onClearReply={() => setReplyTo(null)}
       />
 
       <TemplatePicker
