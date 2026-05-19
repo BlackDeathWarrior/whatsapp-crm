@@ -4,6 +4,8 @@
 > sales pipelines, broadcasts, and no-code automations. Fork it, brand
 > it, host it.
 
+[![Deploy on Hostinger](https://img.shields.io/badge/Deploy_on-Hostinger-673DE6?style=for-the-badge&logo=hostinger&logoColor=white)](https://www.hostinger.com/web-apps-hosting)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
 [![CI](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml/badge.svg)](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org)
