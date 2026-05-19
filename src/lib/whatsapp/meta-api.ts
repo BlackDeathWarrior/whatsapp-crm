@@ -74,6 +74,9 @@ export interface SendTextMessageArgs {
   accessToken: string
   to: string
   text: string
+  /** Meta's message_id of the message being replied to. Adds a `context` field
+   *  so WhatsApp renders the new message as a reply with a quote preview. */
+  contextMessageId?: string
 }
 
 /**
@@ -83,21 +86,25 @@ export interface SendTextMessageArgs {
 export async function sendTextMessage(
   args: SendTextMessageArgs
 ): Promise<MetaSendResult> {
-  const { phoneNumberId, accessToken, to, text } = args
+  const { phoneNumberId, accessToken, to, text, contextMessageId } = args
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'text',
+    text: { body: text },
+  }
+  if (contextMessageId) {
+    body.context = { message_id: contextMessageId }
+  }
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to,
-      type: 'text',
-      text: { body: text },
-    }),
+    body: JSON.stringify(body),
   })
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
@@ -113,6 +120,8 @@ export interface SendTemplateMessageArgs {
   templateName: string
   language?: string
   params?: string[]
+  /** Meta's message_id of the message being replied to. */
+  contextMessageId?: string
 }
 
 /**
@@ -129,6 +138,7 @@ export async function sendTemplateMessage(
     templateName,
     language = 'en_US',
     params,
+    contextMessageId,
   } = args
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
@@ -146,6 +156,55 @@ export async function sendTemplateMessage(
     ]
   }
 
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'template',
+    template,
+  }
+  if (contextMessageId) {
+    body.context = { message_id: contextMessageId }
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const data = await response.json()
+  return { messageId: data.messages[0].id }
+}
+
+// ============================================================
+// Reactions
+// ============================================================
+
+export interface SendReactionMessageArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  /** Meta's message_id of the message being reacted to. */
+  targetMessageId: string
+  /** Single emoji, or empty string to remove an existing reaction. */
+  emoji: string
+}
+
+/**
+ * Send a reaction (or removal) to a previously-exchanged message.
+ * Empty `emoji` removes the reaction per Meta's spec.
+ */
+export async function sendReactionMessage(
+  args: SendReactionMessageArgs
+): Promise<MetaSendResult> {
+  const { phoneNumberId, accessToken, to, targetMessageId, emoji } = args
+  const url = `${META_API_BASE}/${phoneNumberId}/messages`
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -156,8 +215,8 @@ export async function sendTemplateMessage(
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
       to,
-      type: 'template',
-      template,
+      type: 'reaction',
+      reaction: { message_id: targetMessageId, emoji },
     }),
   })
   if (!response.ok) {
