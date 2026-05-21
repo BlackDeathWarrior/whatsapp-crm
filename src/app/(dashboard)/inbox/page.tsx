@@ -30,6 +30,14 @@ export default function InboxPage() {
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
     null
   );
+  /**
+   * Bumped whenever we want children (ConversationList, MessageThread)
+   * to refetch from the DB — used as a safety net against missed
+   * realtime events. Bumped on WS reconnect and on tab visibility →
+   * visible. The initial mount fetches don't depend on this; they fire
+   * once on conversationId-change as usual.
+   */
+  const [resyncToken, setResyncToken] = useState(0);
 
   // Fire the deep-link auto-select exactly once per URL — subsequent
   // list refreshes (realtime, manual refetch) must not snap the user
@@ -42,6 +50,24 @@ export default function InboxPage() {
   // hydrateConversation; the dedupe here keeps it at one refetch per
   // new conversation even when both events arrive within milliseconds.
   const hydratingConvIdsRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Synchronous mirror of the conversation ids currently in `conversations`
+   * state. Event handlers need to know "do we already have this conv?"
+   * without waiting for a setState updater to run — updaters fire during
+   * reconciliation, *after* the synchronous handler code returns, so a
+   * `let foundInList = false; setState(p => { foundInList = ...; return ... })`
+   * flag reads as `false` in the same tick (this exact bug shipped in #105
+   * and caused #106: every incoming message and every status flip fired a
+   * redundant DB hydrate, swamping the supabase client and starving the
+   * realtime channel). The ref is kept in sync via the effect below.
+   */
+  const knownConvIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const next = new Set<string>();
+    for (const c of conversations) next.add(c.id);
+    knownConvIdsRef.current = next;
+  }, [conversations]);
 
   // Pull the conversation row with its `contact` joined and merge it
   // into state. Needed because Supabase Realtime payloads only carry the
@@ -142,32 +168,33 @@ export default function InboxPage() {
           });
         }
 
-        // Update conversation list preview. If the conv isn't in state
-        // yet (its INSERT event was missed, delayed, or this is the
-        // first message for a conversation created out-of-band) the
-        // map() below is a no-op and the preview would never appear —
-        // hydrate the row from the DB instead so the inbox self-heals.
-        let foundInList = false;
-        setConversations((prev) => {
-          if (!prev.some((c) => c.id === newMsg.conversation_id)) {
-            return prev;
-          }
-          foundInList = true;
-          return prev.map((c) =>
-            c.id === newMsg.conversation_id
-              ? {
-                  ...c,
-                  last_message_text: newMsg.content_text ?? "",
-                  last_message_at: newMsg.created_at,
-                  unread_count:
-                    activeConversation?.id === newMsg.conversation_id
-                      ? 0
-                      : c.unread_count + 1,
-                }
-              : c,
+        // Update conversation list preview. We need to know *synchronously*
+        // whether the conv is already in state to decide between patching
+        // the preview and triggering a hydrate — see the comment on
+        // knownConvIdsRef for why a closure flag inside the updater would
+        // always read false here.
+        if (knownConvIdsRef.current.has(newMsg.conversation_id)) {
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === newMsg.conversation_id
+                ? {
+                    ...c,
+                    last_message_text: newMsg.content_text ?? "",
+                    last_message_at: newMsg.created_at,
+                    unread_count:
+                      activeConversation?.id === newMsg.conversation_id
+                        ? 0
+                        : c.unread_count + 1,
+                  }
+                : c,
+            ),
           );
-        });
-        if (!foundInList) {
+        } else {
+          // First time we're seeing this conv: the conv-INSERT event
+          // hasn't landed yet, or was missed. Hydrate from the DB so
+          // the row surfaces with its `contact` joined; the conv-UPDATE
+          // event the webhook emits right after the message INSERT will
+          // converge state when it arrives.
           hydrateConversation(newMsg.conversation_id);
         }
       }
@@ -192,27 +219,30 @@ export default function InboxPage() {
       const conv = event.new;
 
       if (event.eventType === "INSERT") {
-        // Prepend immediately for snappy UX, then hydrate to fill in
-        // the `contact` join (realtime payloads omit it). The dedupe
-        // inside hydrateConversation keeps the result idempotent if
-        // the first-message-INSERT handler also triggers a hydrate.
-        setConversations((prev) => {
-          if (prev.some((c) => c.id === conv.id)) return prev;
-          return [conv, ...prev];
-        });
-        hydrateConversation(conv.id);
+        // Prepend immediately for snappy UX so the new conv shows in the
+        // list right away, then hydrate to fill in the `contact` join
+        // (realtime payloads never include joins). Skip both if we
+        // already have the row — that shouldn't happen normally, but
+        // out-of-order delivery would have us prepending a duplicate.
+        if (!knownConvIdsRef.current.has(conv.id)) {
+          setConversations((prev) => {
+            if (prev.some((c) => c.id === conv.id)) return prev;
+            return [conv, ...prev];
+          });
+          hydrateConversation(conv.id);
+        }
       }
 
       if (event.eventType === "UPDATE") {
-        let foundInList = false;
-        setConversations((prev) => {
-          if (!prev.some((c) => c.id === conv.id)) return prev;
-          foundInList = true;
-          return prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c));
-        });
-        if (!foundInList) {
-          // UPDATE arrived before the INSERT (or after a missed
-          // INSERT) — fetch the row so it surfaces with its contact.
+        if (knownConvIdsRef.current.has(conv.id)) {
+          setConversations((prev) =>
+            prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c)),
+          );
+        } else {
+          // UPDATE arrived before the INSERT (or after a missed INSERT)
+          // — fetch the row so it surfaces with its contact joined. The
+          // patch contained in `conv` will already be reflected in what
+          // the hydrate fetch returns.
           hydrateConversation(conv.id);
         }
 
@@ -227,13 +257,58 @@ export default function InboxPage() {
     [activeConversation, hydrateConversation]
   );
 
-  // Subscribe to realtime
-  useRealtime({
+  // Subscribe to realtime. The `isConnected` flag below feeds the
+  // reconnect resync: realtime is best-effort and events sent while the
+  // WS was disconnected (laptop sleep, network blip, background-tab
+  // throttle) are simply lost. We need a way to catch up.
+  const { isConnected } = useRealtime({
     channelName: "inbox-realtime",
     onMessageEvent: handleMessageEvent,
     onConversationEvent: handleConversationEvent,
     enabled: true,
   });
+
+  /**
+   * Bump `resyncToken` whenever the realtime channel transitions from
+   * disconnected → connected *after* the initial connect. The initial
+   * connect is covered by the children's on-mount fetches; only later
+   * reconnects need a manual refetch to fill the gap.
+   *
+   * Tracked via a `was-connected` ref rather than a count so that React
+   * strict-mode's dev-only effect double-fire doesn't read as a
+   * reconnect.
+   */
+  const wasConnectedRef = useRef(false);
+  const initialConnectDoneRef = useRef(false);
+  useEffect(() => {
+    if (isConnected && !wasConnectedRef.current) {
+      // false → true transition
+      if (initialConnectDoneRef.current) {
+        setResyncToken((n) => n + 1);
+      } else {
+        initialConnectDoneRef.current = true;
+      }
+    }
+    wasConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  /**
+   * Refetch when the tab regains focus. Background tabs may have their
+   * WS throttled by the browser even without a full disconnect, so a
+   * visibilitychange → visible is a reliable signal that we may have
+   * missed events. Cheap to fire; the children dedupe on their own.
+   */
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setResyncToken((n) => n + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
@@ -397,6 +472,7 @@ export default function InboxPage() {
             onSelect={handleSelectConversation}
             conversations={conversations}
             onConversationsLoaded={handleConversationsLoaded}
+            resyncToken={resyncToken}
           />
         </div>
 
@@ -420,6 +496,7 @@ export default function InboxPage() {
             onStatusChange={handleStatusChange}
             onAssignChange={handleAssignChange}
             onBack={handleCloseConversation}
+            resyncToken={resyncToken}
           />
         </div>
 

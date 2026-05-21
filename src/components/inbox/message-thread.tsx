@@ -70,6 +70,14 @@ interface MessageThreadProps {
    * mobile only.
    */
   onBack?: () => void;
+  /**
+   * Increment to force the messages + reactions fetch effects to refire.
+   * Parent bumps this on realtime reconnect / tab visibility → visible
+   * so the open thread catches up on any events sent while the WS was
+   * disconnected or the tab was throttled. Optional so existing callers
+   * keep working.
+   */
+  resyncToken?: number;
 }
 
 function formatDateSeparator(dateStr: string): string {
@@ -112,6 +120,7 @@ export function MessageThread({
   onStatusChange,
   onAssignChange,
   onBack,
+  resyncToken = 0,
 }: MessageThreadProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -219,12 +228,16 @@ export function MessageThread({
     return () => {
       cancelled = true;
     };
-  }, [conversationId]);
+    // `resyncToken` is included so the parent can force a refetch when
+    // the realtime channel reconnects or the tab regains focus —
+    // realtime is best-effort and any message events sent while the WS
+    // was disconnected or throttled are otherwise lost.
+  }, [conversationId, resyncToken]);
 
-  // Reactions: fetch + realtime per conversation. Subscribing here (not at
-  // the page level) keeps the channel scoped to the visible conversation,
-  // matching the message fetch effect above and avoiding cross-conversation
-  // chatter on a busy inbox.
+  // Reactions fetch — pulls the current state from the DB. Kept separate
+  // from the channel subscription below so a `resyncToken` bump just
+  // refetches the rows without also tearing down and rebuilding the
+  // realtime channel.
   useEffect(() => {
     if (!conversationId) {
       setReactions([]);
@@ -245,6 +258,18 @@ export function MessageThread({
       }
       setReactions((data as MessageReaction[]) ?? []);
     })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, resyncToken]);
+
+  // Reactions realtime subscription per conversation. Subscribing here
+  // (not at the page level) keeps the channel scoped to the visible
+  // conversation and avoids cross-conversation chatter on a busy inbox.
+  useEffect(() => {
+    if (!conversationId) return;
+    const supabase = createClient();
 
     const channel = supabase
       .channel(`reactions:${conversationId}`)
@@ -308,7 +333,6 @@ export function MessageThread({
       .subscribe();
 
     return () => {
-      cancelled = true;
       supabase.removeChannel(channel);
     };
   }, [conversationId]);
