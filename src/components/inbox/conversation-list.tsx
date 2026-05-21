@@ -21,6 +21,13 @@ interface ConversationListProps {
   onSelect: (conversation: Conversation) => void;
   conversations: Conversation[];
   onConversationsLoaded: (conversations: Conversation[]) => void;
+  /**
+   * Increment to force the fetch effect below to refire. The parent
+   * bumps this on realtime reconnect / tab visibility → visible so the
+   * list catches up on any events sent while the WS was disconnected
+   * or the tab was throttled. Optional so existing callers keep working.
+   */
+  resyncToken?: number;
 }
 
 const STATUS_COLORS: Record<ConversationStatus, string> = {
@@ -41,6 +48,7 @@ export function ConversationList({
   onSelect,
   conversations,
   onConversationsLoaded,
+  resyncToken = 0,
 }: ConversationListProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ConversationStatus | "all">("all");
@@ -94,7 +102,10 @@ export function ConversationList({
     return () => {
       cancelled = true;
     };
-  }, []);
+    // `resyncToken` is included so the parent can force a refetch when
+    // the realtime channel reconnects or the tab regains focus — catches
+    // up on any events sent while the WS was disconnected or throttled.
+  }, [resyncToken]);
 
   const filtered = useMemo(() => {
     let result = conversations;
