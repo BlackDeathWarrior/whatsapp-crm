@@ -15,7 +15,7 @@
  * the same file as small components rather than separate modules.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -173,6 +173,110 @@ function uniqueNodeKey(base: string, existing: BuilderNode[]): string {
   return `${base}_${i}`;
 }
 
+// Short, single-line content summary used in the collapsed NodeCard
+// header — lets users scan a 10-node flow without expanding every card.
+// Returns null when there's nothing meaningful to show (start/end, or
+// a freshly-added node with no fields filled in).
+function truncate(s: string, max = 80): string {
+  const clean = s.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  return clean.slice(0, max - 1) + "…";
+}
+
+function summarizeNode(node: BuilderNode): string | null {
+  const cfg = node.config;
+  switch (node.node_type) {
+    case "start":
+    case "end":
+      return null;
+    case "send_message": {
+      const text = typeof cfg.text === "string" ? cfg.text : "";
+      return text.length > 0 ? truncate(text) : null;
+    }
+    case "send_buttons": {
+      const text = typeof cfg.text === "string" ? cfg.text : "";
+      const buttons = Array.isArray(cfg.buttons)
+        ? (cfg.buttons as Array<Record<string, unknown>>)
+        : [];
+      const titles = buttons
+        .map((b) => (typeof b.title === "string" ? b.title : ""))
+        .filter(Boolean)
+        .join(" / ");
+      if (text.length > 0) {
+        return titles ? `${truncate(text, 40)} · ${truncate(titles, 35)}` : truncate(text);
+      }
+      return titles || null;
+    }
+    case "send_list": {
+      const text = typeof cfg.text === "string" ? cfg.text : "";
+      const sections = Array.isArray(cfg.sections)
+        ? (cfg.sections as Array<Record<string, unknown>>)
+        : [];
+      const rowCount = sections.reduce<number>((sum, s) => {
+        const rows = Array.isArray(s.rows) ? s.rows : [];
+        return sum + rows.length;
+      }, 0);
+      if (text.length > 0) {
+        return rowCount > 0
+          ? `${truncate(text, 50)} · ${rowCount} option${rowCount === 1 ? "" : "s"}`
+          : truncate(text);
+      }
+      return rowCount > 0
+        ? `${rowCount} option${rowCount === 1 ? "" : "s"} across ${sections.length} section${sections.length === 1 ? "" : "s"}`
+        : null;
+    }
+    case "collect_input": {
+      const prompt = typeof cfg.prompt_text === "string" ? cfg.prompt_text : "";
+      const varKey = typeof cfg.var_key === "string" ? cfg.var_key : "";
+      if (prompt.length > 0) {
+        return varKey ? `${truncate(prompt, 50)} → vars.${varKey}` : truncate(prompt);
+      }
+      return varKey ? `→ vars.${varKey}` : null;
+    }
+    case "condition": {
+      const subjectKey =
+        typeof cfg.subject_key === "string" ? cfg.subject_key : "";
+      if (!subjectKey) return null;
+      const subject =
+        cfg.subject === "tag"
+          ? "tag"
+          : cfg.subject === "contact_field"
+            ? "field"
+            : "var";
+      const subjectStr =
+        subject === "tag" ? `has tag ${truncate(subjectKey, 24)}` : `${subject}.${subjectKey}`;
+      const op =
+        cfg.operator === "equals"
+          ? "=="
+          : cfg.operator === "contains"
+            ? "contains"
+            : cfg.operator === "present"
+              ? "exists"
+              : cfg.operator === "absent"
+                ? "missing"
+                : "";
+      const value = typeof cfg.value === "string" ? cfg.value : "";
+      const valStr =
+        (cfg.operator === "equals" || cfg.operator === "contains") && value
+          ? ` "${truncate(value, 20)}"`
+          : "";
+      return subject === "tag" ? subjectStr : `${subjectStr} ${op}${valStr}`;
+    }
+    case "set_tag": {
+      const mode = cfg.mode === "remove" ? "Remove" : "Add";
+      const tagId = typeof cfg.tag_id === "string" ? cfg.tag_id : "";
+      // No tag name available without an async lookup here; show a
+      // short prefix of the UUID so users can disambiguate between
+      // multiple set_tag nodes at a glance.
+      return tagId ? `${mode} tag ${tagId.slice(0, 8)}…` : `${mode} tag (none picked)`;
+    }
+    case "handoff": {
+      const note = typeof cfg.note === "string" ? cfg.note : "";
+      return note.length > 0 ? truncate(note) : null;
+    }
+  }
+}
+
 function defaultConfigFor(type: NodeType): Record<string, unknown> {
   switch (type) {
     case "start":
@@ -256,6 +360,10 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
     setDirty(true);
     setState(updaterOrValue);
   }, []);
+
+  // Used by jumpToNode() to scroll the target into view + flash its border.
+  const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [flashedKey, setFlashedKey] = useState<string | null>(null);
 
   // Browser-level reload / tab-close / external-link guard. SPA
   // navigation (sidebar links, back button) isn't covered here — Next 16
@@ -455,6 +563,36 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
     });
   }, []);
 
+  // Jump-to-node: invoked when a user clicks an issue in the validation
+  // panel. Expand the offending card (so the broken field is visible),
+  // scroll it into the viewport, then flash its border so the eye lands
+  // on it. requestAnimationFrame defers the scroll until after React
+  // commits the expanded layout.
+  const jumpToNode = useCallback((key: string) => {
+    setExpanded((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+    setFlashedKey(key);
+    requestAnimationFrame(() => {
+      const el = nodeRefs.current.get(key);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    window.setTimeout(() => {
+      setFlashedKey((cur) => (cur === key ? null : cur));
+    }, 1600);
+  }, []);
+
+  const setNodeRef = useCallback(
+    (key: string) => (el: HTMLDivElement | null) => {
+      if (el) nodeRefs.current.set(key, el);
+      else nodeRefs.current.delete(key);
+    },
+    [],
+  );
+
   // ---- Render ----
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col gap-6 p-6">
@@ -502,6 +640,8 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
               allNodes={state.nodes}
               expanded={expanded.has(node.node_key)}
               isEntry={state.entry_node_id === node.node_key}
+              isFlashed={flashedKey === node.node_key}
+              cardRef={setNodeRef(node.node_key)}
               issues={issues.filter(
                 (i) => i.scope === "node" && i.node_key === node.node_key,
               )}
@@ -517,7 +657,7 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
         )}
       </section>
 
-      <ValidationPanel issues={issues} />
+      <ValidationPanel issues={issues} onJump={jumpToNode} />
     </div>
   );
 }
@@ -797,6 +937,8 @@ function NodeCard({
   allNodes,
   expanded,
   isEntry,
+  isFlashed,
+  cardRef,
   issues,
   onToggle,
   onUpdate,
@@ -808,6 +950,8 @@ function NodeCard({
   allNodes: BuilderNode[];
   expanded: boolean;
   isEntry: boolean;
+  isFlashed: boolean;
+  cardRef: (el: HTMLDivElement | null) => void;
   issues: ValidationIssue[];
   onToggle: () => void;
   onUpdate: (patch: Partial<BuilderNode>) => void;
@@ -817,15 +961,19 @@ function NodeCard({
 }) {
   const meta = NODE_META[node.node_type];
   const hasError = issues.some((i) => i.severity === "error");
+  const preview = summarizeNode(node);
   return (
     <div
+      ref={cardRef}
       className={cn(
-        "rounded-lg border bg-slate-900 transition-colors",
+        "rounded-lg border bg-slate-900 transition-shadow duration-500",
         hasError
           ? "border-red-500/40"
           : isEntry
             ? "border-violet-500/40"
             : "border-slate-800",
+        isFlashed &&
+          "ring-2 ring-violet-400 ring-offset-2 ring-offset-slate-950",
       )}
     >
       <button
@@ -851,6 +999,11 @@ function NodeCard({
               </Badge>
             )}
           </div>
+          {!expanded && preview && (
+            <p className="mt-0.5 truncate text-xs text-slate-500">
+              {preview}
+            </p>
+          )}
         </div>
         {hasError && (
           <CircleAlert className="h-3.5 w-3.5 shrink-0 text-red-400" />
@@ -916,21 +1069,16 @@ function NodeConfigForm({
   onUpdateConfig: (patch: Record<string, unknown>) => void;
 }) {
   const cfg = node.config;
+  // Internal identifiers (node_key, reply_id columns on buttons/list rows)
+  // are auto-generated and the runner is the only consumer. Hide them by
+  // default so the form reads as plain editing; expose under "Advanced"
+  // for the rare case where someone wants to lock a key for stable
+  // analytics or external integration.
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const hasReplyIds =
+    node.node_type === "send_buttons" || node.node_type === "send_list";
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <label className="mb-1 block text-xs text-slate-400">
-          Node key (used internally — keep stable)
-        </label>
-        <Input
-          value={node.node_key}
-          onChange={(e) =>
-            onUpdate({ node_key: slugify(e.target.value, node.node_key) })
-          }
-          className="bg-slate-800"
-        />
-      </div>
-
       {node.node_type === "start" && (
         <NextNodeRow
           value={(cfg as { next_node_key?: string }).next_node_key ?? ""}
@@ -964,6 +1112,7 @@ function NodeConfigForm({
           allNodes={allNodes}
           currentKey={node.node_key}
           onUpdateConfig={onUpdateConfig}
+          showAdvanced={showAdvanced}
         />
       )}
 
@@ -973,6 +1122,7 @@ function NodeConfigForm({
           allNodes={allNodes}
           currentKey={node.node_key}
           onUpdateConfig={onUpdateConfig}
+          showAdvanced={showAdvanced}
         />
       )}
 
@@ -1051,6 +1201,44 @@ function NodeConfigForm({
           complete. No config needed.
         </p>
       )}
+
+      <div className="border-t border-slate-800 pt-3">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300"
+        >
+          {showAdvanced ? (
+            <ChevronUp className="h-3 w-3" />
+          ) : (
+            <ChevronDown className="h-3 w-3" />
+          )}
+          {showAdvanced ? "Hide" : "Show"} advanced
+        </button>
+        {showAdvanced && (
+          <div className="mt-3 flex flex-col gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">
+                Node key (internal identifier — keep stable for analytics)
+              </label>
+              <Input
+                value={node.node_key}
+                onChange={(e) =>
+                  onUpdate({ node_key: slugify(e.target.value, node.node_key) })
+                }
+                className="bg-slate-800 font-mono text-xs"
+              />
+            </div>
+            {hasReplyIds && (
+              <p className="text-[10px] text-slate-500">
+                Reply IDs for each option are shown inline above. They&apos;re
+                returned by WhatsApp when a customer taps; you usually don&apos;t
+                need to touch them.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1068,11 +1256,13 @@ function SendButtonsForm({
   allNodes,
   currentKey,
   onUpdateConfig,
+  showAdvanced,
 }: {
   cfg: SendButtonsCfg;
   allNodes: BuilderNode[];
   currentKey: string;
   onUpdateConfig: (patch: Record<string, unknown>) => void;
+  showAdvanced: boolean;
 }) {
   const buttons = cfg.buttons ?? [];
   const updateButton = (
@@ -1120,18 +1310,25 @@ function SendButtonsForm({
           {buttons.map((b, i) => (
             <div
               key={i}
-              className="grid grid-cols-1 gap-2 rounded-md border border-slate-800 bg-slate-800/40 p-3 md:grid-cols-[1fr_2fr_2fr_auto]"
+              className={cn(
+                "grid grid-cols-1 gap-2 rounded-md border border-slate-800 bg-slate-800/40 p-3",
+                showAdvanced
+                  ? "md:grid-cols-[1fr_2fr_2fr_auto]"
+                  : "md:grid-cols-[2fr_2fr_auto]",
+              )}
             >
-              <Input
-                value={b.reply_id}
-                onChange={(e) =>
-                  updateButton(i, {
-                    reply_id: slugify(e.target.value, `btn_${i + 1}`),
-                  })
-                }
-                placeholder="reply_id"
-                className="bg-slate-800 font-mono text-xs"
-              />
+              {showAdvanced && (
+                <Input
+                  value={b.reply_id}
+                  onChange={(e) =>
+                    updateButton(i, {
+                      reply_id: slugify(e.target.value, `btn_${i + 1}`),
+                    })
+                  }
+                  placeholder="reply_id"
+                  className="bg-slate-800 font-mono text-xs"
+                />
+              )}
               <Input
                 value={b.title}
                 onChange={(e) => updateButton(i, { title: e.target.value })}
@@ -1195,11 +1392,13 @@ function SendListForm({
   allNodes,
   currentKey,
   onUpdateConfig,
+  showAdvanced,
 }: {
   cfg: SendListCfg;
   allNodes: BuilderNode[];
   currentKey: string;
   onUpdateConfig: (patch: Record<string, unknown>) => void;
+  showAdvanced: boolean;
 }) {
   const sections = cfg.sections ?? [];
   const totalRows = sections.reduce((sum, s) => sum + s.rows.length, 0);
@@ -1214,6 +1413,24 @@ function SendListForm({
       ),
     });
   };
+  const addSection = () =>
+    onUpdateConfig({
+      sections: [
+        ...sections,
+        {
+          title: "",
+          rows: [
+            {
+              reply_id: `row_${totalRows + 1}`,
+              title: `Option ${totalRows + 1}`,
+              next_node_key: "",
+            },
+          ],
+        },
+      ],
+    });
+  const removeSection = (sIdx: number) =>
+    onUpdateConfig({ sections: sections.filter((_, i) => i !== sIdx) });
   const updateRow = (
     sIdx: number,
     rIdx: number,
@@ -1287,32 +1504,52 @@ function SendListForm({
             key={sIdx}
             className="mb-3 rounded-md border border-slate-800 bg-slate-800/40 p-3"
           >
-            <Input
-              value={section.title ?? ""}
-              onChange={(e) =>
-                updateSection(sIdx, { title: e.target.value })
-              }
-              placeholder="Section title (optional)"
-              className="mb-2 bg-slate-800 text-xs"
-            />
+            <div className="mb-2 flex items-center gap-2">
+              <Input
+                value={section.title ?? ""}
+                onChange={(e) =>
+                  updateSection(sIdx, { title: e.target.value })
+                }
+                placeholder={`Section ${sIdx + 1} title (optional)`}
+                className="bg-slate-800 text-xs"
+              />
+              {sections.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeSection(sIdx)}
+                  className="shrink-0 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  aria-label="Remove section"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
             {section.rows.map((row, rIdx) => (
               <div
                 key={rIdx}
-                className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_2fr_2fr_auto]"
+                className={cn(
+                  "mb-2 grid grid-cols-1 gap-2",
+                  showAdvanced
+                    ? "md:grid-cols-[1fr_2fr_2fr_auto]"
+                    : "md:grid-cols-[2fr_2fr_auto]",
+                )}
               >
-                <Input
-                  value={row.reply_id}
-                  onChange={(e) =>
-                    updateRow(sIdx, rIdx, {
-                      reply_id: slugify(
-                        e.target.value,
-                        `row_${rIdx + 1}`,
-                      ),
-                    })
-                  }
-                  placeholder="reply_id"
-                  className="bg-slate-800 font-mono text-xs"
-                />
+                {showAdvanced && (
+                  <Input
+                    value={row.reply_id}
+                    onChange={(e) =>
+                      updateRow(sIdx, rIdx, {
+                        reply_id: slugify(
+                          e.target.value,
+                          `row_${rIdx + 1}`,
+                        ),
+                      })
+                    }
+                    placeholder="reply_id"
+                    className="bg-slate-800 font-mono text-xs"
+                  />
+                )}
                 <Input
                   value={row.title}
                   onChange={(e) =>
@@ -1354,6 +1591,19 @@ function SendListForm({
             )}
           </div>
         ))}
+        {/* WhatsApp's interactive-list spec caps sections at 10. Group rows
+            by category (Billing / Support / Sales etc.) to give customers a
+            scannable menu. */}
+        {sections.length < 10 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addSection}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add section
+          </Button>
+        )}
       </div>
     </>
   );
@@ -1783,7 +2033,13 @@ function AddNodeButton({ onAdd }: { onAdd: (type: NodeType) => void }) {
 // Validation panel — bottom of the editor
 // ============================================================
 
-function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
+function ValidationPanel({
+  issues,
+  onJump,
+}: {
+  issues: ValidationIssue[];
+  onJump: (key: string) => void;
+}) {
   if (issues.length === 0) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-emerald-600/40 bg-emerald-500/10 p-3 text-xs text-emerald-300">
@@ -1807,28 +2063,28 @@ function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
       </div>
       <div className="flex flex-col gap-1">
         {issues.map((i, ix) => (
-          <IssueLine key={ix} issue={i} />
+          <IssueLine key={ix} issue={i} onJump={onJump} />
         ))}
       </div>
     </div>
   );
 }
 
-function IssueLine({ issue }: { issue: ValidationIssue }) {
-  return (
-    <div
-      className={cn(
-        "flex items-start gap-2 rounded-md px-2 py-1 text-xs",
-        issue.severity === "error" ? "text-red-300" : "text-amber-300",
-      )}
-    >
-      <CircleAlert
-        className={cn(
-          "mt-0.5 h-3 w-3 shrink-0",
-          issue.severity === "error" ? "text-red-400" : "text-amber-400",
-        )}
-      />
-      <span>
+function IssueLine({
+  issue,
+  onJump,
+}: {
+  issue: ValidationIssue;
+  onJump?: (key: string) => void;
+}) {
+  const tone =
+    issue.severity === "error" ? "text-red-300" : "text-amber-300";
+  const iconTone =
+    issue.severity === "error" ? "text-red-400" : "text-amber-400";
+  const body = (
+    <>
+      <CircleAlert className={cn("mt-0.5 h-3 w-3 shrink-0", iconTone)} />
+      <span className="min-w-0 flex-1">
         {issue.node_key && (
           <code className="mr-1 rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-400">
             {issue.node_key}
@@ -1836,6 +2092,34 @@ function IssueLine({ issue }: { issue: ValidationIssue }) {
         )}
         {issue.message}
       </span>
+    </>
+  );
+
+  // Only node-scoped issues can jump; trigger-scoped issues have no
+  // destination (the trigger panel is already at the top of the page).
+  if (issue.node_key && onJump) {
+    return (
+      <button
+        type="button"
+        onClick={() => onJump(issue.node_key!)}
+        className={cn(
+          "flex w-full items-start gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-slate-800/60",
+          tone,
+        )}
+        aria-label={`Jump to node ${issue.node_key}`}
+      >
+        {body}
+      </button>
+    );
+  }
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2 rounded-md px-2 py-1 text-xs",
+        tone,
+      )}
+    >
+      {body}
     </div>
   );
 }
