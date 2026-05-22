@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
+import { supabaseAdmin } from '@/lib/flows/admin-client'
+import { isFlowsEnabled } from '@/lib/flows/feature-flag'
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -281,6 +283,44 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', conversation_id)
+
+    // Pause any active Flow run for this contact — the agent stepping
+    // in is the strongest "yield, human is here" signal. Gated on the
+    // beta flag to avoid an extra DB write for non-beta accounts; for
+    // those, no run can exist anyway. See PR #2 plan for why we pause
+    // (not end): preserves diagnostic state + lets the agent or the
+    // 24h timeout sweep cleanly resolve the run later.
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('beta_features')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (isFlowsEnabled(profile as { beta_features?: string[] | null } | null)) {
+        const { error: pauseErr } = await supabaseAdmin()
+          .from('flow_runs')
+          .update({
+            status: 'paused_by_agent',
+            ended_at: new Date().toISOString(),
+            end_reason: 'agent_replied',
+          })
+          .eq('user_id', user.id)
+          .eq('contact_id', contact.id)
+          .eq('status', 'active')
+        if (pauseErr) {
+          // Best-effort — log + continue. The agent's message already
+          // landed at Meta; don't fail the response over a bookkeeping
+          // miss. Worst case: a stale active run gets caught by the
+          // stale-run cron sweep within 24h.
+          console.error('[flows] pause-on-agent-send failed:', pauseErr.message)
+        }
+      }
+    } catch (err) {
+      console.error(
+        '[flows] pause-on-agent-send threw:',
+        err instanceof Error ? err.message : err,
+      )
+    }
 
     return NextResponse.json({
       success: true,
