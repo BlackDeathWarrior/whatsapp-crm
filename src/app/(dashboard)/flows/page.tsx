@@ -271,9 +271,9 @@ export default function FlowsPage() {
                       type="button"
                       onClick={() => handleUseTemplate(t.slug)}
                       disabled={creating}
-                      className="flex flex-col gap-2.5 rounded-lg border border-slate-800 bg-slate-950 p-4 text-left transition-colors hover:border-violet-500/40 hover:bg-slate-800 disabled:opacity-50"
+                      className="flex flex-col gap-2.5 rounded-lg border border-slate-800 bg-slate-950 p-4 text-left transition-colors hover:border-primary/40 hover:bg-slate-800 disabled:opacity-50"
                     >
-                      <Icon className="h-5 w-5 text-violet-400" />
+                      <Icon className="h-5 w-5 text-primary" />
                       <span className="text-sm font-semibold text-white">
                         {t.name}
                       </span>
@@ -366,7 +366,7 @@ function FlowCard({
     <div className="flex flex-col rounded-lg border border-slate-800 bg-slate-900 p-4 transition-colors hover:border-slate-700">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <Workflow className="h-4 w-4 shrink-0 text-violet-400" />
+          <Workflow className="h-4 w-4 shrink-0 text-primary" />
           <h3 className="truncate text-sm font-semibold text-white">
             {flow.name}
           </h3>
