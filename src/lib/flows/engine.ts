@@ -1011,13 +1011,19 @@ async function startNewRun(
   });
   // Bump the flow's execution counter — used by the builder UI to
   // surface "X runs since activation" on the flow card.
-  await db
-    .from("flows")
-    .update({
-      execution_count: flow.execution_count + 1,
-      last_executed_at: new Date().toISOString(),
-    })
-    .eq("id", flow.id);
+  //
+  // Atomic RPC (migration 012) rather than read-modify-write: two
+  // concurrent webhooks starting runs for different contacts on the
+  // same flow would otherwise both read N and both write N+1, losing
+  // a count. Mirrors the automations engine's use of
+  // `increment_automation_execution_count` (migration 007).
+  const { error: incErr } = await db.rpc("increment_flow_execution_count", {
+    p_flow_id: flow.id,
+  });
+  if (incErr) {
+    // Non-fatal — the run itself succeeded; only the counter is off.
+    console.error("[flows] execution_count rpc error:", incErr.message);
+  }
 
   // Run the advance loop starting from the entry node.
   const outcome = await advanceFromNodeKey(db, run, flow.entry_node_id!);
