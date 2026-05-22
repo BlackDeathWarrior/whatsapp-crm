@@ -17,8 +17,6 @@ import {
 import { toast } from "sonner";
 import { format, formatDistanceToNow } from "date-fns";
 
-import { useAuth } from "@/hooks/use-auth";
-import { isFlowsEnabled } from "@/lib/flows/feature-flag";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -98,7 +96,6 @@ const STATUS_META: Record<
 export default function FlowRunsPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { profile, loading: authLoading, profileLoading } = useAuth();
 
   const [flow, setFlow] = useState<{ id: string; name: string } | null>(null);
   const [runs, setRuns] = useState<RunRow[]>([]);
@@ -107,15 +104,7 @@ export default function FlowRunsPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [notFound, setNotFound] = useState(false);
 
-  const allowed = isFlowsEnabled(profile);
-
   useEffect(() => {
-    // Wait for BOTH session and profile — see /flows/page.tsx.
-    if (authLoading || profileLoading) return;
-    if (!allowed) {
-      router.replace("/dashboard");
-      return;
-    }
     if (!params.id) return;
     let cancelled = false;
     (async () => {
@@ -148,7 +137,7 @@ export default function FlowRunsPage() {
     return () => {
       cancelled = true;
     };
-  }, [allowed, authLoading, profileLoading, params.id, router]);
+  }, [params.id]);
 
   function toggle(runId: string) {
     setExpanded((prev) => {
@@ -159,7 +148,7 @@ export default function FlowRunsPage() {
     });
   }
 
-  if (authLoading || profileLoading || (allowed && loading)) {
+  if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-slate-500" />

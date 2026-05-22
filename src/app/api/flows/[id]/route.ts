@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
-import { isFlowsEnabled } from '@/lib/flows/feature-flag'
 
 /**
  * GET   /api/flows/[id]  — fetch one flow with its nodes.
@@ -13,10 +12,12 @@ import { isFlowsEnabled } from '@/lib/flows/feature-flag'
  * DELETE /api/flows/[id] — hard delete (RLS+CASCADE clean up nodes,
  *                          runs, events).
  *
- * All three are 404 for non-beta accounts.
+ * All three require a signed-in caller who owns the flow. Flows is in
+ * soft-GA — the beta gate that previously 404'd non-beta accounts is
+ * gone; the "Beta" label in the UI is the only remaining signal.
  */
 
-async function requireFlowsBetaAndOwnership(
+async function requireOwnership(
   flowId: string,
 ): Promise<
   | {
@@ -32,14 +33,6 @@ async function requireFlowsBetaAndOwnership(
   } = await supabase.auth.getUser()
   if (!user) {
     return { ok: false, status: 401, body: { error: 'Unauthorized' } }
-  }
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('beta_features')
-    .eq('user_id', user.id)
-    .maybeSingle()
-  if (!isFlowsEnabled(profile as { beta_features?: string[] | null } | null)) {
-    return { ok: false, status: 404, body: { error: 'Not found' } }
   }
   // RLS scopes this to the caller — a flow owned by another user
   // returns null (404 below).
@@ -59,7 +52,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params
-  const guard = await requireFlowsBetaAndOwnership(id)
+  const guard = await requireOwnership(id)
   if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status })
   const { supabase } = guard
 
@@ -98,7 +91,7 @@ export async function PUT(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params
-  const guard = await requireFlowsBetaAndOwnership(id)
+  const guard = await requireOwnership(id)
   if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status })
 
   const body = (await request.json().catch(() => null)) as PutBody | null
@@ -184,7 +177,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params
-  const guard = await requireFlowsBetaAndOwnership(id)
+  const guard = await requireOwnership(id)
   if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status })
 
   // CASCADE on flow_nodes / flow_runs / flow_run_events handles the

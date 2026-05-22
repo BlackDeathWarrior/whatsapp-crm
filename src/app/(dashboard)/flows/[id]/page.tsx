@@ -5,8 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useAuth } from "@/hooks/use-auth";
-import { isFlowsEnabled } from "@/lib/flows/feature-flag";
 import { FlowBuilder } from "@/components/flows/flow-builder";
 import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
 
@@ -17,31 +15,21 @@ import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
  * `<FlowBuilder>`. Owns the loading/error state so the builder can
  * focus purely on editing.
  *
- * Beta gate: client-side bounce for the snappy redirect, server-side
- * 404 on the API as the real security boundary.
+ * Open to every authenticated user — the beta gate that previously
+ * 404'd non-beta accounts was removed in PR #134. The API still
+ * 404s on a flow id the caller doesn't own (RLS), which becomes the
+ * "Flow not found" state below.
  */
 export default function FlowEditorPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { profile, loading: authLoading, profileLoading } = useAuth();
 
   const [flow, setFlow] = useState<FlowRow | null>(null);
   const [nodes, setNodes] = useState<FlowNodeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const allowed = isFlowsEnabled(profile);
-
   useEffect(() => {
-    // Wait for BOTH session and profile — see the comment on the same
-    // gate in /flows/page.tsx. Without `profileLoading`, navigating
-    // here from the list shows the `{ loading: false, profile: null }`
-    // window and would bounce a legitimate beta user.
-    if (authLoading || profileLoading) return;
-    if (!allowed) {
-      router.replace("/dashboard");
-      return;
-    }
     if (!params.id) return;
     let cancelled = false;
     (async () => {
@@ -72,9 +60,9 @@ export default function FlowEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [allowed, authLoading, profileLoading, params.id, router]);
+  }, [params.id]);
 
-  if (authLoading || profileLoading || (allowed && loading)) {
+  if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
