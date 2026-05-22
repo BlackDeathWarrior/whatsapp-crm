@@ -173,18 +173,26 @@ async function loadActiveRunForContact(
   userId: string,
   contactId: string,
 ): Promise<FlowRunRow | null> {
+  // The partial unique index `idx_one_active_run_per_contact` makes
+  // "two active runs for one contact" impossible by design. But a
+  // future migration glitch or manual SQL could create one, and
+  // .maybeSingle() throws on >1 row — which would kill dispatch for
+  // that contact's webhook entirely. .limit(1) is forgiving: pick the
+  // newest, let the cron sweep clean up the stale one.
   const { data, error } = await db
     .from("flow_runs")
     .select("*")
     .eq("user_id", userId)
     .eq("contact_id", contactId)
     .eq("status", "active")
-    .maybeSingle();
+    .order("started_at", { ascending: false })
+    .limit(1);
   if (error) {
     console.error("[flows] loadActiveRunForContact error:", error.message);
     return null;
   }
-  return (data as FlowRunRow | null) ?? null;
+  const rows = (data as FlowRunRow[] | null) ?? [];
+  return rows[0] ?? null;
 }
 
 async function loadFlow(
@@ -866,14 +874,20 @@ async function handleReplyForActiveRun(
     const captured = message.text.trim();
     if (captured.length > 0 && cfg.var_key) {
       // Persist captured value + reset reprompt count atomically.
+      const newVars = { ...run.vars, [cfg.var_key]: captured };
       const { error: capErr } = await db
         .from("flow_runs")
         .update({
-          vars: { ...run.vars, [cfg.var_key]: captured },
+          vars: newVars,
           reprompt_count: 0,
         })
         .eq("id", run.id);
       if (!capErr) {
+        // Mirror the UPDATE in-memory so downstream interpolation in
+        // the advance loop sees the captured var without us having to
+        // re-SELECT the whole row.
+        run.vars = newVars;
+        run.reprompt_count = 0;
         await logEvent(db, run.id, "node_entered", currentNode.node_key, {
           captured_key: cfg.var_key,
           captured_length: captured.length,
@@ -884,19 +898,21 @@ async function handleReplyForActiveRun(
   }
 
   if (matched) {
-    // Reset reprompt count on a successful match.
-    await db
-      .from("flow_runs")
-      .update({ reprompt_count: 0 })
-      .eq("id", run.id);
-    // Re-read so the advance loop sees the fresh reprompt_count.
-    const fresh = await db
-      .from("flow_runs")
-      .select("*")
-      .eq("id", run.id)
-      .maybeSingle();
-    const next = (fresh.data as FlowRunRow | null) ?? run;
-    const outcome = await advanceFromNodeKey(db, next, matched);
+    // Reset reprompt count on a successful match. Skip the write when
+    // already 0 — the collect_input capture branch above already
+    // zeroed it, and interactive-reply matches against a fresh run
+    // (post-prior-reset) are also already 0. The previous re-read of
+    // the whole row was needed only because we weren't mirroring the
+    // capture UPDATE into the in-memory `run`; now that we do, the
+    // local copy is the source of truth.
+    if (run.reprompt_count !== 0) {
+      const { error } = await db
+        .from("flow_runs")
+        .update({ reprompt_count: 0 })
+        .eq("id", run.id);
+      if (!error) run.reprompt_count = 0;
+    }
+    const outcome = await advanceFromNodeKey(db, run, matched);
     return {
       consumed: true,
       flow_run_id: run.id,
