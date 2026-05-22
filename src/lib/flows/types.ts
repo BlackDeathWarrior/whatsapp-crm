@@ -78,6 +78,72 @@ export interface HandoffNodeConfig {
   assign_to?: string;
 }
 
+/**
+ * Captures the customer's next free-text reply into
+ * `flow_runs.vars[var_key]`, then advances.
+ *
+ * v1.5 ships without runtime validation (`validation` is accepted on
+ * the config for forward compat but ignored by the runner); the
+ * builder still surfaces the field so users can author flows that
+ * v2 will start enforcing.
+ */
+export interface CollectInputNodeConfig {
+  /** Prompt text sent to the customer before they reply. */
+  prompt_text: string;
+  /**
+   * Key under which to store the captured text in
+   * `flow_runs.vars`. Stable identifier — used by downstream
+   * `condition` nodes and `handoff` notes via interpolation.
+   */
+  var_key: string;
+  /**
+   * Reserved for v2. Accepted on the config but ignored by the v1.5
+   * runner — captures any non-empty text.
+   */
+  validation?: "any" | "email" | "phone" | "regex";
+  /** Used only when `validation === 'regex'`. */
+  regex?: string;
+  /** Node to advance to after capture. */
+  next_node_key: string;
+}
+
+export type ConditionOperator =
+  | "equals"
+  | "contains"
+  | "present"
+  | "absent";
+
+export type ConditionSubject = "var" | "tag" | "contact_field";
+
+/**
+ * Routes the run based on a predicate over the contact's tags,
+ * profile fields, or stored vars. Always auto-advances — no Meta
+ * call, no customer-side input.
+ */
+export interface ConditionNodeConfig {
+  subject: ConditionSubject;
+  /**
+   * For `var`: the key in flow_runs.vars.
+   * For `tag`: the tag UUID (matched against contact_tags).
+   * For `contact_field`: one of 'name' | 'email' | 'phone' | 'company'.
+   */
+  subject_key: string;
+  operator: ConditionOperator;
+  /** Compared against `subject` for `equals`/`contains`. Ignored for `present`/`absent`. */
+  value?: string;
+  /** Node to advance to when the predicate evaluates true. */
+  true_next: string;
+  /** Node to advance to when it evaluates false. */
+  false_next: string;
+}
+
+export interface SetTagNodeConfig {
+  mode: "add" | "remove";
+  /** Tag UUID. The builder picks from the user's existing tags. */
+  tag_id: string;
+  next_node_key: string;
+}
+
 // Terminal nodes carry no config — they just stop the run.
 export type EndNodeConfig = Record<string, never>;
 
@@ -94,6 +160,9 @@ export type FlowNodeConfig =
   | { node_type: "send_message"; config: SendMessageNodeConfig }
   | { node_type: "send_buttons"; config: SendButtonsNodeConfig }
   | { node_type: "send_list"; config: SendListNodeConfig }
+  | { node_type: "collect_input"; config: CollectInputNodeConfig }
+  | { node_type: "condition"; config: ConditionNodeConfig }
+  | { node_type: "set_tag"; config: SetTagNodeConfig }
   | { node_type: "handoff"; config: HandoffNodeConfig }
   | { node_type: "end"; config: EndNodeConfig };
 

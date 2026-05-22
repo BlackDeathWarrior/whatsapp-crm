@@ -13,6 +13,9 @@ import {
   PlayCircle,
   PauseCircle,
   Archive,
+  HelpCircle,
+  UserPlus,
+  FileText,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -64,6 +67,21 @@ const STATUS_COLORS: Record<FlowRow["status"], string> = {
   archived: "border-slate-700 bg-slate-800/50 text-slate-500",
 };
 
+interface TemplateSummary {
+  slug: string;
+  name: string;
+  description: string;
+  icon: "MessageSquare" | "HelpCircle" | "UserPlus";
+  trigger_type: string;
+  node_count: number;
+}
+
+const TEMPLATE_ICONS = {
+  MessageSquare,
+  HelpCircle,
+  UserPlus,
+} as const;
+
 export default function FlowsPage() {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
@@ -72,6 +90,7 @@ export default function FlowsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [templates, setTemplates] = useState<TemplateSummary[]>([]);
 
   const flowsAccessAllowed = isFlowsEnabled(profile);
 
@@ -85,10 +104,23 @@ export default function FlowsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/flows");
-        if (!res.ok) throw new Error(`Failed to load flows: ${res.status}`);
-        const json = (await res.json()) as { flows: FlowRow[] };
-        if (!cancelled) setFlows(json.flows ?? []);
+        const [flowsRes, tmplRes] = await Promise.all([
+          fetch("/api/flows"),
+          fetch("/api/flows/templates"),
+        ]);
+        if (!flowsRes.ok) {
+          throw new Error(`Failed to load flows: ${flowsRes.status}`);
+        }
+        const flowsJson = (await flowsRes.json()) as { flows: FlowRow[] };
+        if (!cancelled) setFlows(flowsJson.flows ?? []);
+        // Templates endpoint is forward-looking — if it 404s on an
+        // older deployment, gracefully fall through.
+        if (tmplRes.ok) {
+          const tmplJson = (await tmplRes.json()) as {
+            templates: TemplateSummary[];
+          };
+          if (!cancelled) setTemplates(tmplJson.templates ?? []);
+        }
       } catch (err) {
         if (!cancelled) {
           console.error(err);
@@ -124,6 +156,29 @@ export default function FlowsPage() {
     } catch (err) {
       console.error(err);
       toast.error("Couldn't create flow.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleUseTemplate(slug: string) {
+    setCreating(true);
+    try {
+      const res = await fetch("/api/flows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template_slug: slug }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error ?? `Clone failed: ${res.status}`);
+      }
+      const json = (await res.json()) as { flow: FlowRow };
+      setCreateOpen(false);
+      router.push(`/flows/${json.flow.id}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Clone failed";
+      toast.error(msg);
     } finally {
       setCreating(false);
     }
@@ -185,23 +240,62 @@ export default function FlowsPage() {
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="bg-slate-900 text-slate-100">
+        <DialogContent className="max-w-2xl bg-slate-900 text-slate-100">
           <DialogHeader>
             <DialogTitle>Create a new flow</DialogTitle>
             <DialogDescription className="text-slate-400">
-              Give it a name. You can configure the trigger and nodes on the
-              next screen.
+              Start from a template or build from scratch.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. Welcome menu"
-            className="bg-slate-800"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreate();
-            }}
-          />
+
+          {templates.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Start from a template
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {templates.map((t) => {
+                  const Icon = TEMPLATE_ICONS[t.icon] ?? FileText;
+                  return (
+                    <button
+                      key={t.slug}
+                      type="button"
+                      onClick={() => handleUseTemplate(t.slug)}
+                      disabled={creating}
+                      className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950 p-3 text-left transition-colors hover:border-violet-500/40 hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      <Icon className="h-4 w-4 text-violet-400" />
+                      <span className="text-sm font-medium text-white">
+                        {t.name}
+                      </span>
+                      <span className="line-clamp-3 text-xs text-slate-400">
+                        {t.description}
+                      </span>
+                      <span className="mt-auto text-[10px] text-slate-500">
+                        {t.node_count} nodes
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              Or start blank
+            </p>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Welcome menu"
+              className="bg-slate-800"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreate();
+              }}
+            />
+          </div>
+
           <DialogFooter>
             <Button
               variant="ghost"
@@ -212,7 +306,7 @@ export default function FlowsPage() {
             </Button>
             <Button onClick={handleCreate} disabled={!newName.trim() || creating}>
               {creating && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create
+              Create blank flow
             </Button>
           </DialogFooter>
         </DialogContent>
