@@ -15,7 +15,7 @@
  * the same file as small components rather than separate modules.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -247,6 +247,9 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(initialNodes.map((n) => n.node_key)),
   );
+  // Used by jumpToNode() to scroll the target into view + flash its border.
+  const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [flashedKey, setFlashedKey] = useState<string | null>(null);
 
   // ---- Validation ----
   const issues = useMemo<ValidationIssue[]>(
@@ -425,6 +428,36 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
     });
   }, []);
 
+  // Jump-to-node: invoked when a user clicks an issue in the validation
+  // panel. Expand the offending card (so the broken field is visible),
+  // scroll it into the viewport, then flash its border so the eye lands
+  // on it. requestAnimationFrame defers the scroll until after React
+  // commits the expanded layout.
+  const jumpToNode = useCallback((key: string) => {
+    setExpanded((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+    setFlashedKey(key);
+    requestAnimationFrame(() => {
+      const el = nodeRefs.current.get(key);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    window.setTimeout(() => {
+      setFlashedKey((cur) => (cur === key ? null : cur));
+    }, 1600);
+  }, []);
+
+  const setNodeRef = useCallback(
+    (key: string) => (el: HTMLDivElement | null) => {
+      if (el) nodeRefs.current.set(key, el);
+      else nodeRefs.current.delete(key);
+    },
+    [],
+  );
+
   // ---- Render ----
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col gap-6 p-6">
@@ -471,6 +504,8 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
               allNodes={state.nodes}
               expanded={expanded.has(node.node_key)}
               isEntry={state.entry_node_id === node.node_key}
+              isFlashed={flashedKey === node.node_key}
+              cardRef={setNodeRef(node.node_key)}
               issues={issues.filter(
                 (i) => i.scope === "node" && i.node_key === node.node_key,
               )}
@@ -486,7 +521,7 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
         )}
       </section>
 
-      <ValidationPanel issues={issues} />
+      <ValidationPanel issues={issues} onJump={jumpToNode} />
     </div>
   );
 }
@@ -754,6 +789,8 @@ function NodeCard({
   allNodes,
   expanded,
   isEntry,
+  isFlashed,
+  cardRef,
   issues,
   onToggle,
   onUpdate,
@@ -765,6 +802,8 @@ function NodeCard({
   allNodes: BuilderNode[];
   expanded: boolean;
   isEntry: boolean;
+  isFlashed: boolean;
+  cardRef: (el: HTMLDivElement | null) => void;
   issues: ValidationIssue[];
   onToggle: () => void;
   onUpdate: (patch: Partial<BuilderNode>) => void;
@@ -776,13 +815,16 @@ function NodeCard({
   const hasError = issues.some((i) => i.severity === "error");
   return (
     <div
+      ref={cardRef}
       className={cn(
-        "rounded-lg border bg-slate-900 transition-colors",
+        "rounded-lg border bg-slate-900 transition-shadow duration-500",
         hasError
           ? "border-red-500/40"
           : isEntry
             ? "border-violet-500/40"
             : "border-slate-800",
+        isFlashed &&
+          "ring-2 ring-violet-400 ring-offset-2 ring-offset-slate-950",
       )}
     >
       <button
@@ -1740,7 +1782,13 @@ function AddNodeButton({ onAdd }: { onAdd: (type: NodeType) => void }) {
 // Validation panel — bottom of the editor
 // ============================================================
 
-function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
+function ValidationPanel({
+  issues,
+  onJump,
+}: {
+  issues: ValidationIssue[];
+  onJump: (key: string) => void;
+}) {
   if (issues.length === 0) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-emerald-600/40 bg-emerald-500/10 p-3 text-xs text-emerald-300">
@@ -1764,28 +1812,28 @@ function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
       </div>
       <div className="flex flex-col gap-1">
         {issues.map((i, ix) => (
-          <IssueLine key={ix} issue={i} />
+          <IssueLine key={ix} issue={i} onJump={onJump} />
         ))}
       </div>
     </div>
   );
 }
 
-function IssueLine({ issue }: { issue: ValidationIssue }) {
-  return (
-    <div
-      className={cn(
-        "flex items-start gap-2 rounded-md px-2 py-1 text-xs",
-        issue.severity === "error" ? "text-red-300" : "text-amber-300",
-      )}
-    >
-      <CircleAlert
-        className={cn(
-          "mt-0.5 h-3 w-3 shrink-0",
-          issue.severity === "error" ? "text-red-400" : "text-amber-400",
-        )}
-      />
-      <span>
+function IssueLine({
+  issue,
+  onJump,
+}: {
+  issue: ValidationIssue;
+  onJump?: (key: string) => void;
+}) {
+  const tone =
+    issue.severity === "error" ? "text-red-300" : "text-amber-300";
+  const iconTone =
+    issue.severity === "error" ? "text-red-400" : "text-amber-400";
+  const body = (
+    <>
+      <CircleAlert className={cn("mt-0.5 h-3 w-3 shrink-0", iconTone)} />
+      <span className="min-w-0 flex-1">
         {issue.node_key && (
           <code className="mr-1 rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-400">
             {issue.node_key}
@@ -1793,6 +1841,34 @@ function IssueLine({ issue }: { issue: ValidationIssue }) {
         )}
         {issue.message}
       </span>
+    </>
+  );
+
+  // Only node-scoped issues can jump; trigger-scoped issues have no
+  // destination (the trigger panel is already at the top of the page).
+  if (issue.node_key && onJump) {
+    return (
+      <button
+        type="button"
+        onClick={() => onJump(issue.node_key!)}
+        className={cn(
+          "flex w-full items-start gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-slate-800/60",
+          tone,
+        )}
+        aria-label={`Jump to node ${issue.node_key}`}
+      >
+        {body}
+      </button>
+    );
+  }
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2 rounded-md px-2 py-1 text-xs",
+        tone,
+      )}
+    >
+      {body}
     </div>
   );
 }
