@@ -1171,6 +1171,24 @@ function SendListForm({
       ),
     });
   };
+  const addSection = () =>
+    onUpdateConfig({
+      sections: [
+        ...sections,
+        {
+          title: "",
+          rows: [
+            {
+              reply_id: `row_${totalRows + 1}`,
+              title: `Option ${totalRows + 1}`,
+              next_node_key: "",
+            },
+          ],
+        },
+      ],
+    });
+  const removeSection = (sIdx: number) =>
+    onUpdateConfig({ sections: sections.filter((_, i) => i !== sIdx) });
   const updateRow = (
     sIdx: number,
     rIdx: number,
@@ -1244,14 +1262,27 @@ function SendListForm({
             key={sIdx}
             className="mb-3 rounded-md border border-slate-800 bg-slate-800/40 p-3"
           >
-            <Input
-              value={section.title ?? ""}
-              onChange={(e) =>
-                updateSection(sIdx, { title: e.target.value })
-              }
-              placeholder="Section title (optional)"
-              className="mb-2 bg-slate-800 text-xs"
-            />
+            <div className="mb-2 flex items-center gap-2">
+              <Input
+                value={section.title ?? ""}
+                onChange={(e) =>
+                  updateSection(sIdx, { title: e.target.value })
+                }
+                placeholder={`Section ${sIdx + 1} title (optional)`}
+                className="bg-slate-800 text-xs"
+              />
+              {sections.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeSection(sIdx)}
+                  className="shrink-0 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  aria-label="Remove section"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
             {section.rows.map((row, rIdx) => (
               <div
                 key={rIdx}
@@ -1311,6 +1342,19 @@ function SendListForm({
             )}
           </div>
         ))}
+        {/* WhatsApp's interactive-list spec caps sections at 10. Group rows
+            by category (Billing / Support / Sales etc.) to give customers a
+            scannable menu. */}
+        {sections.length < 10 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addSection}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add section
+          </Button>
+        )}
       </div>
     </>
   );
