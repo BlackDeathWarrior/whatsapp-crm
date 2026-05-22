@@ -98,7 +98,7 @@ const STATUS_META: Record<
 export default function FlowRunsPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { profile, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading, profileLoading } = useAuth();
 
   const [flow, setFlow] = useState<{ id: string; name: string } | null>(null);
   const [runs, setRuns] = useState<RunRow[]>([]);
@@ -110,7 +110,8 @@ export default function FlowRunsPage() {
   const allowed = isFlowsEnabled(profile);
 
   useEffect(() => {
-    if (authLoading) return;
+    // Wait for BOTH session and profile — see /flows/page.tsx.
+    if (authLoading || profileLoading) return;
     if (!allowed) {
       router.replace("/dashboard");
       return;
@@ -147,7 +148,7 @@ export default function FlowRunsPage() {
     return () => {
       cancelled = true;
     };
-  }, [allowed, authLoading, params.id, router]);
+  }, [allowed, authLoading, profileLoading, params.id, router]);
 
   function toggle(runId: string) {
     setExpanded((prev) => {
@@ -158,7 +159,7 @@ export default function FlowRunsPage() {
     });
   }
 
-  if (authLoading || (allowed && loading)) {
+  if (authLoading || profileLoading || (allowed && loading)) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
