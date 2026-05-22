@@ -17,6 +17,13 @@ interface Profile {
   email: string;
   avatar_url: string | null;
   role: string | null;
+  /**
+   * Opted-in beta feature keys for this account (e.g. `'flows'`).
+   * Gates client-side UI surfaces like the sidebar Flows entry; the
+   * server consults the same column for API + webhook guards. See
+   * `src/lib/flows/feature-flag.ts` for the shared predicate.
+   */
+  beta_features: string[];
 }
 
 interface AuthContextValue {
@@ -50,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, avatar_url, role")
+        .select("id, full_name, email, avatar_url, role, beta_features")
         .eq("user_id", userId)
         .maybeSingle();
 
@@ -64,7 +71,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (data) setProfile(data);
+      if (data) {
+        // `beta_features` is `NOT NULL DEFAULT ARRAY[]` in the DB, but
+        // narrow defensively in case the column hasn't been migrated yet
+        // (older deployments running 011 lazily) — `null` reads as no
+        // opt-ins, matching what `isFlowsEnabled()` expects.
+        setProfile({
+          ...data,
+          beta_features: data.beta_features ?? [],
+        });
+      }
     } catch (err) {
       console.error("[AuthProvider] fetchProfile threw:", err);
     }

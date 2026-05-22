@@ -5,6 +5,13 @@ export interface Profile {
   email: string;
   avatar_url?: string;
   role: string;
+  /**
+   * Opted-in beta feature keys for this account. Server reads + UI
+   * gates against this array (see `src/lib/flows/feature-flag.ts`).
+   * Defaults to `[]` for every profile; toggled per-account via a
+   * direct UPDATE on the `profiles` row.
+   */
+  beta_features?: string[];
   created_at: string;
 }
 
