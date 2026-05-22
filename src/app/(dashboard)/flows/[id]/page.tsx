@@ -88,7 +88,7 @@ export default function FlowEditorPage() {
         <button
           type="button"
           onClick={() => router.push("/flows")}
-          className="text-sm text-violet-400 hover:text-violet-300"
+          className="text-sm text-primary hover:opacity-80"
         >
           ← Back to flows
         </button>

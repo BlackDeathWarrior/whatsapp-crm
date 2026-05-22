@@ -712,7 +712,7 @@ function Header({
       </div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <Workflow className="h-5 w-5 shrink-0 text-violet-400" />
+          <Workflow className="h-5 w-5 shrink-0 text-primary" />
           <Input
             value={state.name}
             onChange={(e) =>
@@ -920,7 +920,7 @@ function EntryPicker({
   if (state.nodes.length === 0) return null;
   return (
     <section className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 p-3">
-      <CornerDownRight className="h-4 w-4 shrink-0 text-violet-400" />
+      <CornerDownRight className="h-4 w-4 shrink-0 text-primary" />
       <span className="text-xs text-slate-400">Entry node:</span>
       <NodeKeySelect
         value={state.entry_node_id}
@@ -977,10 +977,10 @@ function NodeCard({
         hasError
           ? "border-red-500/40"
           : isEntry
-            ? "border-violet-500/40"
+            ? "border-primary/50"
             : "border-slate-800",
         isFlashed &&
-          "ring-2 ring-violet-400 ring-offset-2 ring-offset-slate-950",
+          "ring-2 ring-primary ring-offset-2 ring-offset-slate-950",
       )}
     >
       <button
@@ -1000,7 +1000,7 @@ function NodeCard({
             {isEntry && (
               <Badge
                 variant="outline"
-                className="border-violet-500/40 bg-violet-500/10 text-[10px] text-violet-300"
+                className="border-primary/40 bg-primary/10 text-[10px] text-primary"
               >
                 Entry
               </Badge>
