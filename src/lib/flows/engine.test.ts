@@ -5,6 +5,7 @@ import {
   isAutoAdvancing,
   isSuspending,
   isTerminal,
+  evaluateConditionPredicate,
 } from "./engine";
 
 describe("matchReplyId", () => {
@@ -143,11 +144,14 @@ describe("matchesKeywordTrigger", () => {
 });
 
 describe("node classification helpers", () => {
-  it("isAutoAdvancing covers start + send_message", () => {
+  it("isAutoAdvancing covers start + send_message + condition + set_tag", () => {
     expect(isAutoAdvancing("start")).toBe(true);
     expect(isAutoAdvancing("send_message")).toBe(true);
+    expect(isAutoAdvancing("condition")).toBe(true);
+    expect(isAutoAdvancing("set_tag")).toBe(true);
     expect(isAutoAdvancing("send_buttons")).toBe(false);
     expect(isAutoAdvancing("send_list")).toBe(false);
+    expect(isAutoAdvancing("collect_input")).toBe(false);
     expect(isAutoAdvancing("handoff")).toBe(false);
     expect(isAutoAdvancing("end")).toBe(false);
   });
@@ -155,8 +159,11 @@ describe("node classification helpers", () => {
   it("isSuspending covers the input-requiring nodes", () => {
     expect(isSuspending("send_buttons")).toBe(true);
     expect(isSuspending("send_list")).toBe(true);
+    expect(isSuspending("collect_input")).toBe(true);
     expect(isSuspending("start")).toBe(false);
     expect(isSuspending("send_message")).toBe(false);
+    expect(isSuspending("condition")).toBe(false);
+    expect(isSuspending("set_tag")).toBe(false);
     expect(isSuspending("handoff")).toBe(false);
     expect(isSuspending("end")).toBe(false);
   });
@@ -166,6 +173,7 @@ describe("node classification helpers", () => {
     expect(isTerminal("end")).toBe(true);
     expect(isTerminal("start")).toBe(false);
     expect(isTerminal("send_buttons")).toBe(false);
+    expect(isTerminal("condition")).toBe(false);
   });
 
   it("the three classifications are mutually exclusive for known node types", () => {
@@ -174,6 +182,9 @@ describe("node classification helpers", () => {
       "send_message",
       "send_buttons",
       "send_list",
+      "collect_input",
+      "condition",
+      "set_tag",
       "handoff",
       "end",
     ];
@@ -182,5 +193,105 @@ describe("node classification helpers", () => {
       // Exactly one of the three should be true for every known node.
       expect(flags.filter(Boolean).length).toBe(1);
     }
+  });
+});
+
+describe("evaluateConditionPredicate", () => {
+  it("present: true when subject has a value", () => {
+    expect(
+      evaluateConditionPredicate({
+        operator: "present",
+        subjectValue: "alice@example.com",
+        configValue: undefined,
+      }),
+    ).toBe(true);
+  });
+
+  it("present: false when subject is undefined or empty", () => {
+    expect(
+      evaluateConditionPredicate({
+        operator: "present",
+        subjectValue: undefined,
+        configValue: undefined,
+      }),
+    ).toBe(false);
+    expect(
+      evaluateConditionPredicate({
+        operator: "present",
+        subjectValue: "",
+        configValue: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it("absent: inverse of present", () => {
+    expect(
+      evaluateConditionPredicate({
+        operator: "absent",
+        subjectValue: undefined,
+        configValue: undefined,
+      }),
+    ).toBe(true);
+    expect(
+      evaluateConditionPredicate({
+        operator: "absent",
+        subjectValue: "x",
+        configValue: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it("equals: exact string comparison; case-sensitive", () => {
+    expect(
+      evaluateConditionPredicate({
+        operator: "equals",
+        subjectValue: "VIP",
+        configValue: "VIP",
+      }),
+    ).toBe(true);
+    expect(
+      evaluateConditionPredicate({
+        operator: "equals",
+        subjectValue: "vip",
+        configValue: "VIP",
+      }),
+    ).toBe(false);
+  });
+
+  it("equals: undefined subject never matches (even against empty)", () => {
+    expect(
+      evaluateConditionPredicate({
+        operator: "equals",
+        subjectValue: undefined,
+        configValue: "",
+      }),
+    ).toBe(false);
+  });
+
+  it("contains: substring match", () => {
+    expect(
+      evaluateConditionPredicate({
+        operator: "contains",
+        subjectValue: "support@example.com",
+        configValue: "@example.com",
+      }),
+    ).toBe(true);
+    expect(
+      evaluateConditionPredicate({
+        operator: "contains",
+        subjectValue: "support@other.com",
+        configValue: "@example.com",
+      }),
+    ).toBe(false);
+  });
+
+  it("contains: undefined subject never matches", () => {
+    expect(
+      evaluateConditionPredicate({
+        operator: "contains",
+        subjectValue: undefined,
+        configValue: "anything",
+      }),
+    ).toBe(false);
   });
 });

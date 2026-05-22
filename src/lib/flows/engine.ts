@@ -36,9 +36,12 @@ import { supabaseAdmin } from "./admin-client";
 import {
   engineSendInteractiveButtons,
   engineSendInteractiveList,
+  engineSendText,
 } from "./meta-send";
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
 import {
+  type CollectInputNodeConfig,
+  type ConditionNodeConfig,
   type DispatchInboundInput,
   type DispatchInboundResult,
   type FlowNodeRow,
@@ -48,6 +51,7 @@ import {
   type SendButtonsNodeConfig,
   type SendListNodeConfig,
   type SendMessageNodeConfig,
+  type SetTagNodeConfig,
   type StartNodeConfig,
   type KeywordTriggerConfig,
 } from "./types";
@@ -105,17 +109,56 @@ export function matchesKeywordTrigger(
 
 /** Nodes that advance to a next_node_key without waiting for input. */
 export function isAutoAdvancing(node_type: string): boolean {
-  return node_type === "start" || node_type === "send_message";
+  return (
+    node_type === "start" ||
+    node_type === "send_message" ||
+    node_type === "condition" ||
+    node_type === "set_tag"
+  );
 }
 
 /** Nodes that send a prompt and suspend awaiting a customer reply. */
 export function isSuspending(node_type: string): boolean {
-  return node_type === "send_buttons" || node_type === "send_list";
+  return (
+    node_type === "send_buttons" ||
+    node_type === "send_list" ||
+    node_type === "collect_input"
+  );
 }
 
 /** Nodes that end the run. */
 export function isTerminal(node_type: string): boolean {
   return node_type === "handoff" || node_type === "end";
+}
+
+/**
+ * Evaluate a `condition` node's predicate against the current run
+ * state. Exported pure for unit testing — the engine wraps it with a
+ * DB lookup for `tag` / `contact_field` subjects.
+ */
+export function evaluateConditionPredicate(args: {
+  operator: ConditionNodeConfig["operator"];
+  /**
+   * Resolved value of the subject. `undefined` means the subject is
+   * absent (no var with that key / no such tag / contact field is
+   * null). Pure function: caller does the DB lookup.
+   */
+  subjectValue: string | undefined;
+  /** The configured comparison value, when applicable. */
+  configValue: string | undefined;
+}): boolean {
+  switch (args.operator) {
+    case "present":
+      return args.subjectValue !== undefined && args.subjectValue !== "";
+    case "absent":
+      return args.subjectValue === undefined || args.subjectValue === "";
+    case "equals":
+      if (args.subjectValue === undefined) return false;
+      return args.subjectValue === (args.configValue ?? "");
+    case "contains":
+      if (args.subjectValue === undefined) return false;
+      return args.subjectValue.includes(args.configValue ?? "");
+  }
 }
 
 // ============================================================
@@ -385,6 +428,73 @@ async function executeHandoff(
   await endRun(db, run.id, "handed_off", "handoff_node");
 }
 
+/**
+ * Resolve a condition node's subject value from DB / run state, then
+ * call the pure `evaluateConditionPredicate`. Splits out so the
+ * predicate itself stays unit-testable without a Supabase mock.
+ *
+ * Subject sources:
+ *   - `var` → `flow_runs.vars[subject_key]` (captured by collect_input
+ *     or http_fetch in v2).
+ *   - `tag` → present iff `contact_tags(contact_id, tag_id)` exists.
+ *     `subject_key` IS the tag UUID; the SELECT returns 1 row or 0.
+ *   - `contact_field` → one of name/email/phone/company on `contacts`.
+ */
+async function evaluateConditionNode(
+  db: AdminClient,
+  run: FlowRunRow,
+  cfg: ConditionNodeConfig,
+): Promise<boolean> {
+  let subjectValue: string | undefined;
+  if (cfg.subject === "var") {
+    const v = run.vars[cfg.subject_key];
+    subjectValue = typeof v === "string" ? v : v === undefined ? undefined : String(v);
+  } else if (cfg.subject === "tag") {
+    const { count } = await db
+      .from("contact_tags")
+      .select("contact_id", { count: "exact", head: true })
+      .eq("contact_id", run.contact_id!)
+      .eq("tag_id", cfg.subject_key);
+    // For tags, "present" really is the only meaningful test — the
+    // `present`/`absent` operators are the natural fit. equals/contains
+    // against a tag UUID would still work mechanically (compare its
+    // existence to the value).
+    subjectValue = (count ?? 0) > 0 ? cfg.subject_key : undefined;
+  } else {
+    const ALLOWED = ["name", "email", "phone", "company"] as const;
+    type AllowedField = (typeof ALLOWED)[number];
+    if (!ALLOWED.includes(cfg.subject_key as AllowedField)) {
+      throw new Error(`unsupported contact_field: ${cfg.subject_key}`);
+    }
+    const { data } = await db
+      .from("contacts")
+      .select(cfg.subject_key)
+      .eq("id", run.contact_id!)
+      .maybeSingle();
+    const raw = (data as Record<string, unknown> | null)?.[cfg.subject_key];
+    subjectValue = typeof raw === "string" && raw.length > 0 ? raw : undefined;
+  }
+  return evaluateConditionPredicate({
+    operator: cfg.operator,
+    subjectValue,
+    configValue: cfg.value,
+  });
+}
+
+/**
+ * Tiny `{{vars.foo}}` interpolation. Used by send_message + collect_input
+ * prompt text so a captured `name` can show up in the next prompt
+ * ("Thanks {{vars.name}}, what's your email?"). Missing vars render as
+ * empty string — the same behavior as the automations engine.
+ */
+function interpolateVars(template: string, vars: Record<string, unknown>): string {
+  if (!template) return "";
+  return template.replace(/\{\{vars\.([a-zA-Z0-9_]+)\}\}/g, (_, key) => {
+    const v = vars[key];
+    return v === undefined || v === null ? "" : String(v);
+  });
+}
+
 async function endRun(
   db: AdminClient,
   runId: string,
@@ -441,13 +551,124 @@ async function advanceFromNodeKey(
       continue;
     }
     if (node.node_type === "send_message") {
-      // v1 send_message is a plain text without input. The dedicated
-      // text-only sender lives in automations/meta-send.ts; we'll
-      // wire it in PR #4 when the collect_input node lands. For v1,
-      // a flow that needs to send plain text uses a send_buttons
-      // node with a single "OK" button as the gating affordance.
-      // Until then, treat send_message as auto-advance with no send.
       const cfg = node.config as unknown as SendMessageNodeConfig;
+      try {
+        const { whatsapp_message_id } = await engineSendText({
+          userId: run.user_id,
+          conversationId: run.conversation_id!,
+          contactId: run.contact_id!,
+          text: interpolateVars(cfg.text, run.vars),
+        });
+        await logEvent(db, run.id, "message_sent", node.node_key, {
+          node_type: "send_message",
+          whatsapp_message_id,
+        });
+      } catch (err) {
+        await logEvent(db, run.id, "error", node.node_key, {
+          reason: "send_text_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        });
+        await endRun(db, run.id, "failed", "send_text_failed");
+        return { outcome: "completed" };
+      }
+      currentKey = cfg.next_node_key;
+      continue;
+    }
+    if (node.node_type === "collect_input") {
+      // Send the prompt and suspend. Customer's next TEXT reply will
+      // wake us up via handleReplyForActiveRun's collect_input branch.
+      const cfg = node.config as unknown as CollectInputNodeConfig;
+      try {
+        const { whatsapp_message_id } = await engineSendText({
+          userId: run.user_id,
+          conversationId: run.conversation_id!,
+          contactId: run.contact_id!,
+          text: interpolateVars(cfg.prompt_text, run.vars),
+        });
+        await logEvent(db, run.id, "message_sent", node.node_key, {
+          node_type: "collect_input",
+          whatsapp_message_id,
+        });
+        const { data: msg } = await db
+          .from("messages")
+          .select("id")
+          .eq("message_id", whatsapp_message_id)
+          .maybeSingle();
+        await db
+          .from("flow_runs")
+          .update({
+            last_prompt_message_id: (msg as { id: string } | null)?.id ?? null,
+          })
+          .eq("id", run.id);
+      } catch (err) {
+        await logEvent(db, run.id, "error", node.node_key, {
+          reason: "collect_input_prompt_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        });
+        await endRun(db, run.id, "failed", "collect_input_prompt_failed");
+        return { outcome: "completed" };
+      }
+      const advanced = await advanceCurrentNodeKey(
+        db,
+        run.id,
+        run.current_node_key,
+        node.node_key,
+      );
+      if (!advanced) {
+        await logEvent(db, run.id, "error", node.node_key, {
+          reason: "lost_race_during_advance",
+        });
+      }
+      return { outcome: "advanced" };
+    }
+    if (node.node_type === "condition") {
+      const cfg = node.config as unknown as ConditionNodeConfig;
+      let branch: "true" | "false";
+      try {
+        branch = (await evaluateConditionNode(db, run, cfg))
+          ? "true"
+          : "false";
+      } catch (err) {
+        await logEvent(db, run.id, "error", node.node_key, {
+          reason: "condition_evaluation_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        });
+        await endRun(db, run.id, "failed", "condition_evaluation_failed");
+        return { outcome: "completed" };
+      }
+      currentKey =
+        branch === "true" ? cfg.true_next : cfg.false_next;
+      await logEvent(db, run.id, "node_entered", node.node_key, {
+        condition_result: branch,
+        advancing_to: currentKey,
+      });
+      continue;
+    }
+    if (node.node_type === "set_tag") {
+      const cfg = node.config as unknown as SetTagNodeConfig;
+      try {
+        if (cfg.mode === "add") {
+          await db
+            .from("contact_tags")
+            .upsert(
+              { contact_id: run.contact_id!, tag_id: cfg.tag_id },
+              { onConflict: "contact_id,tag_id" },
+            );
+        } else {
+          await db
+            .from("contact_tags")
+            .delete()
+            .eq("contact_id", run.contact_id!)
+            .eq("tag_id", cfg.tag_id);
+        }
+      } catch (err) {
+        // Non-fatal — log + advance. A tag-write failure shouldn't
+        // strand the customer mid-flow.
+        await logEvent(db, run.id, "error", node.node_key, {
+          reason: "set_tag_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        });
+      }
       currentKey = cfg.next_node_key;
       continue;
     }
@@ -625,11 +846,41 @@ async function handleReplyForActiveRun(
     return { consumed: true, flow_run_id: run.id, outcome: "no_match" };
   }
 
-  // Only interactive replies can advance a v1 flow. Text replies fall
-  // through to the fallback policy below (collect_input arrives in v1.5).
+  // Two ways a reply can advance:
+  //   1. Interactive button/list tap on a send_buttons/send_list node.
+  //   2. Text reply on a collect_input node — capture into vars.
+  //
+  // Everything else falls through to the fallback policy below.
   let matched: string | null = null;
-  if (message.kind === "interactive_reply") {
+  if (
+    message.kind === "interactive_reply" &&
+    (currentNode.node_type === "send_buttons" ||
+      currentNode.node_type === "send_list")
+  ) {
     matched = matchReplyId(currentNode, message.reply_id);
+  } else if (
+    message.kind === "text" &&
+    currentNode.node_type === "collect_input"
+  ) {
+    const cfg = currentNode.config as unknown as CollectInputNodeConfig;
+    const captured = message.text.trim();
+    if (captured.length > 0 && cfg.var_key) {
+      // Persist captured value + reset reprompt count atomically.
+      const { error: capErr } = await db
+        .from("flow_runs")
+        .update({
+          vars: { ...run.vars, [cfg.var_key]: captured },
+          reprompt_count: 0,
+        })
+        .eq("id", run.id);
+      if (!capErr) {
+        await logEvent(db, run.id, "node_entered", currentNode.node_key, {
+          captured_key: cfg.var_key,
+          captured_length: captured.length,
+        });
+        matched = cfg.next_node_key;
+      }
+    }
   }
 
   if (matched) {
@@ -678,6 +929,23 @@ async function handleReplyForActiveRun(
       await sendButtonsAndSuspend(db, run, currentNode);
     } else if (currentNode.node_type === "send_list") {
       await sendListAndSuspend(db, run, currentNode);
+    } else if (currentNode.node_type === "collect_input") {
+      // Customer typed something we couldn't accept (empty after trim,
+      // or var_key missing — rare). Re-send the prompt so they try again.
+      const cfg = currentNode.config as unknown as CollectInputNodeConfig;
+      try {
+        await engineSendText({
+          userId: run.user_id,
+          conversationId: run.conversation_id!,
+          contactId: run.contact_id!,
+          text: interpolateVars(cfg.prompt_text, run.vars),
+        });
+      } catch (err) {
+        await logEvent(db, run.id, "error", currentNode.node_key, {
+          reason: "reprompt_send_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
     return { consumed: true, flow_run_id: run.id, outcome: "fallback_fired" };
   }

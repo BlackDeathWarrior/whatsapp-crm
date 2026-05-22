@@ -15,12 +15,13 @@
  * the same file as small components rather than separate modules.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CircleCheck,
   CircleAlert,
+  History,
   Loader2,
   Plus,
   Save,
@@ -36,6 +37,9 @@ import {
   Flag,
   PlayCircle,
   PauseCircle,
+  Inbox,
+  GitFork,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -79,6 +83,9 @@ type NodeType =
   | "send_message"
   | "send_buttons"
   | "send_list"
+  | "collect_input"
+  | "condition"
+  | "set_tag"
   | "handoff"
   | "end";
 
@@ -122,6 +129,21 @@ const NODE_META: Record<
     label: "Send list",
     icon: ListPlus,
     color: "text-indigo-400",
+  },
+  collect_input: {
+    label: "Collect input",
+    icon: Inbox,
+    color: "text-teal-400",
+  },
+  condition: {
+    label: "If / else",
+    icon: GitFork,
+    color: "text-fuchsia-400",
+  },
+  set_tag: {
+    label: "Tag contact",
+    icon: Tag,
+    color: "text-pink-400",
   },
   handoff: {
     label: "Handoff to agent",
@@ -175,6 +197,23 @@ function defaultConfigFor(type: NodeType): Record<string, unknown> {
           },
         ],
       };
+    case "collect_input":
+      return {
+        prompt_text: "",
+        var_key: "answer",
+        next_node_key: "",
+      };
+    case "condition":
+      return {
+        subject: "var",
+        subject_key: "",
+        operator: "equals",
+        value: "",
+        true_next: "",
+        false_next: "",
+      };
+    case "set_tag":
+      return { mode: "add", tag_id: "", next_node_key: "" };
     case "handoff":
       return { note: "" };
     case "end":
@@ -399,6 +438,7 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
         onDelete={handleDelete}
         canActivate={canActivate}
         onBack={() => router.push("/flows")}
+        onViewRuns={() => router.push(`/flows/${initialFlow.id}/runs`)}
       />
 
       <TriggerPanel
@@ -465,6 +505,7 @@ function Header({
   onDelete,
   canActivate,
   onBack,
+  onViewRuns,
 }: {
   state: BuilderState;
   setState: React.Dispatch<React.SetStateAction<BuilderState>>;
@@ -475,6 +516,7 @@ function Header({
   onDelete: () => void;
   canActivate: boolean;
   onBack: () => void;
+  onViewRuns: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -502,6 +544,14 @@ function Header({
           <StatusBadge status={state.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onViewRuns()}
+          >
+            <History className="h-3.5 w-3.5" />
+            Runs
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -883,6 +933,66 @@ function NodeConfigForm({
         />
       )}
 
+      {node.node_type === "collect_input" && (
+        <>
+          <TextRow
+            label="Prompt sent to the customer"
+            value={(cfg as { prompt_text?: string }).prompt_text ?? ""}
+            onChange={(v) => onUpdateConfig({ prompt_text: v })}
+            rows={2}
+          />
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">
+              Variable key (stored in flow_runs.vars; alphanumeric + underscore)
+            </label>
+            <Input
+              value={(cfg as { var_key?: string }).var_key ?? ""}
+              onChange={(e) =>
+                onUpdateConfig({
+                  var_key: e.target.value.replace(/[^a-zA-Z0-9_]/g, ""),
+                })
+              }
+              placeholder="e.g. name, email, company"
+              className="bg-slate-800 font-mono text-xs"
+            />
+            <p className="mt-1 text-[10px] text-slate-500">
+              Interpolate in downstream prompts and handoff notes with{" "}
+              <code className="rounded bg-slate-800 px-1">
+                {"{{vars."}
+                {(cfg as { var_key?: string }).var_key || "name"}
+                {"}}"}
+              </code>
+              .
+            </p>
+          </div>
+          <NextNodeRow
+            value={(cfg as { next_node_key?: string }).next_node_key ?? ""}
+            allNodes={allNodes}
+            currentKey={node.node_key}
+            onChange={(v) => onUpdateConfig({ next_node_key: v })}
+            label="After capturing, advance to"
+          />
+        </>
+      )}
+
+      {node.node_type === "condition" && (
+        <ConditionForm
+          cfg={cfg as ConditionCfg}
+          allNodes={allNodes}
+          currentKey={node.node_key}
+          onUpdateConfig={onUpdateConfig}
+        />
+      )}
+
+      {node.node_type === "set_tag" && (
+        <SetTagForm
+          cfg={cfg as SetTagCfg}
+          allNodes={allNodes}
+          currentKey={node.node_key}
+          onUpdateConfig={onUpdateConfig}
+        />
+      )}
+
       {node.node_type === "handoff" && (
         <TextRow
           label="Internal note (for the agent picking up)"
@@ -1206,6 +1316,281 @@ function SendListForm({
   );
 }
 
+// ---- condition form ----
+
+interface ConditionCfg {
+  subject?: "var" | "tag" | "contact_field";
+  subject_key?: string;
+  operator?: "equals" | "contains" | "present" | "absent";
+  value?: string;
+  true_next?: string;
+  false_next?: string;
+}
+
+interface UserTag {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+function ConditionForm({
+  cfg,
+  allNodes,
+  currentKey,
+  onUpdateConfig,
+}: {
+  cfg: ConditionCfg;
+  allNodes: BuilderNode[];
+  currentKey: string;
+  onUpdateConfig: (patch: Record<string, unknown>) => void;
+}) {
+  const [tags, setTags] = useState<UserTag[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/tags").catch(() => null);
+        if (!res || !res.ok) return;
+        const json = (await res.json()) as { tags?: UserTag[] };
+        if (!cancelled) setTags(json.tags ?? []);
+      } catch {
+        // Tags endpoint absent on older deployments — fall back to a
+        // plain text input so the condition is still authorable.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const subject = cfg.subject ?? "var";
+  const operator = cfg.operator ?? "equals";
+  const showValue = operator === "equals" || operator === "contains";
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">If</label>
+          <Select
+            value={subject}
+            onValueChange={(v) =>
+              onUpdateConfig({ subject: v as ConditionCfg["subject"] })
+            }
+          >
+            <SelectTrigger className="bg-slate-800">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="var">Captured variable</SelectItem>
+              <SelectItem value="tag">Contact has tag</SelectItem>
+              <SelectItem value="contact_field">Contact field</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="md:col-span-2">
+          <label className="mb-1 block text-xs text-slate-400">
+            {subject === "var"
+              ? "var name"
+              : subject === "tag"
+                ? "Tag"
+                : "Field"}
+          </label>
+          {subject === "tag" && tags.length > 0 ? (
+            <Select
+              value={cfg.subject_key ?? ""}
+              onValueChange={(v) => onUpdateConfig({ subject_key: v })}
+            >
+              <SelectTrigger className="bg-slate-800">
+                <SelectValue placeholder="Pick a tag…" />
+              </SelectTrigger>
+              <SelectContent>
+                {tags.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : subject === "contact_field" ? (
+            <Select
+              value={cfg.subject_key ?? ""}
+              onValueChange={(v) => onUpdateConfig({ subject_key: v })}
+            >
+              <SelectTrigger className="bg-slate-800">
+                <SelectValue placeholder="Pick a field…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">name</SelectItem>
+                <SelectItem value="email">email</SelectItem>
+                <SelectItem value="phone">phone</SelectItem>
+                <SelectItem value="company">company</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              value={cfg.subject_key ?? ""}
+              onChange={(e) => onUpdateConfig({ subject_key: e.target.value })}
+              placeholder={subject === "var" ? "e.g. email" : "tag UUID"}
+              className="bg-slate-800 font-mono text-xs"
+            />
+          )}
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-3",
+          showValue ? "md:grid-cols-2" : "",
+        )}
+      >
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">Operator</label>
+          <Select
+            value={operator}
+            onValueChange={(v) =>
+              onUpdateConfig({ operator: v as ConditionCfg["operator"] })
+            }
+          >
+            <SelectTrigger className="bg-slate-800">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="present">is present</SelectItem>
+              <SelectItem value="absent">is absent</SelectItem>
+              <SelectItem value="equals">equals</SelectItem>
+              <SelectItem value="contains">contains</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {showValue && (
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">Value</label>
+            <Input
+              value={cfg.value ?? ""}
+              onChange={(e) => onUpdateConfig({ value: e.target.value })}
+              className="bg-slate-800"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <NextNodeRow
+          value={cfg.true_next ?? ""}
+          allNodes={allNodes}
+          currentKey={currentKey}
+          onChange={(v) => onUpdateConfig({ true_next: v })}
+          label="If true → advance to"
+        />
+        <NextNodeRow
+          value={cfg.false_next ?? ""}
+          allNodes={allNodes}
+          currentKey={currentKey}
+          onChange={(v) => onUpdateConfig({ false_next: v })}
+          label="If false → advance to"
+        />
+      </div>
+    </>
+  );
+}
+
+// ---- set_tag form ----
+
+interface SetTagCfg {
+  mode?: "add" | "remove";
+  tag_id?: string;
+  next_node_key?: string;
+}
+
+function SetTagForm({
+  cfg,
+  allNodes,
+  currentKey,
+  onUpdateConfig,
+}: {
+  cfg: SetTagCfg;
+  allNodes: BuilderNode[];
+  currentKey: string;
+  onUpdateConfig: (patch: Record<string, unknown>) => void;
+}) {
+  const [tags, setTags] = useState<UserTag[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/tags").catch(() => null);
+        if (!res || !res.ok) return;
+        const json = (await res.json()) as { tags?: UserTag[] };
+        if (!cancelled) setTags(json.tags ?? []);
+      } catch {
+        // No tags endpoint — fall back to raw UUID input.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">Action</label>
+          <Select
+            value={cfg.mode ?? "add"}
+            onValueChange={(v) =>
+              onUpdateConfig({ mode: v as SetTagCfg["mode"] })
+            }
+          >
+            <SelectTrigger className="bg-slate-800">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="add">Add tag</SelectItem>
+              <SelectItem value="remove">Remove tag</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">Tag</label>
+          {tags.length > 0 ? (
+            <Select
+              value={cfg.tag_id ?? ""}
+              onValueChange={(v) => onUpdateConfig({ tag_id: v })}
+            >
+              <SelectTrigger className="bg-slate-800">
+                <SelectValue placeholder="Pick a tag…" />
+              </SelectTrigger>
+              <SelectContent>
+                {tags.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              value={cfg.tag_id ?? ""}
+              onChange={(e) => onUpdateConfig({ tag_id: e.target.value })}
+              placeholder="Tag UUID"
+              className="bg-slate-800 font-mono text-xs"
+            />
+          )}
+        </div>
+      </div>
+      <NextNodeRow
+        value={cfg.next_node_key ?? ""}
+        allNodes={allNodes}
+        currentKey={currentKey}
+        onChange={(v) => onUpdateConfig({ next_node_key: v })}
+        label="Then advance to"
+      />
+    </>
+  );
+}
+
 // ---- Smaller field components ----
 
 function TextRow({
@@ -1321,6 +1706,9 @@ function AddNodeButton({ onAdd }: { onAdd: (type: NodeType) => void }) {
     "send_buttons",
     "send_list",
     "send_message",
+    "collect_input",
+    "condition",
+    "set_tag",
     "handoff",
     "end",
   ];

@@ -473,6 +473,175 @@ function validateNode(
       break;
     }
 
+    case "collect_input": {
+      const cfg = node.config as {
+        prompt_text?: string;
+        var_key?: string;
+        next_node_key?: string;
+      };
+      if (!cfg.prompt_text?.trim()) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "prompt_text",
+          message: "Collect-input needs a prompt to send the customer.",
+        });
+      }
+      if (!cfg.var_key?.trim()) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "var_key",
+          message: "Collect-input needs a var_key to store the answer under.",
+        });
+      } else if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(cfg.var_key)) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "var_key",
+          message: `var_key "${cfg.var_key}" must be alphanumeric+underscore and start with a letter or underscore.`,
+        });
+      }
+      if (!cfg.next_node_key) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "next_node_key",
+          message: "Collect-input must point to a next node.",
+        });
+      } else if (!knownKeys.has(cfg.next_node_key)) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "next_node_key",
+          message: `Collect-input points to non-existent node "${cfg.next_node_key}".`,
+        });
+      }
+      break;
+    }
+
+    case "condition": {
+      const cfg = node.config as {
+        subject?: "var" | "tag" | "contact_field";
+        subject_key?: string;
+        operator?: "equals" | "contains" | "present" | "absent";
+        value?: string;
+        true_next?: string;
+        false_next?: string;
+      };
+      if (!cfg.subject || !["var", "tag", "contact_field"].includes(cfg.subject)) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "subject",
+          message: "Condition needs a subject (var / tag / contact_field).",
+        });
+      }
+      if (!cfg.subject_key?.trim()) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "subject_key",
+          message: "Condition needs a subject_key (var name, tag id, or field name).",
+        });
+      }
+      if (
+        !cfg.operator ||
+        !["equals", "contains", "present", "absent"].includes(cfg.operator)
+      ) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "operator",
+          message: "Condition needs an operator.",
+        });
+      } else if (
+        (cfg.operator === "equals" || cfg.operator === "contains") &&
+        (cfg.value === undefined || cfg.value === "")
+      ) {
+        issues.push({
+          severity: "warning",
+          scope: "node",
+          node_key: node.node_key,
+          field: "value",
+          message: `Operator "${cfg.operator}" usually expects a comparison value — empty value will only match empty subjects.`,
+        });
+      }
+      for (const branch of ["true_next", "false_next"] as const) {
+        const key = cfg[branch];
+        if (!key) {
+          issues.push({
+            severity: "error",
+            scope: "node",
+            node_key: node.node_key,
+            field: branch,
+            message: `Condition needs a node for the "${branch === "true_next" ? "true" : "false"}" branch.`,
+          });
+        } else if (!knownKeys.has(key)) {
+          issues.push({
+            severity: "error",
+            scope: "node",
+            node_key: node.node_key,
+            field: branch,
+            message: `Condition's "${branch}" points to non-existent node "${key}".`,
+          });
+        }
+      }
+      break;
+    }
+
+    case "set_tag": {
+      const cfg = node.config as {
+        mode?: "add" | "remove";
+        tag_id?: string;
+        next_node_key?: string;
+      };
+      if (!cfg.mode || !["add", "remove"].includes(cfg.mode)) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "mode",
+          message: "Set-tag needs a mode (add or remove).",
+        });
+      }
+      if (!cfg.tag_id) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "tag_id",
+          message: "Set-tag needs a tag to apply.",
+        });
+      }
+      if (!cfg.next_node_key) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "next_node_key",
+          message: "Set-tag must point to a next node.",
+        });
+      } else if (!knownKeys.has(cfg.next_node_key)) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "next_node_key",
+          message: `Set-tag points to non-existent node "${cfg.next_node_key}".`,
+        });
+      }
+      break;
+    }
+
     case "handoff":
     case "end":
       // Terminal nodes have no outgoing edges; nothing to validate
@@ -520,9 +689,21 @@ export function reachableFromEntry(
 function outgoingEdges(node: NodeInput): string[] {
   switch (node.node_type) {
     case "start":
-    case "send_message": {
+    case "send_message":
+    case "collect_input":
+    case "set_tag": {
       const cfg = node.config as { next_node_key?: string };
       return cfg.next_node_key ? [cfg.next_node_key] : [];
+    }
+    case "condition": {
+      const cfg = node.config as {
+        true_next?: string;
+        false_next?: string;
+      };
+      const out: string[] = [];
+      if (cfg.true_next) out.push(cfg.true_next);
+      if (cfg.false_next) out.push(cfg.false_next);
+      return out;
     }
     case "send_buttons": {
       const cfg = node.config as {
