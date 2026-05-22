@@ -84,7 +84,7 @@ const TEMPLATE_ICONS = {
 
 export default function FlowsPage() {
   const router = useRouter();
-  const { profile, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading, profileLoading } = useAuth();
   const [flows, setFlows] = useState<FlowRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -95,7 +95,12 @@ export default function FlowsPage() {
   const flowsAccessAllowed = isFlowsEnabled(profile);
 
   useEffect(() => {
-    if (authLoading) return;
+    // Wait for BOTH the session and the profile row. Session loads
+    // fast (cookie read) but profile crosses the network — during the
+    // gap `profile` is null and `isFlowsEnabled(null)` is false, which
+    // would bounce a legitimate beta user back to /dashboard on every
+    // navigation here.
+    if (authLoading || profileLoading) return;
     if (!flowsAccessAllowed) {
       // Bounce non-beta users — the API would 404 every call anyway.
       router.replace("/dashboard");
@@ -133,7 +138,7 @@ export default function FlowsPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, flowsAccessAllowed, router]);
+  }, [authLoading, profileLoading, flowsAccessAllowed, router]);
 
   async function handleCreate() {
     if (!newName.trim()) return;
@@ -200,7 +205,7 @@ export default function FlowsPage() {
     }
   }
 
-  if (authLoading || (flowsAccessAllowed && loading)) {
+  if (authLoading || profileLoading || (flowsAccessAllowed && loading)) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-slate-500" />

@@ -29,7 +29,21 @@ interface Profile {
 interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
+  /**
+   * Session-level loading. Flips to false as soon as we know whether
+   * a user is signed in, *without* waiting for the profile row. Use
+   * this for chrome (sidebar / header) that can render with just the
+   * user object.
+   */
   loading: boolean;
+  /**
+   * Profile-row loading. Stays true until `fetchProfile` settles
+   * (success, missing row, or error). Code that branches on
+   * `profile.beta_features` MUST gate on this — otherwise it sees the
+   * `{ loading: false, profile: null }` window during initial load
+   * and may take the "not opted in" branch incorrectly.
+   */
+  profileLoading: boolean;
   signOut: () => Promise<void>;
   /** Re-fetch the current user's profile row — call after a save from
    *  the settings form so header/sidebar reflect the change without a
@@ -48,12 +62,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  // Tracked separately from `loading`. The session settles fast (one
+  // local cookie read); the profile fetch crosses the network and
+  // settles later. Callers that gate on `profile.*` need to know which
+  // window they're in — see the type doc above.
+  const [profileLoading, setProfileLoading] = useState(true);
 
   // Shared across init, auth-state-change listener, and the exposed
   // refreshProfile() callback. Reads the current session's user id and
   // pulls the matching profile row.
   const fetchProfile = useCallback(async (userId: string) => {
     const supabase = createClient();
+    setProfileLoading(true);
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -83,6 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error("[AuthProvider] fetchProfile threw:", err);
+    } finally {
+      setProfileLoading(false);
     }
   }, []);
 
@@ -94,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (mounted) {
         console.warn("[AuthProvider] getSession() timed out after 3s");
         setLoading(false);
+        setProfileLoading(false);
       }
     }, 3000);
 
@@ -111,9 +134,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(currentUser);
 
         if (currentUser) {
-          // Don't block loading on profile fetch — let the UI render
-          // with the user info we already have, profile enriches async.
+          // Don't block session loading on profile fetch — chrome
+          // (header, sidebar) can render from the user object alone,
+          // profile enriches async. Callers that need to branch on
+          // profile data gate on `profileLoading` instead.
           fetchProfile(currentUser.id);
+        } else {
+          // No user → no profile to load. Flip profileLoading off so
+          // pages that gate on it don't wait forever on the logged-out
+          // path (the route guard or redirect should fire instead).
+          setProfileLoading(false);
         }
       } catch (err) {
         console.error("[AuthProvider] init threw:", err);
@@ -136,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfile(currentUser.id);
       } else {
         setProfile(null);
+        setProfileLoading(false);
       }
 
       setLoading(false);
@@ -163,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, signOut, refreshProfile }}
+      value={{ user, profile, loading, profileLoading, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
@@ -183,6 +214,7 @@ export function useAuth(): AuthContextValue {
       user: null,
       profile: null,
       loading: false,
+      profileLoading: false,
       signOut: async () => {
         window.location.href = "/login";
       },

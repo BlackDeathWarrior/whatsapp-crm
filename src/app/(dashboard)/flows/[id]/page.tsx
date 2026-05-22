@@ -23,7 +23,7 @@ import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
 export default function FlowEditorPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { profile, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading, profileLoading } = useAuth();
 
   const [flow, setFlow] = useState<FlowRow | null>(null);
   const [nodes, setNodes] = useState<FlowNodeRow[]>([]);
@@ -33,7 +33,11 @@ export default function FlowEditorPage() {
   const allowed = isFlowsEnabled(profile);
 
   useEffect(() => {
-    if (authLoading) return;
+    // Wait for BOTH session and profile — see the comment on the same
+    // gate in /flows/page.tsx. Without `profileLoading`, navigating
+    // here from the list shows the `{ loading: false, profile: null }`
+    // window and would bounce a legitimate beta user.
+    if (authLoading || profileLoading) return;
     if (!allowed) {
       router.replace("/dashboard");
       return;
@@ -68,9 +72,9 @@ export default function FlowEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [allowed, authLoading, params.id, router]);
+  }, [allowed, authLoading, profileLoading, params.id, router]);
 
-  if (authLoading || (allowed && loading)) {
+  if (authLoading || profileLoading || (allowed && loading)) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
