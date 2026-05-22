@@ -873,21 +873,16 @@ function NodeConfigForm({
   onUpdateConfig: (patch: Record<string, unknown>) => void;
 }) {
   const cfg = node.config;
+  // Internal identifiers (node_key, reply_id columns on buttons/list rows)
+  // are auto-generated and the runner is the only consumer. Hide them by
+  // default so the form reads as plain editing; expose under "Advanced"
+  // for the rare case where someone wants to lock a key for stable
+  // analytics or external integration.
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const hasReplyIds =
+    node.node_type === "send_buttons" || node.node_type === "send_list";
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <label className="mb-1 block text-xs text-slate-400">
-          Node key (used internally — keep stable)
-        </label>
-        <Input
-          value={node.node_key}
-          onChange={(e) =>
-            onUpdate({ node_key: slugify(e.target.value, node.node_key) })
-          }
-          className="bg-slate-800"
-        />
-      </div>
-
       {node.node_type === "start" && (
         <NextNodeRow
           value={(cfg as { next_node_key?: string }).next_node_key ?? ""}
@@ -921,6 +916,7 @@ function NodeConfigForm({
           allNodes={allNodes}
           currentKey={node.node_key}
           onUpdateConfig={onUpdateConfig}
+          showAdvanced={showAdvanced}
         />
       )}
 
@@ -930,6 +926,7 @@ function NodeConfigForm({
           allNodes={allNodes}
           currentKey={node.node_key}
           onUpdateConfig={onUpdateConfig}
+          showAdvanced={showAdvanced}
         />
       )}
 
@@ -1008,6 +1005,44 @@ function NodeConfigForm({
           complete. No config needed.
         </p>
       )}
+
+      <div className="border-t border-slate-800 pt-3">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300"
+        >
+          {showAdvanced ? (
+            <ChevronUp className="h-3 w-3" />
+          ) : (
+            <ChevronDown className="h-3 w-3" />
+          )}
+          {showAdvanced ? "Hide" : "Show"} advanced
+        </button>
+        {showAdvanced && (
+          <div className="mt-3 flex flex-col gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">
+                Node key (internal identifier — keep stable for analytics)
+              </label>
+              <Input
+                value={node.node_key}
+                onChange={(e) =>
+                  onUpdate({ node_key: slugify(e.target.value, node.node_key) })
+                }
+                className="bg-slate-800 font-mono text-xs"
+              />
+            </div>
+            {hasReplyIds && (
+              <p className="text-[10px] text-slate-500">
+                Reply IDs for each option are shown inline above. They&apos;re
+                returned by WhatsApp when a customer taps; you usually don&apos;t
+                need to touch them.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1025,11 +1060,13 @@ function SendButtonsForm({
   allNodes,
   currentKey,
   onUpdateConfig,
+  showAdvanced,
 }: {
   cfg: SendButtonsCfg;
   allNodes: BuilderNode[];
   currentKey: string;
   onUpdateConfig: (patch: Record<string, unknown>) => void;
+  showAdvanced: boolean;
 }) {
   const buttons = cfg.buttons ?? [];
   const updateButton = (
@@ -1077,18 +1114,25 @@ function SendButtonsForm({
           {buttons.map((b, i) => (
             <div
               key={i}
-              className="grid grid-cols-1 gap-2 rounded-md border border-slate-800 bg-slate-800/40 p-3 md:grid-cols-[1fr_2fr_2fr_auto]"
+              className={cn(
+                "grid grid-cols-1 gap-2 rounded-md border border-slate-800 bg-slate-800/40 p-3",
+                showAdvanced
+                  ? "md:grid-cols-[1fr_2fr_2fr_auto]"
+                  : "md:grid-cols-[2fr_2fr_auto]",
+              )}
             >
-              <Input
-                value={b.reply_id}
-                onChange={(e) =>
-                  updateButton(i, {
-                    reply_id: slugify(e.target.value, `btn_${i + 1}`),
-                  })
-                }
-                placeholder="reply_id"
-                className="bg-slate-800 font-mono text-xs"
-              />
+              {showAdvanced && (
+                <Input
+                  value={b.reply_id}
+                  onChange={(e) =>
+                    updateButton(i, {
+                      reply_id: slugify(e.target.value, `btn_${i + 1}`),
+                    })
+                  }
+                  placeholder="reply_id"
+                  className="bg-slate-800 font-mono text-xs"
+                />
+              )}
               <Input
                 value={b.title}
                 onChange={(e) => updateButton(i, { title: e.target.value })}
@@ -1152,11 +1196,13 @@ function SendListForm({
   allNodes,
   currentKey,
   onUpdateConfig,
+  showAdvanced,
 }: {
   cfg: SendListCfg;
   allNodes: BuilderNode[];
   currentKey: string;
   onUpdateConfig: (patch: Record<string, unknown>) => void;
+  showAdvanced: boolean;
 }) {
   const sections = cfg.sections ?? [];
   const totalRows = sections.reduce((sum, s) => sum + s.rows.length, 0);
@@ -1255,21 +1301,28 @@ function SendListForm({
             {section.rows.map((row, rIdx) => (
               <div
                 key={rIdx}
-                className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_2fr_2fr_auto]"
+                className={cn(
+                  "mb-2 grid grid-cols-1 gap-2",
+                  showAdvanced
+                    ? "md:grid-cols-[1fr_2fr_2fr_auto]"
+                    : "md:grid-cols-[2fr_2fr_auto]",
+                )}
               >
-                <Input
-                  value={row.reply_id}
-                  onChange={(e) =>
-                    updateRow(sIdx, rIdx, {
-                      reply_id: slugify(
-                        e.target.value,
-                        `row_${rIdx + 1}`,
-                      ),
-                    })
-                  }
-                  placeholder="reply_id"
-                  className="bg-slate-800 font-mono text-xs"
-                />
+                {showAdvanced && (
+                  <Input
+                    value={row.reply_id}
+                    onChange={(e) =>
+                      updateRow(sIdx, rIdx, {
+                        reply_id: slugify(
+                          e.target.value,
+                          `row_${rIdx + 1}`,
+                        ),
+                      })
+                    }
+                    placeholder="reply_id"
+                    className="bg-slate-800 font-mono text-xs"
+                  />
+                )}
                 <Input
                   value={row.title}
                   onChange={(e) =>
