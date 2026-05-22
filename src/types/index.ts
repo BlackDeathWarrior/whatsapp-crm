@@ -6,10 +6,11 @@ export interface Profile {
   avatar_url?: string;
   role: string;
   /**
-   * Opted-in beta feature keys for this account. Server reads + UI
-   * gates against this array (see `src/lib/flows/feature-flag.ts`).
-   * Defaults to `[]` for every profile; toggled per-account via a
-   * direct UPDATE on the `profiles` row.
+   * Opted-in beta feature keys for this account. The column survives
+   * for future beta gates; no current feature reads it (Flows was
+   * the last user and went to soft-GA in PR #134). Defaults to `[]`
+   * for every profile; toggled per-account via a direct UPDATE on
+   * the `profiles` row.
    */
   beta_features?: string[];
   created_at: string;

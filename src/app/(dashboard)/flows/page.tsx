@@ -18,8 +18,6 @@ import {
   FileText,
 } from "lucide-react";
 
-import { useAuth } from "@/hooks/use-auth";
-import { isFlowsEnabled } from "@/lib/flows/feature-flag";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,10 +34,9 @@ import { cn } from "@/lib/utils";
 /**
  * Flows list page.
  *
- * Gated client-side on `isFlowsEnabled(profile)` AND server-side by
- * every /api/flows endpoint returning 404 to non-beta accounts. The
- * client gate hides the page from non-beta users who land here via
- * URL-typing; the server gate is the real security boundary.
+ * Open to every authenticated user. Flows is in soft-GA — the "Beta"
+ * chip in the header is the only remaining signal that the surface
+ * is new. The previous per-account beta gate was removed in PR #134.
  */
 
 interface FlowRow {
@@ -84,7 +81,6 @@ const TEMPLATE_ICONS = {
 
 export default function FlowsPage() {
   const router = useRouter();
-  const { profile, loading: authLoading, profileLoading } = useAuth();
   const [flows, setFlows] = useState<FlowRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -92,20 +88,7 @@ export default function FlowsPage() {
   const [creating, setCreating] = useState(false);
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
 
-  const flowsAccessAllowed = isFlowsEnabled(profile);
-
   useEffect(() => {
-    // Wait for BOTH the session and the profile row. Session loads
-    // fast (cookie read) but profile crosses the network — during the
-    // gap `profile` is null and `isFlowsEnabled(null)` is false, which
-    // would bounce a legitimate beta user back to /dashboard on every
-    // navigation here.
-    if (authLoading || profileLoading) return;
-    if (!flowsAccessAllowed) {
-      // Bounce non-beta users — the API would 404 every call anyway.
-      router.replace("/dashboard");
-      return;
-    }
     let cancelled = false;
     (async () => {
       try {
@@ -138,7 +121,7 @@ export default function FlowsPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, profileLoading, flowsAccessAllowed, router]);
+  }, []);
 
   async function handleCreate() {
     if (!newName.trim()) return;
@@ -205,7 +188,7 @@ export default function FlowsPage() {
     }
   }
 
-  if (authLoading || profileLoading || (flowsAccessAllowed && loading)) {
+  if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
@@ -217,7 +200,12 @@ export default function FlowsPage() {
     <div className="space-y-6 p-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Flows</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-white">Flows</h1>
+            <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+              Beta
+            </span>
+          </div>
           <p className="mt-1 text-sm text-slate-400">
             Build branching, button-driven WhatsApp conversations. Useful for
             menus, FAQs, and triage before a human steps in.

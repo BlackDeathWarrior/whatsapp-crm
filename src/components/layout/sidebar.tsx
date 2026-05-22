@@ -6,7 +6,6 @@ import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
-import { isFlowsEnabled } from "@/lib/flows/feature-flag";
 import {
   LayoutDashboard,
   MessageSquare,
@@ -38,11 +37,10 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   /**
-   * If set, only included in the rendered nav when the predicate
-   * returns true. Used to gate beta-only entries (e.g. /flows) on
-   * `profiles.beta_features`.
+   * When true, the nav row renders a small "Beta" chip after the label.
+   * Purely informational — doesn't affect routing or access.
    */
-  betaKey?: string;
+  beta?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -52,10 +50,7 @@ const navItems: NavItem[] = [
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
   { href: "/broadcasts", label: "Broadcasts", icon: Radio },
   { href: "/automations", label: "Automations", icon: Zap },
-  // Flows is gated on the per-account beta flag; the entry is invisible
-  // for accounts that haven't opted in. Server-side route guards make
-  // this a UX choice, not a security one — the API + pages 404 anyway.
-  { href: "/flows", label: "Flows", icon: Workflow, betaKey: "flows" },
+  { href: "/flows", label: "Flows", icon: Workflow, beta: true },
 ];
 
 const bottomNavItems = [
@@ -150,13 +145,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
-              // Per-account beta gate. Today only 'flows' uses this;
-              // extending the navItems list with new betaKeys is a
-              // single-line change.
-              if (item.betaKey === "flows" && !isFlowsEnabled(profile)) {
-                return null;
-              }
-
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -178,6 +166,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                   >
                     <item.icon className="h-4 w-4" />
                     <span className="flex-1">{item.label}</span>
+                    {item.beta && (
+                      <span
+                        aria-label="Beta feature"
+                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                      >
+                        Beta
+                      </span>
+                    )}
                     {showUnreadDot && (
                       <span
                         aria-label={`${totalUnread} unread conversation${totalUnread === 1 ? "" : "s"}`}

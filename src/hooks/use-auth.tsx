@@ -18,10 +18,9 @@ interface Profile {
   avatar_url: string | null;
   role: string | null;
   /**
-   * Opted-in beta feature keys for this account (e.g. `'flows'`).
-   * Gates client-side UI surfaces like the sidebar Flows entry; the
-   * server consults the same column for API + webhook guards. See
-   * `src/lib/flows/feature-flag.ts` for the shared predicate.
+   * Opted-in beta feature keys for this account. No current feature
+   * reads this — Flows was the last user and went to soft-GA in PR
+   * #134 — but the column survives for future beta gates.
    */
   beta_features: string[];
 }
@@ -95,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // `beta_features` is `NOT NULL DEFAULT ARRAY[]` in the DB, but
         // narrow defensively in case the column hasn't been migrated yet
         // (older deployments running 011 lazily) — `null` reads as no
-        // opt-ins, matching what `isFlowsEnabled()` expects.
+        // opt-ins, which is the safe default for any future beta gate.
         setProfile({
           ...data,
           beta_features: data.beta_features ?? [],

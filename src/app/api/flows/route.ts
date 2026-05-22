@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
-import { isFlowsEnabled } from '@/lib/flows/feature-flag'
 import { getFlowTemplate } from '@/lib/flows/templates'
 
 /**
  * GET /api/flows — list the caller's flows.
  * POST /api/flows — create a new (draft) flow.
  *
- * Both endpoints gate on the per-account Flows beta flag. Non-beta
- * accounts get a 404 so the UI / a curious user can't discover the
- * surface ahead of GA.
+ * Available to every authenticated user. The previous per-account
+ * beta gate was removed when Flows went to soft-GA; the UI still
+ * shows a "Beta" label so users know the surface is young, but the
+ * routes themselves are open.
  */
 
-async function requireFlowsBeta(): Promise<
+async function requireUser(): Promise<
   | { ok: true; userId: string; supabase: Awaited<ReturnType<typeof createClient>> }
   | { ok: false; status: number; body: { error: string } }
 > {
@@ -24,23 +24,11 @@ async function requireFlowsBeta(): Promise<
   if (!user) {
     return { ok: false, status: 401, body: { error: 'Unauthorized' } }
   }
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('beta_features')
-    .eq('user_id', user.id)
-    .maybeSingle()
-  if (
-    !isFlowsEnabled(profile as { beta_features?: string[] | null } | null)
-  ) {
-    // 404 (not 403) so the route looks like it doesn't exist to
-    // non-beta accounts — keeps the UI invisible.
-    return { ok: false, status: 404, body: { error: 'Not found' } }
-  }
   return { ok: true, userId: user.id, supabase }
 }
 
 export async function GET() {
-  const guard = await requireFlowsBeta()
+  const guard = await requireUser()
   if (!guard.ok) {
     return NextResponse.json(guard.body, { status: guard.status })
   }
@@ -57,7 +45,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const guard = await requireFlowsBeta()
+  const guard = await requireUser()
   if (!guard.ok) {
     return NextResponse.json(guard.body, { status: guard.status })
   }

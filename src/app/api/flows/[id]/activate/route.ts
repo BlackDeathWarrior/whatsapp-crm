@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
-import { isFlowsEnabled } from '@/lib/flows/feature-flag'
 import { validateFlowForActivation } from '@/lib/flows/validate'
 
 /**
@@ -30,14 +29,6 @@ export async function POST(
   } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('beta_features')
-    .eq('user_id', user.id)
-    .maybeSingle()
-  if (!isFlowsEnabled(profile as { beta_features?: string[] | null } | null)) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
   const body = (await request.json().catch(() => null)) as
