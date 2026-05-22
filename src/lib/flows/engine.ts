@@ -822,11 +822,18 @@ async function handleReplyForActiveRun(
   run: FlowRunRow,
   message: ParsedInbound,
 ): Promise<DispatchInboundResult> {
+  // Note: we intentionally do NOT persist the raw customer text. A
+  // `collect_input` prompt that asks "what's your card number?" would
+  // otherwise leave the PAN sitting in flow_run_events.payload forever,
+  // visible to anyone with access to the runs viewer or the events
+  // table. Length is enough for "did they actually reply?" debugging;
+  // for the captured value itself, the `node_entered` event already
+  // records `captured_key` + `captured_length` after the var is stored.
   await logEvent(db, run.id, "reply_received", run.current_node_key, {
     meta_message_id: message.meta_message_id,
     reply_kind: message.kind,
     reply_id: message.kind === "interactive_reply" ? message.reply_id : null,
-    text: message.kind === "text" ? message.text : null,
+    text_length: message.kind === "text" ? message.text.length : null,
   });
 
   if (!run.current_node_key) {
