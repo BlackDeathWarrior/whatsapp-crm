@@ -657,7 +657,14 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
         )}
       </section>
 
-      <ValidationPanel issues={issues} onJump={jumpToNode} />
+      {/* Sticky-bottom so the activate-readiness status follows the
+          user as they scroll through nodes. The parent <main> in the
+          dashboard shell is the scroll container; this stays pinned
+          to the viewport bottom (with a 1rem gap) until the page
+          naturally ends, at which point it falls back into flow. */}
+      <div className="sticky bottom-4 z-10 shadow-xl shadow-slate-950/60">
+        <ValidationPanel issues={issues} onJump={jumpToNode} />
+      </div>
     </div>
   );
 }
@@ -2041,9 +2048,12 @@ function ValidationPanel({
   onJump: (key: string) => void;
 }) {
   if (issues.length === 0) {
+    // Slate-950 base + emerald accents so the panel stays readable when
+    // sticky-positioned over scrolled-behind node cards (a translucent
+    // bg-emerald-500/10 would bleed through ugly).
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-600/40 bg-emerald-500/10 p-3 text-xs text-emerald-300">
-        <CircleCheck className="h-4 w-4" />
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-600/50 bg-slate-950 p-3 text-sm font-medium text-emerald-300">
+        <CircleCheck className="h-4 w-4 shrink-0" />
         No issues. Ready to activate.
       </div>
     );
@@ -2051,7 +2061,12 @@ function ValidationPanel({
   const errors = issues.filter((i) => i.severity === "error");
   const warnings = issues.filter((i) => i.severity === "warning");
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900 p-3">
+    <div
+      className={cn(
+        "rounded-lg border bg-slate-950 p-3",
+        errors.length > 0 ? "border-red-500/40" : "border-amber-500/40",
+      )}
+    >
       <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
         {errors.length > 0 ? (
           <CircleAlert className="h-4 w-4 text-red-400" />
