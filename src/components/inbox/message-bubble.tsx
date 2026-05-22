@@ -12,10 +12,13 @@ import {
   MapPin,
   LayoutTemplate,
   ImageOff,
+  CornerDownLeft,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
 import { MessageReactions } from "./message-reactions";
+import { useAuth } from "@/hooks/use-auth";
+import { isFlowsEnabled } from "@/lib/flows/feature-flag";
 
 interface MessageBubbleProps {
   message: Message;
@@ -116,6 +119,14 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
 }
 
 function MessageContent({ message }: { message: Message }) {
+  // Used to gate the interactive-reply bubble style below. The webhook
+  // only ever inserts `content_type='interactive'` rows when our runner
+  // sent an interactive message first — and the runner itself is behind
+  // the same beta gate (forthcoming PRs) — so this gate is belt-and-
+  // suspenders against any stray row that slipped in via manual SQL,
+  // a misconfigured import, or a future bug. Non-beta accounts fall
+  // back to plain text.
+  const { profile } = useAuth();
   switch (message.content_type) {
     case "text":
       return (
@@ -211,6 +222,37 @@ function MessageContent({ message }: { message: Message }) {
           <span>{message.content_text || "Location shared"}</span>
         </div>
       );
+
+    case "interactive": {
+      // Defensive gate — non-beta accounts render the tapped option as
+      // plain text. See the comment at the top of MessageContent for why
+      // this can't be reached in normal operation; this branch exists so
+      // that if a stray interactive row ever appears for a non-beta
+      // account, they don't see UI for a feature they haven't opted into.
+      if (!isFlowsEnabled(profile)) {
+        return (
+          <p className="whitespace-pre-wrap break-words text-sm">
+            {message.content_text || "[Interactive reply]"}
+          </p>
+        );
+      }
+      // Customer tapped a reply button or list row on a message the bot
+      // sent. We show the tapped option's title (already in content_text,
+      // set by parseMessageContent in the webhook) with a small affordance
+      // so agents reading the inbox can tell at a glance that this is a
+      // tap rather than the customer typing the same words.
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+            <CornerDownLeft className="h-3 w-3" />
+            Button reply
+          </span>
+          <p className="whitespace-pre-wrap break-words text-sm">
+            {message.content_text || "[Interactive reply]"}
+          </p>
+        </div>
+      );
+    }
 
     default:
       return (
