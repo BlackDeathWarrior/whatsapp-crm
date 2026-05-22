@@ -82,7 +82,16 @@ export interface Conversation {
 }
 
 export type SenderType = 'customer' | 'agent' | 'bot';
-export type ContentType = 'text' | 'image' | 'document' | 'audio' | 'video' | 'location' | 'template';
+export type ContentType =
+  | 'text'
+  | 'image'
+  | 'document'
+  | 'audio'
+  | 'video'
+  | 'location'
+  | 'template'
+  /** Customer tapped a reply button or list row on a message we sent. */
+  | 'interactive';
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 export interface Message {
@@ -98,6 +107,13 @@ export interface Message {
   status: MessageStatus;
   created_at: string;
   reply_to_message_id?: string;
+  /**
+   * Only set when `content_type === 'interactive'` — the stable id of
+   * the button or list row the customer tapped. The Flows engine uses
+   * this to route the next node; the inbox bubble uses it as a styling
+   * cue (renders with a "↩ button reply" affordance).
+   */
+  interactive_reply_id?: string;
 }
 
 export type ReactionActor = 'customer' | 'agent';

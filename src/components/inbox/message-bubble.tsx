@@ -12,6 +12,7 @@ import {
   MapPin,
   LayoutTemplate,
   ImageOff,
+  CornerDownLeft,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
@@ -209,6 +210,24 @@ function MessageContent({ message }: { message: Message }) {
         <div className="flex items-center gap-2 text-sm">
           <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
           <span>{message.content_text || "Location shared"}</span>
+        </div>
+      );
+
+    case "interactive":
+      // Customer tapped a reply button or list row on a message the bot
+      // sent. We show the tapped option's title (already in content_text,
+      // set by parseMessageContent in the webhook) with a small affordance
+      // so agents reading the inbox can tell at a glance that this is a
+      // tap rather than the customer typing the same words.
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+            <CornerDownLeft className="h-3 w-3" />
+            Button reply
+          </span>
+          <p className="whitespace-pre-wrap break-words text-sm">
+            {message.content_text || "[Interactive reply]"}
+          </p>
         </div>
       );
 
