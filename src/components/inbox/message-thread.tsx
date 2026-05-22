@@ -119,6 +119,18 @@ const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string 
   { label: "Closed", value: "closed", color: "text-slate-400" },
 ];
 
+/**
+ * WhatsApp-style doodle background applied to the chat area (both the
+ * active thread and the empty state). The SVG tile lives at
+ * `/public/inbox-doodle.svg`; the slate-950 colour sits underneath so
+ * the doodles read as a subtle pattern rather than a stark grid.
+ *
+ * Defined once at module scope so the two render paths can't drift —
+ * if we ever switch the asset, both spots update together.
+ */
+const DOODLE_BG_CLASSES =
+  "bg-slate-950 bg-[url('/inbox-doodle.svg')] bg-repeat";
+
 export function MessageThread({
   conversation,
   contact,
@@ -661,10 +673,12 @@ export function MessageThread({
     [conversation, onAssignChange],
   );
 
-  // Empty state
+  // Empty state — same WhatsApp-style doodle background as the active
+  // thread below, so swapping between empty/selected doesn't change the
+  // pattern under the user's eye.
   if (!conversation || !contact) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center bg-slate-950">
+      <div className={cn("flex flex-1 flex-col items-center justify-center", DOODLE_BG_CLASSES)}>
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-800">
           <MessageSquare className="h-8 w-8 text-slate-600" />
         </div>
@@ -690,8 +704,9 @@ export function MessageThread({
     : "Assign";
 
   return (
-    <div className="flex flex-1 flex-col bg-slate-950">
-      {/* Header */}
+    <div className={cn("flex flex-1 flex-col", DOODLE_BG_CLASSES)}>
+      {/* Header — solid bg-slate-900 sits on top of the doodle so the
+          name/avatar/dropdowns stay legible. */}
       <div className="flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-900 px-3 py-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
