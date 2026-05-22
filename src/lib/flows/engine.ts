@@ -203,22 +203,32 @@ async function loadFlow(
   return (data as FlowRow | null) ?? null;
 }
 
-async function loadNode(
+/**
+ * Load every node of a flow in one round trip and key them by
+ * `node_key`. The advance loop is then in-memory — a 5-node
+ * auto-advancing chain costs one SELECT, not five.
+ *
+ * Returns an empty map on error so the caller can still dispatch
+ * cleanly (every subsequent .get() returns undefined → the run
+ * fails with node_not_found, same as the old per-node lookup).
+ */
+async function loadAllNodes(
   db: AdminClient,
   flowId: string,
-  nodeKey: string,
-): Promise<FlowNodeRow | null> {
+): Promise<Map<string, FlowNodeRow>> {
   const { data, error } = await db
     .from("flow_nodes")
     .select("*")
-    .eq("flow_id", flowId)
-    .eq("node_key", nodeKey)
-    .maybeSingle();
+    .eq("flow_id", flowId);
   if (error) {
-    console.error("[flows] loadNode error:", error.message);
-    return null;
+    console.error("[flows] loadAllNodes error:", error.message);
+    return new Map();
   }
-  return (data as FlowNodeRow | null) ?? null;
+  const map = new Map<string, FlowNodeRow>();
+  for (const row of (data ?? []) as FlowNodeRow[]) {
+    map.set(row.node_key, row);
+  }
+  return map;
 }
 
 async function logEvent(
@@ -522,6 +532,7 @@ async function advanceFromNodeKey(
   db: AdminClient,
   run: FlowRunRow,
   startNodeKey: string,
+  nodes: Map<string, FlowNodeRow>,
 ): Promise<{ outcome: "advanced" | "completed" | "handed_off" }> {
   let currentKey: string | null = startNodeKey;
   // Defensive cap — if a flow has a cycle (which the validator
@@ -534,7 +545,7 @@ async function advanceFromNodeKey(
       await endRun(db, run.id, "failed", "missing_next_node");
       return { outcome: "completed" };
     }
-    const node = await loadNode(db, run.flow_id, currentKey);
+    const node: FlowNodeRow | null = nodes.get(currentKey) ?? null;
     if (!node) {
       await logEvent(db, run.id, "error", currentKey, {
         reason: "node_not_found",
@@ -794,7 +805,10 @@ export async function dispatchInboundToFlows(
           outcome: "duplicate_inbound_ignored",
         };
       }
-      return handleReplyForActiveRun(db, activeRun, input.message);
+      // One SELECT for the whole flow's nodes — advance loop is now
+      // in-memory. See loadAllNodes.
+      const nodes = await loadAllNodes(db, activeRun.flow_id);
+      return handleReplyForActiveRun(db, activeRun, input.message, nodes);
     }
 
     // No active run → look for a flow whose entry trigger matches.
@@ -807,7 +821,8 @@ export async function dispatchInboundToFlows(
     if (!flow || !flow.entry_node_id) {
       return { consumed: false, outcome: "no_match" };
     }
-    return startNewRun(db, flow, input);
+    const nodes = await loadAllNodes(db, flow.id);
+    return startNewRun(db, flow, input, nodes);
   } catch (err) {
     console.error(
       "[flows] dispatchInboundToFlows threw:",
@@ -821,6 +836,7 @@ async function handleReplyForActiveRun(
   db: AdminClient,
   run: FlowRunRow,
   message: ParsedInbound,
+  nodes: Map<string, FlowNodeRow>,
 ): Promise<DispatchInboundResult> {
   // Note: we intentionally do NOT persist the raw customer text. A
   // `collect_input` prompt that asks "what's your card number?" would
@@ -847,7 +863,7 @@ async function handleReplyForActiveRun(
     };
   }
 
-  const currentNode = await loadNode(db, run.flow_id, run.current_node_key);
+  const currentNode = nodes.get(run.current_node_key) ?? null;
   if (!currentNode) {
     await endRun(db, run.id, "failed", "current_node_not_found");
     return { consumed: true, flow_run_id: run.id, outcome: "no_match" };
@@ -903,7 +919,7 @@ async function handleReplyForActiveRun(
       .eq("id", run.id)
       .maybeSingle();
     const next = (fresh.data as FlowRunRow | null) ?? run;
-    const outcome = await advanceFromNodeKey(db, next, matched);
+    const outcome = await advanceFromNodeKey(db, next, matched, nodes);
     return {
       consumed: true,
       flow_run_id: run.id,
@@ -978,6 +994,7 @@ async function startNewRun(
   db: AdminClient,
   flow: FlowRow,
   input: DispatchInboundInput,
+  nodes: Map<string, FlowNodeRow>,
 ): Promise<DispatchInboundResult> {
   // INSERT — partial unique index `idx_one_active_run_per_contact`
   // catches concurrent inserts with 23505. We catch and return as
@@ -1026,7 +1043,7 @@ async function startNewRun(
   }
 
   // Run the advance loop starting from the entry node.
-  const outcome = await advanceFromNodeKey(db, run, flow.entry_node_id!);
+  const outcome = await advanceFromNodeKey(db, run, flow.entry_node_id!, nodes);
   return {
     consumed: true,
     flow_run_id: run.id,
