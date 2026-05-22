@@ -5,6 +5,8 @@ import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { dispatchInboundToFlows } from '@/lib/flows/engine'
+import { isFlowsEnabled } from '@/lib/flows/feature-flag'
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -574,6 +576,51 @@ async function processMessage(
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(userId, contactRecord.id)
 
+  // ============================================================
+  // Flow runner dispatch.
+  //
+  // Gated on the per-account beta flag (see PR #113). For accounts
+  // that haven't opted in, the runner never executes and the webhook
+  // behaves identically to before — automations fire as today.
+  //
+  // For opted-in accounts: if the runner consumes the message (it
+  // either advanced an active run or started a new one), we suppress
+  // the `new_message_received` + `keyword_match` automation triggers
+  // for this inbound. Customer is navigating the bot menu, not
+  // sending a fresh trigger word that should fork into automations.
+  //
+  // The relationship-level triggers (`new_contact_created`,
+  // `first_inbound_message`) still fire even when consumed — those
+  // are about WHO is messaging, not what they said.
+  //
+  // Awaited (not fire-and-forget) because we need the `consumed`
+  // result before deciding whether to dispatch automations. The
+  // runner has its own try/catch and never throws.
+  // ============================================================
+  let flowConsumed = false
+  if (await isProfileFlowsEnabled(userId)) {
+    const result = await dispatchInboundToFlows({
+      userId,
+      contactId: contactRecord.id,
+      conversationId: conversation.id,
+      message:
+        interactiveReplyId
+          ? {
+              kind: 'interactive_reply',
+              reply_id: interactiveReplyId,
+              reply_title: contentText ?? '',
+              meta_message_id: message.id,
+            }
+          : {
+              kind: 'text',
+              text: contentText ?? message.text?.body ?? '',
+              meta_message_id: message.id,
+            },
+      isFirstInboundMessage,
+    })
+    flowConsumed = result.consumed
+  }
+
   // Fire any automations that react to this webhook event. All dispatches
   // run here (not earlier) so the contact, conversation, and inbound
   // message all exist before any step — including send_message — runs.
@@ -585,7 +632,12 @@ async function processMessage(
     | 'first_inbound_message'
     | 'new_message_received'
     | 'keyword_match'
-  )[] = ['new_message_received', 'keyword_match']
+  )[] = []
+  // Content-level triggers are suppressed when a flow consumed the
+  // message — see the comment block above.
+  if (!flowConsumed) {
+    automationTriggers.push('new_message_received', 'keyword_match')
+  }
   // new_contact_created fires only when the webhook just auto-created the
   // contact row. first_inbound_message fires whenever this is the contact's
   // first-ever customer-sent message — a superset that also catches
@@ -604,6 +656,36 @@ async function processMessage(
         conversation_id: conversation.id,
       },
     }).catch((err) => console.error('[automations] dispatch failed:', err))
+  }
+}
+
+/**
+ * Reads the calling user's `profiles.beta_features` and asks whether
+ * the Flows beta is enabled for them. Best-effort: a DB failure reads
+ * as "not enabled" so a transient outage can't accidentally turn the
+ * feature on for a non-beta account.
+ *
+ * Result not cached across webhooks — Meta webhooks are infrequent
+ * (≪ 1 RPS for a single tenant) and the query is a single indexed
+ * row lookup. Caching introduces staleness when the owner toggles
+ * their opt-in via SQL.
+ */
+async function isProfileFlowsEnabled(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabaseAdmin()
+      .from('profiles')
+      .select('beta_features')
+      .eq('user_id', userId)
+      .maybeSingle()
+    return isFlowsEnabled(
+      data as { beta_features?: string[] | null } | null,
+    )
+  } catch (err) {
+    console.error(
+      '[flows] isProfileFlowsEnabled lookup failed:',
+      err instanceof Error ? err.message : err,
+    )
+    return false
   }
 }
 
