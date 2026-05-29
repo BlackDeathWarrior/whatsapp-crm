@@ -16,14 +16,24 @@
  * feedback was that the list shape made flows "hard to understand".
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LayoutGrid, ListTree } from "lucide-react";
 
 import { FlowBuilder } from "./flow-builder";
 import { FlowCanvas } from "./flow-canvas";
 import { FlowEditorProvider } from "./flow-editor-state";
+import { EditorHeader } from "./header";
+import { ValidationPanel } from "./validation-panel";
 import { cn } from "@/lib/utils";
 import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
+
+/**
+ * Below this viewport width we force list view and hide the toggle.
+ * Canvas with drag-to-connect on a phone is unusable — handles are
+ * ~10px and live finger drags from one node to another aren't a
+ * practical workflow. Matches Tailwind's `md` breakpoint.
+ */
+const MOBILE_BREAKPOINT = "(max-width: 767px)";
 
 type View = "canvas" | "list";
 
@@ -50,6 +60,13 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
     return "canvas";
   });
 
+  // Live mobile detection. We don't render canvas under the
+  // breakpoint regardless of `view` — but we keep `view` itself
+  // intact so the user's preference comes back when they widen
+  // again (e.g. rotating a tablet, resizing a window).
+  const isMobile = useMatchMedia(MOBILE_BREAKPOINT);
+  const effectiveView: View = isMobile ? "list" : view;
+
   const choose = (next: View) => {
     setView(next);
     try {
@@ -61,32 +78,64 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
 
   return (
     <FlowEditorProvider initialFlow={initialFlow} initialNodes={initialNodes}>
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-end">
-          <div
-            role="group"
-            aria-label="Editor view"
-            className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 p-0.5 text-xs"
-          >
-            <ToggleButton
-              active={view === "canvas"}
-              onClick={() => choose("canvas")}
-              icon={<LayoutGrid className="h-3 w-3" />}
-              label="Canvas"
-            />
-            <ToggleButton
-              active={view === "list"}
-              onClick={() => choose("list")}
-              icon={<ListTree className="h-3 w-3" />}
-              label="List"
-            />
+      <div className="mx-auto flex h-full max-w-4xl flex-col gap-6 p-6">
+        <EditorHeader />
+        {!isMobile && (
+          <div className="flex items-center justify-end">
+            <div
+              role="group"
+              aria-label="Editor view"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 p-0.5 text-xs"
+            >
+              <ToggleButton
+                active={effectiveView === "canvas"}
+                onClick={() => choose("canvas")}
+                icon={<LayoutGrid className="h-3 w-3" />}
+                label="Canvas"
+              />
+              <ToggleButton
+                active={effectiveView === "list"}
+                onClick={() => choose("list")}
+                icon={<ListTree className="h-3 w-3" />}
+                label="List"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
-        {view === "canvas" ? <FlowCanvas /> : <FlowBuilder />}
+        {effectiveView === "canvas" ? <FlowCanvas /> : <FlowBuilder />}
+
+        {/* Sticky-bottom validation panel mirrors the placement used
+            when this lived inside FlowBuilder — the activate-readiness
+            status follows the user as they scroll, in either view. */}
+        <div className="sticky bottom-4 z-10 shadow-xl shadow-slate-950/60">
+          <ValidationPanel />
+        </div>
       </div>
     </FlowEditorProvider>
   );
+}
+
+/**
+ * Tiny `useMatchMedia` shim. We could pull in `react-responsive` but
+ * this is the only consumer and matchMedia is one of those browser
+ * APIs that doesn't need a dependency.
+ */
+function useMatchMedia(query: string): boolean {
+  const [matches, setMatches] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(query).matches;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    // Safari < 14 still uses addListener; addEventListener is the
+    // modern path. Both fire identically.
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [query]);
+  return matches;
 }
 
 function ToggleButton({
