@@ -66,6 +66,152 @@ export async function verifyPhoneNumber(
 }
 
 // ============================================================
+// Cloud API registration (subscription for inbound webhooks)
+// ============================================================
+//
+// Saving a phone_number_id + access_token to whatsapp_config is NOT
+// enough to receive inbound events from Meta. Two extra calls are
+// required:
+//
+//   POST /{phone_number_id}/register
+//     Subscribes the number for THIS app's webhook. Requires a
+//     6-digit 2FA PIN the user previously set in Meta WhatsApp
+//     Manager → Two-step verification. Without /register, inbound
+//     events are routed to whichever app last claimed the number
+//     (often the one that did Embedded Signup) — so a second user
+//     adding a second number under the same WABA silently loses
+//     every inbound message.
+//
+//   POST /{waba_id}/subscribed_apps
+//     Subscribes the WABA itself to this app. Required exactly
+//     once per WABA, but idempotent so calling on every save is
+//     safe and cheap.
+//
+// Both calls are no-ops when already done — Meta returns success +
+// the helpers below treat that as success.
+
+export interface RegisterPhoneNumberArgs {
+  phoneNumberId: string
+  accessToken: string
+  /**
+   * 6-digit PIN the user set in Meta WhatsApp Manager →
+   * Two-step verification. If 2FA is not enabled on the number,
+   * Meta rejects /register with a clear error and the user is
+   * pointed at the right setting in the UI.
+   */
+  pin: string
+}
+
+export interface RegisterPhoneNumberResult {
+  success: boolean
+  /**
+   * True when Meta indicated the number was already registered to
+   * THIS app — same outcome as a fresh registration from the
+   * caller's POV, surfaced separately for logging clarity.
+   */
+  alreadyRegistered: boolean
+}
+
+/**
+ * Register a phone number for inbound webhook events.
+ *
+ * Errors that should be surfaced verbatim to the user:
+ *   * Missing / wrong PIN  → "Two-step verification PIN required..."
+ *   * No 2FA enabled       → "Two-factor authentication is not on..."
+ *   * Number on other app  → "Number is registered to another app..."
+ */
+export async function registerPhoneNumber(
+  args: RegisterPhoneNumberArgs
+): Promise<RegisterPhoneNumberResult> {
+  const { phoneNumberId, accessToken, pin } = args
+  const url = `${META_API_BASE}/${phoneNumberId}/register`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ messaging_product: 'whatsapp', pin }),
+  })
+
+  if (response.ok) {
+    return { success: true, alreadyRegistered: false }
+  }
+
+  // Meta returns an error envelope with a code. Code 133005 + the
+  // text "already registered" appears when the number is already
+  // subscribed to this app — that's success from the caller's
+  // perspective, surface it as such.
+  let data: { error?: { message?: string; code?: number; error_subcode?: number } } = {}
+  try {
+    data = await response.json()
+  } catch {
+    /* keep empty */
+  }
+  const message = data.error?.message ?? `Meta API error: ${response.status}`
+  if (/already.*registered/i.test(message)) {
+    return { success: true, alreadyRegistered: true }
+  }
+  throw new Error(message)
+}
+
+export interface SubscribeWabaToAppArgs {
+  wabaId: string
+  accessToken: string
+}
+
+/**
+ * Subscribe the WABA to this Meta app's webhook. Idempotent — Meta
+ * returns success even when the subscription already exists.
+ */
+export async function subscribeWabaToApp(
+  args: SubscribeWabaToAppArgs
+): Promise<void> {
+  const { wabaId, accessToken } = args
+  const url = `${META_API_BASE}/${wabaId}/subscribed_apps`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+}
+
+export interface GetSubscribedAppsArgs {
+  wabaId: string
+  accessToken: string
+}
+
+export interface SubscribedApp {
+  whatsapp_business_api_data?: {
+    id?: string
+    name?: string
+    link?: string
+  }
+}
+
+/**
+ * Diagnostic — fetch the list of apps currently subscribed to this
+ * WABA. The UI uses this to confirm OUR app is in the list when
+ * the user clicks Verify Registration.
+ */
+export async function getSubscribedApps(
+  args: GetSubscribedAppsArgs
+): Promise<SubscribedApp[]> {
+  const { wabaId, accessToken } = args
+  const url = `${META_API_BASE}/${wabaId}/subscribed_apps`
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const data = (await response.json()) as { data?: SubscribedApp[] }
+  return data.data ?? []
+}
+
+// ============================================================
 // Sending
 // ============================================================
 
