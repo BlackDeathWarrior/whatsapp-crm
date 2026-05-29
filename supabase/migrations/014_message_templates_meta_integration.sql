@@ -123,10 +123,14 @@ END $$;
 -- New default for fresh inserts.
 ALTER TABLE message_templates ALTER COLUMN status SET DEFAULT 'DRAFT';
 
--- 4. buttons shape guard. Permissive at the DB level — strict per-type
---    validation (max counts per type, QUICK_REPLY-vs-CTA exclusivity,
---    URL example required when {{1}} is present) lives in the API
---    validators so error messages can be specific.
+-- 4. buttons shape guard. Postgres disallows subqueries in CHECK
+--    constraints, so we can only assert the outer shape here (is-array
+--    + max length). Per-element type validation (recognised `type`
+--    values, max counts per type, QUICK_REPLY-vs-CTA exclusivity, URL
+--    example required when {{1}} is present) lives in the API
+--    validators in src/lib/whatsapp/template-validators.ts — that's
+--    where error messages can be specific to the offending button
+--    anyway.
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -142,15 +146,6 @@ BEGIN
         OR (
           jsonb_typeof(buttons) = 'array'
           AND jsonb_array_length(buttons) <= 10
-          AND NOT EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements(buttons) AS b
-            WHERE jsonb_typeof(b) <> 'object'
-              OR NOT (b ? 'type')
-              OR (b->>'type') NOT IN (
-                'QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'
-              )
-          )
         )
       );
   END IF;
