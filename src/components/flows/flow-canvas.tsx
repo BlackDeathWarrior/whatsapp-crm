@@ -26,7 +26,7 @@
  * that has to stay stable across views.
  */
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Background,
   Controls,
@@ -36,24 +36,30 @@ import {
   type Node as RfNode,
   type Edge as RfEdge,
   type NodeProps,
+  type OnNodeDrag,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { deriveCanvasEdges } from "@/lib/flows/edges";
 import { autoLayout, shouldAutoLayout } from "@/lib/flows/layout";
 import {
   NODE_META,
   summarizeNode,
   type BuilderNode,
-  type NodeType,
 } from "./shared";
-import type { FlowNodeRow, FlowRow } from "@/lib/flows/types";
-
-interface FlowCanvasProps {
-  initialFlow: FlowRow;
-  initialNodes: FlowNodeRow[];
-}
+import { useFlowEditor } from "./flow-editor-state";
+import { NodeConfigForm } from "./forms/node-config-form";
 
 // React-Flow node `data` payload — the bits our custom renderer needs.
 interface NodeData extends Record<string, unknown> {
@@ -115,16 +121,30 @@ const NODE_TYPES = { flow: FlowNodeCard };
 // Root canvas
 // ============================================================
 
-export function FlowCanvas({ initialFlow, initialNodes }: FlowCanvasProps) {
-  const { rfNodes, rfEdges } = useMemo(() => {
-    const builderNodes: BuilderNode[] = initialNodes.map((n) => ({
-      node_key: n.node_key,
-      node_type: n.node_type as NodeType,
-      config: n.config as Record<string, unknown>,
-      position_x: n.position_x,
-      position_y: n.position_y,
-    }));
+export function FlowCanvas() {
+  const {
+    state,
+    setState,
+    updateNodeConfig,
+    updateNodePosition,
+    removeNode,
+  } = useFlowEditor();
+  const builderNodes = state.nodes;
+  const entryNodeId = state.entry_node_id;
 
+  // Side-panel state — which node's form is open. Canvas-only UI; the
+  // list view's analogue is the per-card expanded set in
+  // flow-builder.tsx.
+  const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null);
+  const selectedNode = useMemo(
+    () =>
+      selectedNodeKey
+        ? builderNodes.find((n) => n.node_key === selectedNodeKey) ?? null
+        : null,
+    [selectedNodeKey, builderNodes],
+  );
+
+  const { rfNodes, rfEdges } = useMemo(() => {
     const canvasEdges = deriveCanvasEdges(builderNodes);
 
     // Decide whether to auto-layout. The helper guards against
@@ -155,12 +175,10 @@ export function FlowCanvas({ initialFlow, initialNodes }: FlowCanvasProps) {
         },
         data: {
           node: n,
-          isEntry: n.node_key === initialFlow.entry_node_id,
+          isEntry: n.node_key === entryNodeId,
         },
-        // Read-only in PR 1 — block all editing affordances. Drag is
-        // still allowed visually because disabling it makes the canvas
-        // feel inert in a way that's worse than letting users nudge a
-        // tile that won't save.
+        // Drag-to-connect + delete-key still off in PR 2a — those land
+        // in PR 2b with per-slot handles + cascading edge cleanup.
         connectable: false,
         deletable: false,
       };
@@ -183,7 +201,49 @@ export function FlowCanvas({ initialFlow, initialNodes }: FlowCanvasProps) {
     }));
 
     return { rfNodes, rfEdges };
-  }, [initialFlow.entry_node_id, initialNodes]);
+  }, [builderNodes, entryNodeId]);
+
+  // Drag-to-position: React-Flow tracks the visual drag internally and
+  // fires this once on release. We write the final coordinate back to
+  // the editor context (which flips `dirty`); save then ships the new
+  // positions in the existing PUT /api/flows/[id] body (the route
+  // already destructures position_x / position_y per migration 010).
+  // Writing only on dragStop (not on every position-change tick during
+  // the drag) keeps state updates cheap on long drags.
+  const handleNodeDragStop = useCallback<OnNodeDrag<RfNode<NodeData>>>(
+    (_event, node) => {
+      updateNodePosition(node.id, node.position.x, node.position.y);
+    },
+    [updateNodePosition],
+  );
+
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: RfNode<NodeData>) => {
+      setSelectedNodeKey(node.id);
+    },
+    [],
+  );
+
+  // Wrapped mutators that target the currently-selected node — pass to
+  // the form so each keystroke goes through the editor context (which
+  // flips `dirty` and feeds the validator).
+  const onSelectedUpdateConfig = useCallback(
+    (patch: Record<string, unknown>) => {
+      if (selectedNodeKey) updateNodeConfig(selectedNodeKey, patch);
+    },
+    [selectedNodeKey, updateNodeConfig],
+  );
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!selectedNodeKey) return;
+    removeNode(selectedNodeKey);
+    setSelectedNodeKey(null);
+  }, [selectedNodeKey, removeNode]);
+
+  const handleSetEntry = useCallback(() => {
+    if (!selectedNodeKey) return;
+    setState((s) => ({ ...s, entry_node_id: selectedNodeKey }));
+  }, [selectedNodeKey, setState]);
 
   if (rfNodes.length === 0) {
     return (
@@ -203,8 +263,10 @@ export function FlowCanvas({ initialFlow, initialNodes }: FlowCanvasProps) {
           fitView
           fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
           proOptions={{ hideAttribution: true }}
-          // Read-only knobs — keeps PR 1's surface inert at the
-          // React-Flow level. PR 2 will flip these back on.
+          onNodeDragStop={handleNodeDragStop}
+          onNodeClick={handleNodeClick}
+          // Drag-to-connect + delete-by-keyboard still off — both land
+          // in PR 2b with per-slot handles + cascading edge cleanup.
           nodesConnectable={false}
           edgesFocusable={false}
           elementsSelectable={true}
@@ -228,6 +290,104 @@ export function FlowCanvas({ initialFlow, initialNodes }: FlowCanvasProps) {
           />
         </ReactFlow>
       </div>
+
+      <NodeEditSheet
+        node={selectedNode}
+        isEntry={selectedNode?.node_key === entryNodeId}
+        allNodes={builderNodes}
+        onClose={() => setSelectedNodeKey(null)}
+        onUpdateConfig={onSelectedUpdateConfig}
+        onDelete={handleDeleteSelected}
+        onSetEntry={handleSetEntry}
+      />
     </ReactFlowProvider>
+  );
+}
+
+// ============================================================
+// Side panel — opens when a canvas node is clicked. Mounts the
+// shared NodeConfigForm dispatcher so edits made here behave
+// identically to the list view's per-card editor.
+// ============================================================
+
+function NodeEditSheet({
+  node,
+  isEntry,
+  allNodes,
+  onClose,
+  onUpdateConfig,
+  onDelete,
+  onSetEntry,
+}: {
+  node: BuilderNode | null;
+  isEntry: boolean;
+  allNodes: BuilderNode[];
+  onClose: () => void;
+  onUpdateConfig: (patch: Record<string, unknown>) => void;
+  onDelete: () => void;
+  onSetEntry: () => void;
+}) {
+  // Sheet is controlled — opens when a node is selected, closes via
+  // Esc / overlay / close button (all delegated to onClose).
+  const open = node !== null;
+  if (!node) {
+    return (
+      <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+        <SheetContent side="right" className="w-full sm:max-w-md" />
+      </Sheet>
+    );
+  }
+  const meta = NODE_META[node.node_type];
+  const Icon = meta.icon;
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 border-l border-slate-800 bg-slate-950 p-0 sm:max-w-md"
+      >
+        <SheetHeader className="border-b border-slate-800 px-5 py-4">
+          <SheetTitle className="flex items-center gap-2 text-slate-100">
+            <Icon className={cn("h-4 w-4 shrink-0", meta.color)} />
+            <span>{meta.label}</span>
+            {isEntry && (
+              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+                Entry
+              </span>
+            )}
+          </SheetTitle>
+          <SheetDescription className="font-mono text-[11px] text-slate-400">
+            {node.node_key}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
+          <NodeConfigForm
+            node={node}
+            allNodes={allNodes}
+            showAdvanced={false}
+            onUpdateConfig={onUpdateConfig}
+          />
+        </div>
+
+        <SheetFooter className="border-t border-slate-800 px-5 py-3 sm:flex-row sm:justify-between">
+          {!isEntry ? (
+            <Button variant="ghost" size="sm" onClick={onSetEntry}>
+              Set as entry
+            </Button>
+          ) : (
+            <span />
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete node
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

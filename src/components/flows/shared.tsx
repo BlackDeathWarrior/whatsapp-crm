@@ -114,6 +114,25 @@ export const NODE_META: Record<
 };
 
 // ============================================================
+// Pure editing helpers — used by forms in both views.
+// ============================================================
+
+/**
+ * Coerce an arbitrary string into a stable identifier (node_key,
+ * reply_id, etc.). Lowercases, collapses non-alphanumerics into
+ * single underscores, and trims leading/trailing underscores. Falls
+ * back to `fallback` for inputs that reduce to an empty string.
+ */
+export function slugify(s: string, fallback: string): string {
+  const cleaned = s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return cleaned || fallback;
+}
+
+// ============================================================
 // Summary helpers — short, single-line content previews used in
 // collapsed node cards (list view) and node tiles (canvas view).
 // Returns null when there's nothing meaningful to show (start/end,
