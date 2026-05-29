@@ -48,6 +48,7 @@ import {
   validateFlowForActivation,
   type ValidationIssue,
 } from "@/lib/flows/validate";
+import { unlinkNodeReferences } from "@/lib/flows/edges";
 import type { FlowNodeRow, FlowRow } from "@/lib/flows/types";
 import { NODE_META, slugify, type BuilderNode, type NodeType } from "./shared";
 
@@ -427,9 +428,16 @@ export function FlowEditorProvider({
 
   const removeNode = useCallback(
     (key: string) => {
+      // Auto-unlink inbound references so canvas / list deletes don't
+      // leave dangling arrows behind that the validator would flag.
+      // Cleared refs become "" (the "no target picked" sentinel the
+      // builder forms already use).
       setState((s) => ({
         ...s,
-        nodes: s.nodes.filter((n) => n.node_key !== key),
+        nodes: unlinkNodeReferences(
+          s.nodes.filter((n) => n.node_key !== key),
+          key,
+        ),
         entry_node_id: s.entry_node_id === key ? null : s.entry_node_id,
       }));
     },
