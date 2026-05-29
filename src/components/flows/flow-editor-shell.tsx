@@ -21,6 +21,7 @@ import { LayoutGrid, ListTree } from "lucide-react";
 
 import { FlowBuilder } from "./flow-builder";
 import { FlowCanvas } from "./flow-canvas";
+import { FlowEditorProvider } from "./flow-editor-state";
 import { cn } from "@/lib/utils";
 import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
 
@@ -59,34 +60,32 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-end">
-        <div
-          role="group"
-          aria-label="Editor view"
-          className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 p-0.5 text-xs"
-        >
-          <ToggleButton
-            active={view === "canvas"}
-            onClick={() => choose("canvas")}
-            icon={<LayoutGrid className="h-3 w-3" />}
-            label="Canvas"
-          />
-          <ToggleButton
-            active={view === "list"}
-            onClick={() => choose("list")}
-            icon={<ListTree className="h-3 w-3" />}
-            label="List"
-          />
+    <FlowEditorProvider initialFlow={initialFlow} initialNodes={initialNodes}>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-end">
+          <div
+            role="group"
+            aria-label="Editor view"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 p-0.5 text-xs"
+          >
+            <ToggleButton
+              active={view === "canvas"}
+              onClick={() => choose("canvas")}
+              icon={<LayoutGrid className="h-3 w-3" />}
+              label="Canvas"
+            />
+            <ToggleButton
+              active={view === "list"}
+              onClick={() => choose("list")}
+              icon={<ListTree className="h-3 w-3" />}
+              label="List"
+            />
+          </div>
         </div>
-      </div>
 
-      {view === "canvas" ? (
-        <FlowCanvas initialFlow={initialFlow} initialNodes={initialNodes} />
-      ) : (
-        <FlowBuilder initialFlow={initialFlow} initialNodes={initialNodes} />
-      )}
-    </div>
+        {view === "canvas" ? <FlowCanvas /> : <FlowBuilder />}
+      </div>
+    </FlowEditorProvider>
   );
 }
 
