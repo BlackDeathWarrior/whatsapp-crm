@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import type {
-  MessageTemplateStatus,
-  TemplateButton,
-  TemplateSampleValues,
-} from '@/types'
+import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
+import type { TemplateButton, TemplateSampleValues } from '@/types'
 
 /**
  * Sync message templates from Meta → local message_templates table.
@@ -60,27 +57,6 @@ function normalizeCategory(
   if (upper === 'UTILITY') return 'Utility'
   if (upper === 'AUTHENTICATION') return 'Authentication'
   return 'Marketing'
-}
-
-// Meta sometimes returns PENDING_REVIEW where the docs say PENDING; map
-// it through. Anything we don't recognise falls back to PENDING so the
-// row is visible to the user rather than silently dropped.
-function normalizeStatus(meta: string): MessageTemplateStatus {
-  const upper = meta.toUpperCase()
-  if (upper === 'PENDING_REVIEW') return 'PENDING'
-  const allowed: MessageTemplateStatus[] = [
-    'DRAFT',
-    'PENDING',
-    'APPROVED',
-    'REJECTED',
-    'PAUSED',
-    'DISABLED',
-    'IN_APPEAL',
-    'PENDING_DELETION',
-  ]
-  return (allowed as string[]).includes(upper)
-    ? (upper as MessageTemplateStatus)
-    : 'PENDING'
 }
 
 function normalizeQualityScore(

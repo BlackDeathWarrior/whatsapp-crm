@@ -183,6 +183,64 @@ export async function sendTemplateMessage(
 }
 
 // ============================================================
+// Template submission (Business Management API)
+// ============================================================
+
+import type { MetaTemplateSubmitPayload } from './template-components'
+
+export interface SubmitMessageTemplateArgs {
+  wabaId: string
+  accessToken: string
+  payload: MetaTemplateSubmitPayload
+}
+
+export interface SubmitMessageTemplateResult {
+  id: string
+  status: string
+  category?: string
+}
+
+/**
+ * Submit a message template to Meta for approval.
+ *
+ * Returns Meta's assigned template id + initial status (typically
+ * PENDING). Caller persists `id` as `meta_template_id` so the
+ * upcoming edit/delete flows can scope to this exact template (and
+ * language variant) via `hsm_id`, rather than nuking every variant
+ * with the same name.
+ *
+ * 429s from Meta (rate limit: 100 creates/hour/WABA) surface as a
+ * regular `Error('Meta API error: 429')`. The route handler
+ * distinguishes 429 and shows a more actionable toast.
+ */
+export async function submitMessageTemplate(
+  args: SubmitMessageTemplateArgs
+): Promise<SubmitMessageTemplateResult> {
+  const { wabaId, accessToken, payload } = args
+  const url = `${META_API_BASE}/${wabaId}/message_templates`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const data = await response.json()
+  if (!data?.id) {
+    throw new Error('Meta accepted the template but returned no id.')
+  }
+  return {
+    id: String(data.id),
+    status: typeof data.status === 'string' ? data.status : 'PENDING',
+    category: typeof data.category === 'string' ? data.category : undefined,
+  }
+}
+
+// ============================================================
 // Reactions
 // ============================================================
 
