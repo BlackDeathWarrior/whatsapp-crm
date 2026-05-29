@@ -113,13 +113,39 @@ export async function sendTextMessage(
   return { messageId: data.messages[0].id }
 }
 
+import type { MessageTemplate } from '@/types'
+import {
+  buildSendComponents,
+  type SendTimeParams,
+} from './template-send-builder'
+
 export interface SendTemplateMessageArgs {
   phoneNumberId: string
   accessToken: string
   to: string
   templateName: string
   language?: string
+  /**
+   * Legacy body-only params. Kept for backward compat with callers
+   * that haven't migrated to the structured `template` + `messageParams`
+   * pair below. New callers should pass `template` so media headers
+   * and URL buttons land on the send.
+   */
   params?: string[]
+  /**
+   * The template row from message_templates. When provided, the helper
+   * builds the full components array (header + body + buttons) via
+   * buildSendComponents — that's the only way image/video/document
+   * headers and URL-with-variable buttons actually reach the recipient.
+   */
+  template?: MessageTemplate
+  /**
+   * Structured per-send values. Body variables go in `body`; header
+   * text variables in `headerText`; media overrides in
+   * `headerMediaUrl` / `headerMediaId`; URL/COPY_CODE button values
+   * in `buttonParams` keyed by index.
+   */
+  messageParams?: SendTimeParams
   /** Meta's message_id of the message being replied to. */
   contextMessageId?: string
 }
@@ -127,6 +153,13 @@ export interface SendTemplateMessageArgs {
 /**
  * Send a pre-approved WhatsApp message template. Required outside
  * the 24-hour window and for any first-touch messaging.
+ *
+ * Caller paths:
+ *   - Legacy: pass `params: string[]` (body only). Same behaviour as
+ *     before this helper learned about media + buttons.
+ *   - Structured: pass `template` (and optionally `messageParams`).
+ *     The full components array is built from the row so media
+ *     headers + URL buttons land correctly.
  */
 export async function sendTemplateMessage(
   args: SendTemplateMessageArgs
@@ -138,17 +171,33 @@ export async function sendTemplateMessage(
     templateName,
     language = 'en_US',
     params,
+    template,
+    messageParams,
     contextMessageId,
   } = args
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
-  const template: Record<string, unknown> = {
+  const templatePayload: Record<string, unknown> = {
     name: templateName,
     language: { code: language },
   }
 
-  if (params && params.length > 0) {
-    template.components = [
+  if (template) {
+    const components = buildSendComponents(template, {
+      // Legacy callers pass body values in `params`; fold them into
+      // `messageParams.body` so the new path covers them too.
+      body: messageParams?.body ?? params,
+      headerText: messageParams?.headerText,
+      headerMediaUrl: messageParams?.headerMediaUrl,
+      headerMediaId: messageParams?.headerMediaId,
+      buttonParams: messageParams?.buttonParams,
+    })
+    if (components.length > 0) {
+      templatePayload.components = components
+    }
+  } else if (params && params.length > 0) {
+    // Legacy body-only path — no template row available.
+    templatePayload.components = [
       {
         type: 'body',
         parameters: params.map((p) => ({ type: 'text', text: String(p) })),
@@ -161,7 +210,7 @@ export async function sendTemplateMessage(
     recipient_type: 'individual',
     to,
     type: 'template',
-    template,
+    template: templatePayload,
   }
   if (contextMessageId) {
     body.context = { message_id: contextMessageId }

@@ -14,6 +14,7 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit'
+import type { MessageTemplate } from '@/types'
 
 export async function POST(request: Request) {
   try {
@@ -45,7 +46,9 @@ export async function POST(request: Request) {
       content_text,
       media_url,
       template_name,
+      template_language,
       template_params,
+      template_message_params,
       reply_to_message_id,
     } = body
 
@@ -177,6 +180,24 @@ export async function POST(request: Request) {
     let waMessageId = ''
     let workingPhone = sanitizedPhone
 
+    // For template sends, load the row so sendTemplateMessage can
+    // build header + button components from the template definition.
+    // Match on (user_id, name, language) — same triple the unique
+    // index enforces — so multi-language templates work correctly.
+    // Missing template falls through with `templateRow = null` and
+    // the legacy body-only path runs.
+    let templateRow: MessageTemplate | null = null
+    if (message_type === 'template' && template_name) {
+      const { data } = await supabase
+        .from('message_templates')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('name', template_name)
+        .eq('language', template_language || 'en_US')
+        .maybeSingle()
+      templateRow = (data ?? null) as MessageTemplate | null
+    }
+
     const attempt = async (phone: string): Promise<string> => {
       if (message_type === 'template') {
         const result = await sendTemplateMessage({
@@ -184,6 +205,11 @@ export async function POST(request: Request) {
           accessToken,
           to: phone,
           templateName: template_name,
+          language: template_language || 'en_US',
+          template: templateRow ?? undefined,
+          messageParams: template_message_params ?? undefined,
+          // Legacy body-only fallback — only consulted when
+          // messageParams.body isn't set.
           params: template_params || [],
           contextMessageId,
         })
