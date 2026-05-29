@@ -3,39 +3,32 @@
 /**
  * Linear-list flow editor.
  *
- * The whole flow (header, trigger config, node list, validation panel)
- * is owned by this single component. State lives client-side as a
- * single `BuilderState` object; `Save` PUTs the whole structure to
- * `/api/flows/[id]`; `Activate` hits `/api/flows/[id]/activate`.
+ * Renders the trigger panel, entry-node picker, and the per-node card
+ * list. Header and validation panel are NOT owned here — they live
+ * once in FlowEditorShell so they show in both views (lifted in PR 3
+ * so canvas users can also save + see validator issues).
  *
- * Why one big file: keeps the diff between fields + the form code
- * obvious, matches the existing `automation-builder.tsx` shape, and
- * sidesteps over-componentization for a UI that will be replaced by a
- * react-flow canvas in v2 anyway. The node-config sub-forms live in
- * the same file as small components rather than separate modules.
+ * State lives in the shared `useFlowEditor()` context — toggling
+ * Canvas ⇄ List never loses edits, and a drag on the canvas updates
+ * the same nodes the list view reads.
+ *
+ * What's still local: the `expanded` set (which cards are open) and
+ * the scroll refs used when the validator's flashKey changes — those
+ * are list-only and have no canvas analogue.
  */
 
-import { useCallback, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft,
-  CircleCheck,
   CircleAlert,
-  History,
-  Loader2,
   Plus,
-  Save,
   Trash2,
   ChevronDown,
   ChevronUp,
   CornerDownRight,
-  PauseCircle,
-  PlayCircle,
-  Workflow,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -60,6 +53,7 @@ import {
 } from "./shared";
 import { NodeConfigForm } from "./forms/node-config-form";
 import { NodeKeySelect } from "./forms/fields";
+import { IssueLine } from "./validation-panel";
 import {
   useFlowEditor,
   type BuilderState,
@@ -76,34 +70,24 @@ import {
 // ============================================================
 
 export function FlowBuilder() {
-  const router = useRouter();
   const {
-    flow,
     state,
     setState,
-    dirty,
-    saving,
-    activating,
     issues,
-    canActivate,
+    flashKey,
     addNode: addNodeCtx,
     updateNode,
     updateNodeConfig,
     removeNode: removeNodeCtx,
-    save: handleSave,
-    setStatus: handleStatus,
-    deleteFlow: handleDelete,
   } = useFlowEditor();
 
-  // List-only UI state: which cards are expanded, scroll refs for
-  // jump-to-node, and the brief border flash that lands the eye on a
-  // jumped-to node. Canvas-view has its own analogue (selected-node
-  // + side-sheet open).
+  // List-only UI state: which cards are expanded + scroll refs for
+  // jump-to-node. The flash itself is read from context (flashKey)
+  // so canvas + list share the same source of truth.
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(state.nodes.map((n) => n.node_key)),
   );
   const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const [flashedKey, setFlashedKey] = useState<string | null>(null);
 
   // Wrap addNode so the new node opens expanded in the list view
   // (matches the previous behaviour where adding always revealed the
@@ -137,28 +121,6 @@ export function FlowBuilder() {
     });
   }, []);
 
-  // Jump-to-node: invoked when a user clicks an issue in the validation
-  // panel. Expand the offending card (so the broken field is visible),
-  // scroll it into the viewport, then flash its border so the eye lands
-  // on it. requestAnimationFrame defers the scroll until after React
-  // commits the expanded layout.
-  const jumpToNode = useCallback((key: string) => {
-    setExpanded((prev) => {
-      if (prev.has(key)) return prev;
-      const next = new Set(prev);
-      next.add(key);
-      return next;
-    });
-    setFlashedKey(key);
-    requestAnimationFrame(() => {
-      const el = nodeRefs.current.get(key);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-    window.setTimeout(() => {
-      setFlashedKey((cur) => (cur === key ? null : cur));
-    }, 1600);
-  }, []);
-
   const setNodeRef = useCallback(
     (key: string) => (el: HTMLDivElement | null) => {
       if (el) nodeRefs.current.set(key, el);
@@ -167,23 +129,28 @@ export function FlowBuilder() {
     [],
   );
 
-  // ---- Render ----
-  return (
-    <div className="mx-auto flex h-full max-w-4xl flex-col gap-6 p-6">
-      <Header
-        state={state}
-        setState={setState}
-        dirty={dirty}
-        saving={saving}
-        activating={activating}
-        onSave={handleSave}
-        onStatus={handleStatus}
-        onDelete={handleDelete}
-        canActivate={canActivate}
-        onBack={() => router.push("/flows")}
-        onViewRuns={() => router.push(`/flows/${flow.id}/runs`)}
-      />
+  // React to validator jumps via the shared flashKey. We DERIVE the
+  // expanded-with-flash set (avoids the "setState inside effect"
+  // smell of mutating `expanded` from a useEffect on flashKey), then
+  // run a side-effect-only effect to scroll the row into view. The
+  // flash class is rendered by NodeCard when its key matches
+  // flashKey; the flash auto-clears in the context so no timer here.
+  const expandedWithFlash = useMemo(() => {
+    if (!flashKey || expanded.has(flashKey)) return expanded;
+    return new Set([...expanded, flashKey]);
+  }, [expanded, flashKey]);
+  useEffect(() => {
+    if (!flashKey) return;
+    // requestAnimationFrame defers the scroll until after React has
+    // committed any expand-induced layout shift.
+    requestAnimationFrame(() => {
+      const el = nodeRefs.current.get(flashKey);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [flashKey]);
 
+  return (
+    <div className="flex flex-col gap-6">
       <TriggerPanel
         state={state}
         setState={setState}
@@ -212,9 +179,9 @@ export function FlowBuilder() {
               key={node.node_key}
               node={node}
               allNodes={state.nodes}
-              expanded={expanded.has(node.node_key)}
+              expanded={expandedWithFlash.has(node.node_key)}
               isEntry={state.entry_node_id === node.node_key}
-              isFlashed={flashedKey === node.node_key}
+              isFlashed={flashKey === node.node_key}
               cardRef={setNodeRef(node.node_key)}
               issues={issues.filter(
                 (i) => i.scope === "node" && i.node_key === node.node_key,
@@ -230,169 +197,10 @@ export function FlowBuilder() {
           ))
         )}
       </section>
-
-      {/* Sticky-bottom so the activate-readiness status follows the
-          user as they scroll through nodes. The parent <main> in the
-          dashboard shell is the scroll container; this stays pinned
-          to the viewport bottom (with a 1rem gap) until the page
-          naturally ends, at which point it falls back into flow. */}
-      <div className="sticky bottom-4 z-10 shadow-xl shadow-slate-950/60">
-        <ValidationPanel issues={issues} onJump={jumpToNode} />
-      </div>
     </div>
   );
 }
 
-// ============================================================
-// Header
-// ============================================================
-
-function Header({
-  state,
-  setState,
-  dirty,
-  saving,
-  activating,
-  onSave,
-  onStatus,
-  onDelete,
-  canActivate,
-  onBack,
-  onViewRuns,
-}: {
-  state: BuilderState;
-  setState: React.Dispatch<React.SetStateAction<BuilderState>>;
-  dirty: boolean;
-  saving: boolean;
-  activating: boolean;
-  onSave: () => void;
-  onStatus: (s: BuilderState["status"]) => void;
-  onDelete: () => void;
-  canActivate: boolean;
-  onBack: () => void;
-  onViewRuns: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1 hover:text-slate-300"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          Flows
-        </button>
-      </div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <Workflow className="h-5 w-5 shrink-0 text-primary" />
-          <Input
-            value={state.name}
-            onChange={(e) =>
-              setState((s) => ({ ...s, name: e.target.value }))
-            }
-            placeholder="Flow name"
-            className="max-w-md bg-slate-900 text-lg font-semibold"
-          />
-          <StatusBadge status={state.status} />
-          {dirty && (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-amber-300"
-              title="Unsaved changes — hit Save to persist"
-              aria-live="polite"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-              Edited
-            </span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onViewRuns()}
-          >
-            <History className="h-3.5 w-3.5" />
-            Runs
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onDelete}
-            className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </Button>
-          {state.status === "active" ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onStatus("draft")}
-              disabled={activating}
-            >
-              {activating ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <PauseCircle className="h-3.5 w-3.5" />
-              )}
-              Pause
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onStatus("active")}
-              disabled={activating || !canActivate}
-              title={
-                !canActivate
-                  ? "Fix the issues below before activating"
-                  : undefined
-              }
-            >
-              {activating ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <PlayCircle className="h-3.5 w-3.5" />
-              )}
-              Activate
-            </Button>
-          )}
-          <Button onClick={onSave} disabled={saving} size="sm">
-            {saving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Save className="h-3.5 w-3.5" />
-            )}
-            Save
-          </Button>
-        </div>
-      </div>
-      <Input
-        value={state.description}
-        onChange={(e) =>
-          setState((s) => ({ ...s, description: e.target.value }))
-        }
-        placeholder="Optional description (internal — customers don't see this)"
-        className="bg-slate-900 text-sm"
-      />
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: BuilderState["status"] }) {
-  const cls = {
-    draft: "border-slate-700 bg-slate-800 text-slate-300",
-    active: "border-emerald-600/40 bg-emerald-500/10 text-emerald-300",
-    archived: "border-slate-700 bg-slate-800/50 text-slate-500",
-  }[status];
-  return (
-    <Badge variant="outline" className={cn("shrink-0", cls)}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </Badge>
-  );
-}
 
 // ============================================================
 // Trigger panel
@@ -745,105 +553,3 @@ function AddNodeButton({ onAdd }: { onAdd: (type: NodeType) => void }) {
   );
 }
 
-// ============================================================
-// Validation panel — bottom of the editor
-// ============================================================
-
-function ValidationPanel({
-  issues,
-  onJump,
-}: {
-  issues: ValidationIssue[];
-  onJump: (key: string) => void;
-}) {
-  if (issues.length === 0) {
-    // Slate-950 base + emerald accents so the panel stays readable when
-    // sticky-positioned over scrolled-behind node cards (a translucent
-    // bg-emerald-500/10 would bleed through ugly).
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-600/50 bg-slate-950 p-3 text-sm font-medium text-emerald-300">
-        <CircleCheck className="h-4 w-4 shrink-0" />
-        No issues. Ready to activate.
-      </div>
-    );
-  }
-  const errors = issues.filter((i) => i.severity === "error");
-  const warnings = issues.filter((i) => i.severity === "warning");
-  return (
-    <div
-      className={cn(
-        "rounded-lg border bg-slate-950 p-3",
-        errors.length > 0 ? "border-red-500/40" : "border-amber-500/40",
-      )}
-    >
-      <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
-        {errors.length > 0 ? (
-          <CircleAlert className="h-4 w-4 text-red-400" />
-        ) : (
-          <CircleAlert className="h-4 w-4 text-amber-400" />
-        )}
-        {errors.length} error{errors.length === 1 ? "" : "s"},{" "}
-        {warnings.length} warning{warnings.length === 1 ? "" : "s"}
-      </div>
-      <div className="flex flex-col gap-1">
-        {issues.map((i, ix) => (
-          <IssueLine key={ix} issue={i} onJump={onJump} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function IssueLine({
-  issue,
-  onJump,
-}: {
-  issue: ValidationIssue;
-  onJump?: (key: string) => void;
-}) {
-  const tone =
-    issue.severity === "error" ? "text-red-300" : "text-amber-300";
-  const iconTone =
-    issue.severity === "error" ? "text-red-400" : "text-amber-400";
-  const body = (
-    <>
-      <CircleAlert className={cn("mt-0.5 h-3 w-3 shrink-0", iconTone)} />
-      <span className="min-w-0 flex-1">
-        {issue.node_key && (
-          <code className="mr-1 rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-400">
-            {issue.node_key}
-          </code>
-        )}
-        {issue.message}
-      </span>
-    </>
-  );
-
-  // Only node-scoped issues can jump; trigger-scoped issues have no
-  // destination (the trigger panel is already at the top of the page).
-  if (issue.node_key && onJump) {
-    return (
-      <button
-        type="button"
-        onClick={() => onJump(issue.node_key!)}
-        className={cn(
-          "flex w-full items-start gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-slate-800/60",
-          tone,
-        )}
-        aria-label={`Jump to node ${issue.node_key}`}
-      >
-        {body}
-      </button>
-    );
-  }
-  return (
-    <div
-      className={cn(
-        "flex items-start gap-2 rounded-md px-2 py-1 text-xs",
-        tone,
-      )}
-    >
-      {body}
-    </div>
-  );
-}

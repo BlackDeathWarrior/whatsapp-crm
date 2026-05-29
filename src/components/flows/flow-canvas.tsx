@@ -36,7 +36,7 @@
  * list view reads.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Background,
   Controls,
@@ -91,6 +91,9 @@ import { NodeConfigForm } from "./forms/node-config-form";
 interface NodeData extends Record<string, unknown> {
   node: BuilderNode;
   isEntry: boolean;
+  /** Validator's "look here" pulse — flashes the card border for
+   *  ~1.6s. Drives a CSS animation, doesn't change layout. */
+  isFlashed: boolean;
 }
 
 const NODE_WIDTH = 240;
@@ -105,7 +108,7 @@ const NODE_HEIGHT = 90;
 // ============================================================
 
 function FlowNodeCard({ data, selected }: NodeProps) {
-  const { node, isEntry } = data as NodeData;
+  const { node, isEntry, isFlashed } = data as NodeData;
   const meta = NODE_META[node.node_type];
   const summary = summarizeNode(node);
   const Icon = meta.icon;
@@ -127,6 +130,10 @@ function FlowNodeCard({ data, selected }: NodeProps) {
         selected
           ? "border-primary ring-1 ring-primary/40"
           : "border-slate-700 hover:border-slate-600",
+        // Flash overrides hover/selected colors briefly. Tailwind's
+        // built-in `animate-pulse` is too gentle; a ring with the
+        // amber accent matches the list view's flash semantics.
+        isFlashed && "!border-amber-400 ring-2 ring-amber-400/60",
       )}
     >
       {hasTarget && (
@@ -200,14 +207,30 @@ const NODE_TYPES = { flow: FlowNodeCard };
 // Root canvas
 // ============================================================
 
+/**
+ * Outer wrapper provides the React-Flow context to the inner body,
+ * so `useReactFlow()` works from anywhere in `FlowCanvasInner`
+ * (notably, the pan-to-flash effect). The split is required because
+ * useReactFlow() must be called inside a ReactFlowProvider.
+ */
 export function FlowCanvas() {
+  return (
+    <ReactFlowProvider>
+      <FlowCanvasInner />
+    </ReactFlowProvider>
+  );
+}
+
+function FlowCanvasInner() {
   const {
     state,
     setState,
     updateNodeConfig,
     updateNodePosition,
     removeNode,
+    flashKey,
   } = useFlowEditor();
+  const reactFlow = useReactFlow();
   const builderNodes = state.nodes;
   const entryNodeId = state.entry_node_id;
 
@@ -255,6 +278,7 @@ export function FlowCanvas() {
         data: {
           node: n,
           isEntry: n.node_key === entryNodeId,
+          isFlashed: n.node_key === flashKey,
         },
       };
     });
@@ -276,7 +300,7 @@ export function FlowCanvas() {
     }));
 
     return { rfNodes, rfEdges };
-  }, [builderNodes, entryNodeId]);
+  }, [builderNodes, entryNodeId, flashKey]);
 
   // Drag-to-position: React-Flow tracks the visual drag internally and
   // fires this once on release. We write the final coordinate back to
@@ -291,6 +315,21 @@ export function FlowCanvas() {
     },
     [updateNodePosition],
   );
+
+  // Pan to the flashed node when the validator panel requests one.
+  // Animate over 400ms; landing zoom is whatever the user already has
+  // (don't force a zoom reset — that would be jarring mid-edit).
+  useEffect(() => {
+    if (!flashKey) return;
+    const node = builderNodes.find((n) => n.node_key === flashKey);
+    if (!node) return;
+    const x = (node.position_x ?? 0) + NODE_WIDTH / 2;
+    const y = (node.position_y ?? 0) + NODE_HEIGHT / 2;
+    reactFlow.setCenter(x, y, {
+      zoom: reactFlow.getZoom(),
+      duration: 400,
+    });
+  }, [flashKey, builderNodes, reactFlow]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: RfNode<NodeData>) => {
@@ -383,14 +422,15 @@ export function FlowCanvas() {
 
   if (rfNodes.length === 0) {
     return (
-      <div className="flex h-[60vh] items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-950 text-sm text-slate-500">
-        No nodes yet. Switch to List view to add your first node.
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-700 bg-slate-950 text-sm text-slate-500">
+        <p>No nodes yet.</p>
+        <CanvasAddNodeButton />
       </div>
     );
   }
 
   return (
-    <ReactFlowProvider>
+    <>
       <div className="h-[70vh] w-full overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
         <ReactFlow
           nodes={rfNodes}
@@ -443,7 +483,7 @@ export function FlowCanvas() {
         onDelete={handleDeleteSelected}
         onSetEntry={handleSetEntry}
       />
-    </ReactFlowProvider>
+    </>
   );
 }
 

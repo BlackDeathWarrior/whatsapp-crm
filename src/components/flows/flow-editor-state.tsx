@@ -38,6 +38,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -102,6 +103,20 @@ export interface FlowEditorContextValue {
   save: () => Promise<void>;
   setStatus: (status: BuilderState["status"]) => Promise<void>;
   deleteFlow: () => Promise<void>;
+
+  /**
+   * Transient "look here" signal. Set when the validation panel's
+   * issue is clicked — both views subscribe: list scrolls the row
+   * into view and flashes its border, canvas pans the viewport to
+   * the node and flashes its card. Auto-clears after 1600ms so the
+   * flash is a one-shot.
+   *
+   * Lives in context (not local view state) so the panel can be
+   * rendered ONCE in the shell and trigger flashes in whichever
+   * view is currently mounted, without per-view plumbing.
+   */
+  flashKey: string | null;
+  requestFlash: (key: string) => void;
 }
 
 // ============================================================
@@ -230,6 +245,31 @@ export function FlowEditorProvider({
     setDirty(true);
     setStateRaw(updaterOrValue);
   }, []);
+
+  // Cross-view "look here" signal (see FlowEditorContextValue docs).
+  // Tracked via a ref alongside state so a rapid second click on a
+  // different issue cancels the previous timeout instead of letting
+  // the first flash linger past the new one.
+  const [flashKey, setFlashKey] = useState<string | null>(null);
+  const flashTimeoutRef = useRef<number | null>(null);
+  const requestFlash = useCallback((key: string) => {
+    if (flashTimeoutRef.current !== null) {
+      window.clearTimeout(flashTimeoutRef.current);
+    }
+    setFlashKey(key);
+    flashTimeoutRef.current = window.setTimeout(() => {
+      setFlashKey(null);
+      flashTimeoutRef.current = null;
+    }, 1600);
+  }, []);
+  useEffect(
+    () => () => {
+      if (flashTimeoutRef.current !== null) {
+        window.clearTimeout(flashTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   // Browser-level reload / tab-close / external-link guard. SPA
   // navigation (sidebar links, back button) isn't covered — Next 16
@@ -462,6 +502,8 @@ export function FlowEditorProvider({
       save,
       setStatus,
       deleteFlow,
+      flashKey,
+      requestFlash,
     }),
     [
       initialFlow,
@@ -480,6 +522,8 @@ export function FlowEditorProvider({
       save,
       setStatus,
       deleteFlow,
+      flashKey,
+      requestFlash,
     ],
   );
 
