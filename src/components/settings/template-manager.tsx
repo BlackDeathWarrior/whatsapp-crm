@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { MessageTemplate } from '@/types';
+import { templateStatusConfig } from '@/lib/template-status';
 
 const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
 const HEADER_TYPES = ['text', 'image', 'video', 'document'] as const;
@@ -37,12 +38,6 @@ const categoryColors: Record<string, string> = {
   Authentication: 'bg-amber-600/20 text-amber-400 border-amber-600/30',
 };
 
-const statusColors: Record<string, string> = {
-  Draft: 'bg-slate-600/20 text-slate-400 border-slate-600/30',
-  Pending: 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30',
-  Approved: 'bg-primary/20 text-primary border-primary/30',
-  Rejected: 'bg-red-600/20 text-red-400 border-red-600/30',
-};
 
 interface TemplateFormData {
   name: string;
@@ -156,7 +151,7 @@ export function TemplateManager() {
         body_text: form.body_text.trim(),
         header_type: form.header_type || null,
         footer_text: form.footer_text.trim() || null,
-        status: 'Draft' as const,
+        status: 'DRAFT' as const,
       };
 
       const { error } = await supabase
@@ -309,9 +304,9 @@ export function TemplateManager() {
                       {template.category}
                     </Badge>
                     <Badge
-                      className={`text-xs border ${statusColors[template.status || 'Draft'] || ''}`}
+                      className={`text-xs border ${templateStatusConfig[template.status || 'DRAFT'].classes}`}
                     >
-                      {template.status || 'Draft'}
+                      {templateStatusConfig[template.status || 'DRAFT'].label}
                     </Badge>
                     {template.language && (
                       <span className="text-xs text-slate-500 uppercase">{template.language}</span>
