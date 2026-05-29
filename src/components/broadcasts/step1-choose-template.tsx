@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Loader2, FileText, ArrowRight } from 'lucide-react';
+import { templateStatusConfig } from '@/lib/template-status';
 
 const categoryColors: Record<string, string> = {
   Marketing: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -106,7 +107,7 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
                   {template.status && (
                     <>
                       <span>-</span>
-                      <span>{template.status}</span>
+                      <span>{templateStatusConfig[template.status].label}</span>
                     </>
                   )}
                 </div>
