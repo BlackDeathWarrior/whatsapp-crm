@@ -6,6 +6,10 @@ import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
+import {
+  handleTemplateWebhookChange,
+  isTemplateWebhookField,
+} from '@/lib/whatsapp/template-webhook'
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -190,6 +194,19 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
   for (const entry of body.entry) {
     for (const change of entry.changes) {
+      // Template-lifecycle events (status / quality / components
+      // updates from Meta) come in on a different change.field and
+      // have a different value shape — route them through the
+      // dedicated handler. Skip the messaging branches below so we
+      // don't try to read message-shaped fields off a template event.
+      if (isTemplateWebhookField(change.field)) {
+        await handleTemplateWebhookChange(
+          { field: change.field, value: change.value as unknown },
+          supabaseAdmin(),
+        )
+        continue
+      }
+
       const value = change.value
 
       // Handle status updates
