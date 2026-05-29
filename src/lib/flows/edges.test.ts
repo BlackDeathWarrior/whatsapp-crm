@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { deriveCanvasEdges } from "./edges";
+import {
+  applyEdgeConnection,
+  deriveCanvasEdges,
+  outgoingSlots,
+  unlinkNodeReferences,
+} from "./edges";
 import type { BuilderNode } from "@/components/flows/shared";
 
 function nodes(...ns: BuilderNode[]): BuilderNode[] {
@@ -283,5 +288,304 @@ describe("deriveCanvasEdges — id stability", () => {
     );
     const ids = edges.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("outgoingSlots", () => {
+  it("returns a single 'next' slot for the auto-advancing types", () => {
+    const each = (node: BuilderNode) =>
+      outgoingSlots(node).map((s) => s.id);
+    expect(
+      each({ node_key: "x", node_type: "start", config: { next_node_key: "y" } }),
+    ).toEqual(["next"]);
+    expect(
+      each({ node_key: "x", node_type: "send_message", config: {} }),
+    ).toEqual(["next"]);
+    expect(
+      each({ node_key: "x", node_type: "send_media", config: {} }),
+    ).toEqual(["next"]);
+    expect(
+      each({ node_key: "x", node_type: "collect_input", config: {} }),
+    ).toEqual(["next"]);
+    expect(each({ node_key: "x", node_type: "set_tag", config: {} })).toEqual([
+      "next",
+    ]);
+  });
+
+  it("returns true/false slots for condition", () => {
+    const slots = outgoingSlots({
+      node_key: "c",
+      node_type: "condition",
+      config: {},
+    });
+    expect(slots.map((s) => s.id)).toEqual(["true", "false"]);
+    expect(slots.map((s) => s.label)).toEqual(["true", "false"]);
+  });
+
+  it("returns one slot per button, labelled with the title", () => {
+    const slots = outgoingSlots({
+      node_key: "m",
+      node_type: "send_buttons",
+      config: {
+        text: "Pick",
+        buttons: [
+          { reply_id: "yes", title: "Yes", next_node_key: "" },
+          { reply_id: "no", title: "No", next_node_key: "" },
+        ],
+      },
+    });
+    expect(slots).toEqual([
+      { id: "button:yes", label: "Yes" },
+      { id: "button:no", label: "No" },
+    ]);
+  });
+
+  it("falls back to reply_id for buttons with no title", () => {
+    const slots = outgoingSlots({
+      node_key: "m",
+      node_type: "send_buttons",
+      config: {
+        text: "x",
+        buttons: [{ reply_id: "raw", next_node_key: "" }],
+      },
+    });
+    expect(slots[0].label).toBe("raw");
+  });
+
+  it("flattens list rows across all sections", () => {
+    const slots = outgoingSlots({
+      node_key: "l",
+      node_type: "send_list",
+      config: {
+        text: "Pick",
+        button_label: "View",
+        sections: [
+          { rows: [{ reply_id: "o1", title: "Order 1", next_node_key: "" }] },
+          { rows: [{ reply_id: "o2", title: "Order 2", next_node_key: "" }] },
+        ],
+      },
+    });
+    expect(slots.map((s) => s.id)).toEqual(["row:o1", "row:o2"]);
+  });
+
+  it("terminal nodes (handoff / end) have no outgoing slots", () => {
+    expect(
+      outgoingSlots({ node_key: "h", node_type: "handoff", config: {} }),
+    ).toEqual([]);
+    expect(
+      outgoingSlots({ node_key: "e", node_type: "end", config: {} }),
+    ).toEqual([]);
+  });
+});
+
+describe("applyEdgeConnection", () => {
+  it("patches next_node_key for single-outgoing nodes", () => {
+    const node: BuilderNode = {
+      node_key: "a",
+      node_type: "send_message",
+      config: { text: "hi", next_node_key: "" },
+    };
+    expect(applyEdgeConnection(node, "next", "b")).toEqual({
+      next_node_key: "b",
+    });
+  });
+
+  it("returns null when the source handle isn't recognised on the type", () => {
+    const node: BuilderNode = {
+      node_key: "a",
+      node_type: "send_message",
+      config: {},
+    };
+    expect(applyEdgeConnection(node, "true", "b")).toBeNull();
+    expect(applyEdgeConnection(node, "button:x", "b")).toBeNull();
+  });
+
+  it("patches the right branch on a condition", () => {
+    const node: BuilderNode = {
+      node_key: "c",
+      node_type: "condition",
+      config: {
+        subject: "var",
+        subject_key: "x",
+        operator: "equals",
+        value: "y",
+        true_next: "",
+        false_next: "",
+      },
+    };
+    expect(applyEdgeConnection(node, "true", "t")).toEqual({ true_next: "t" });
+    expect(applyEdgeConnection(node, "false", "f")).toEqual({
+      false_next: "f",
+    });
+  });
+
+  it("patches only the matching button row on send_buttons", () => {
+    const node: BuilderNode = {
+      node_key: "m",
+      node_type: "send_buttons",
+      config: {
+        text: "Pick",
+        buttons: [
+          { reply_id: "yes", title: "Yes", next_node_key: "" },
+          { reply_id: "no", title: "No", next_node_key: "" },
+        ],
+      },
+    };
+    const patch = applyEdgeConnection(node, "button:yes", "ok");
+    expect(patch).toEqual({
+      buttons: [
+        { reply_id: "yes", title: "Yes", next_node_key: "ok" },
+        { reply_id: "no", title: "No", next_node_key: "" },
+      ],
+    });
+  });
+
+  it("returns null when the button reply_id doesn't exist on the node", () => {
+    const node: BuilderNode = {
+      node_key: "m",
+      node_type: "send_buttons",
+      config: {
+        text: "x",
+        buttons: [{ reply_id: "a", title: "A", next_node_key: "" }],
+      },
+    };
+    expect(applyEdgeConnection(node, "button:ghost", "z")).toBeNull();
+  });
+
+  it("patches the matching list row across sections", () => {
+    const node: BuilderNode = {
+      node_key: "l",
+      node_type: "send_list",
+      config: {
+        text: "x",
+        button_label: "View",
+        sections: [
+          { rows: [{ reply_id: "o1", title: "O1", next_node_key: "" }] },
+          { rows: [{ reply_id: "o2", title: "O2", next_node_key: "" }] },
+        ],
+      },
+    };
+    const patch = applyEdgeConnection(node, "row:o2", "tgt") as {
+      sections: Array<{ rows: Array<{ next_node_key: string }> }>;
+    };
+    expect(patch.sections[0].rows[0].next_node_key).toBe("");
+    expect(patch.sections[1].rows[0].next_node_key).toBe("tgt");
+  });
+
+  it("returns null for terminal nodes (no outgoing)", () => {
+    expect(
+      applyEdgeConnection(
+        { node_key: "h", node_type: "handoff", config: {} },
+        "next",
+        "x",
+      ),
+    ).toBeNull();
+    expect(
+      applyEdgeConnection(
+        { node_key: "e", node_type: "end", config: {} },
+        "next",
+        "x",
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("unlinkNodeReferences", () => {
+  it("clears next_node_key when it points at the deleted node", () => {
+    const before: BuilderNode[] = [
+      {
+        node_key: "a",
+        node_type: "send_message",
+        config: { text: "hi", next_node_key: "victim" },
+      },
+      { node_key: "victim", node_type: "end", config: {} },
+    ];
+    const after = unlinkNodeReferences(before, "victim");
+    expect(
+      (after[0].config as { next_node_key: string }).next_node_key,
+    ).toBe("");
+  });
+
+  it("clears both true_next and false_next when condition points at the deleted node", () => {
+    const before: BuilderNode[] = [
+      {
+        node_key: "c",
+        node_type: "condition",
+        config: {
+          true_next: "victim",
+          false_next: "victim",
+        },
+      },
+    ];
+    const after = unlinkNodeReferences(before, "victim");
+    const cfg = after[0].config as {
+      true_next: string;
+      false_next: string;
+    };
+    expect(cfg.true_next).toBe("");
+    expect(cfg.false_next).toBe("");
+  });
+
+  it("clears only the buttons that point at the deleted node", () => {
+    const before: BuilderNode[] = [
+      {
+        node_key: "m",
+        node_type: "send_buttons",
+        config: {
+          text: "x",
+          buttons: [
+            { reply_id: "a", title: "A", next_node_key: "victim" },
+            { reply_id: "b", title: "B", next_node_key: "safe" },
+          ],
+        },
+      },
+    ];
+    const after = unlinkNodeReferences(before, "victim");
+    const buttons = (after[0].config as {
+      buttons: Array<{ reply_id: string; next_node_key: string }>;
+    }).buttons;
+    expect(buttons[0].next_node_key).toBe("");
+    expect(buttons[1].next_node_key).toBe("safe");
+  });
+
+  it("clears only the list rows that point at the deleted node", () => {
+    const before: BuilderNode[] = [
+      {
+        node_key: "l",
+        node_type: "send_list",
+        config: {
+          sections: [
+            {
+              rows: [
+                { reply_id: "r1", next_node_key: "victim" },
+                { reply_id: "r2", next_node_key: "safe" },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+    const after = unlinkNodeReferences(before, "victim");
+    const rows = (after[0].config as {
+      sections: Array<{ rows: Array<{ next_node_key: string }> }>;
+    }).sections[0].rows;
+    expect(rows[0].next_node_key).toBe("");
+    expect(rows[1].next_node_key).toBe("safe");
+  });
+
+  it("returns the input nodes by identity when none reference the deleted key (no-op path)", () => {
+    const nodes: BuilderNode[] = [
+      {
+        node_key: "a",
+        node_type: "send_message",
+        config: { text: "hi", next_node_key: "b" },
+      },
+      { node_key: "b", node_type: "end", config: {} },
+    ];
+    const after = unlinkNodeReferences(nodes, "ghost");
+    // Same array length, each entry === input (no clone).
+    expect(after).toHaveLength(2);
+    expect(after[0]).toBe(nodes[0]);
+    expect(after[1]).toBe(nodes[1]);
   });
 });

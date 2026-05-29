@@ -1,45 +1,60 @@
 "use client";
 
 /**
- * Read-only canvas / mind-map view of a flow.
+ * Canvas / mind-map view of a flow. Editable, in parity with the
+ * list view for everything except the trigger / header / fallback
+ * panels (those are list-only — they don't fit visually inside a
+ * node graph and the user can switch to List for them).
  *
- * What it does:
- *   - Renders every flow_node as a draggable-looking tile (drag is
- *     visually plausible but doesn't persist in PR 1 — editing comes
- *     in PR 2). Pan and zoom work normally.
+ * What this view does:
+ *   - Renders every flow_node as a draggable tile, pan + zoom +
+ *     minimap. Drag positions persist via the editor context
+ *     (writing on dragStop, not every frame).
  *   - Renders edges between nodes, labeled per slot (button title,
- *     "true" / "false", list row title) so a branching flow reads as
- *     a real decision tree.
+ *     "true" / "false", list row title) so a branching flow reads
+ *     as a real decision tree.
+ *   - Click a node → side-sheet opens with the same per-node form
+ *     the list view uses, plus "Set as entry" / "Delete".
+ *   - Drag from a source handle on one node to a target handle on
+ *     another → wires that slot's `next_node_key`. Per-slot handles
+ *     for multi-outgoing types (condition, send_buttons, send_list)
+ *     so the user picks which branch they're wiring.
+ *   - Backspace / Delete on a selected node → removes it AND clears
+ *     every inbound `next_node_key` reference (no dangling arrows).
+ *   - Delete on a selected edge → clears just that slot.
+ *   - "+ Add node" floating button drops a new node at the visible
+ *     viewport center.
  *   - Runs dagre auto-layout once on mount for flows whose
- *     `position_x` / `position_y` are all zero — without this, every
- *     existing flow would render as a pile of overlapping tiles at
+ *     `position_x` / `position_y` are all zero (pre-canvas flows
+ *     and brand-new flows) — otherwise everything would pile at
  *     the origin.
  *
- * What it intentionally doesn't do (PR 2 territory):
- *   - Persist drag positions to the DB
- *   - Open a side panel on click for node editing
- *   - Drag-to-connect / add / delete nodes
- *
- * The toggle in `view-toggle.tsx` swaps this in for `<FlowBuilder>`
- * on the same page, so both views render against the same data shape
- * (`FlowNodeRow[]` from `/api/flows/[id]`) — that's the only contract
- * that has to stay stable across views.
+ * The toggle in `flow-editor-shell.tsx` swaps this in for
+ * `<FlowBuilder>` on the same page. Both views share the same
+ * `BuilderState` via `useFlowEditor()` — toggling never resets
+ * unsaved edits, and a drag here updates the same nodes array the
+ * list view reads.
  */
 
 import { useCallback, useMemo, useState } from "react";
 import {
   Background,
   Controls,
+  Handle,
   MiniMap,
+  Panel,
+  Position,
   ReactFlow,
   ReactFlowProvider,
+  useReactFlow,
+  type Connection,
   type Node as RfNode,
   type Edge as RfEdge,
   type NodeProps,
   type OnNodeDrag,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -51,13 +66,24 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { deriveCanvasEdges } from "@/lib/flows/edges";
+import {
+  applyEdgeConnection,
+  deriveCanvasEdges,
+  outgoingSlots,
+} from "@/lib/flows/edges";
 import { autoLayout, shouldAutoLayout } from "@/lib/flows/layout";
 import {
   NODE_META,
   summarizeNode,
   type BuilderNode,
+  type NodeType,
 } from "./shared";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useFlowEditor } from "./flow-editor-state";
 import { NodeConfigForm } from "./forms/node-config-form";
 
@@ -83,15 +109,34 @@ function FlowNodeCard({ data, selected }: NodeProps) {
   const meta = NODE_META[node.node_type];
   const summary = summarizeNode(node);
   const Icon = meta.icon;
+  const slots = outgoingSlots(node);
+  // Start nodes are entry-only; nothing ever targets them, so they
+  // don't need an incoming Handle. Every other node type accepts
+  // incoming edges (including terminal handoff / end — they're the
+  // common targets).
+  const hasTarget = node.node_type !== "start";
+  // Single-slot nodes get a single source handle floated on the right
+  // edge of the card. Multi-slot nodes (condition, send_buttons,
+  // send_list) render slot rows inline so each handle visually sits
+  // next to the slot it represents.
+  const isMultiSlot = slots.length > 1;
   return (
     <div
       className={cn(
-        "min-w-[220px] max-w-[260px] rounded-lg border bg-slate-900/95 px-3 py-2 text-left shadow-lg backdrop-blur transition-colors",
+        "relative min-w-[220px] max-w-[260px] rounded-lg border bg-slate-900/95 px-3 py-2 text-left shadow-lg backdrop-blur transition-colors",
         selected
           ? "border-primary ring-1 ring-primary/40"
           : "border-slate-700 hover:border-slate-600",
       )}
     >
+      {hasTarget && (
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="!h-2.5 !w-2.5 !border-slate-600 !bg-slate-700"
+        />
+      )}
+
       <div className="flex items-center gap-2">
         <Icon className={cn("h-3.5 w-3.5 shrink-0", meta.color)} />
         <span className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">
@@ -110,6 +155,40 @@ function FlowNodeCard({ data, selected }: NodeProps) {
         <div className="mt-1 line-clamp-2 text-xs text-slate-400">
           {summary}
         </div>
+      )}
+
+      {isMultiSlot && (
+        <div className="mt-2 flex flex-col gap-1 border-t border-slate-800 pt-2">
+          {slots.map((slot) => (
+            <div
+              key={slot.id}
+              className="relative flex items-center justify-between gap-2 rounded px-1 py-0.5 text-[11px] text-slate-300"
+            >
+              <span className="truncate" title={slot.label}>
+                {slot.label}
+              </span>
+              <Handle
+                type="source"
+                id={slot.id}
+                position={Position.Right}
+                // Override default absolute positioning so the handle
+                // sits flush with the right edge of the card instead
+                // of floating at vertical center. The negative offset
+                // matches the card's px-3 + the handle's own radius.
+                className="!relative !right-auto !top-auto !h-2.5 !w-2.5 !translate-x-[12px] !transform-none !border-slate-600 !bg-slate-700"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!isMultiSlot && slots.length === 1 && (
+        <Handle
+          type="source"
+          id={slots[0].id}
+          position={Position.Right}
+          className="!h-2.5 !w-2.5 !border-slate-600 !bg-slate-700"
+        />
       )}
     </div>
   );
@@ -177,21 +256,17 @@ export function FlowCanvas() {
           node: n,
           isEntry: n.node_key === entryNodeId,
         },
-        // Drag-to-connect + delete-key still off in PR 2a — those land
-        // in PR 2b with per-slot handles + cascading edge cleanup.
-        connectable: false,
-        deletable: false,
       };
     });
 
-    // Strip sourceHandle from PR 1's edges — the custom node card
-    // doesn't expose per-slot handles yet (PR 2 wires those up), and
-    // React-Flow drops edges whose sourceHandle id doesn't resolve.
-    // Label still rides along so a branch reads as e.g. "Yes button".
+    // sourceHandle is now wired up — the FlowNodeCard renders a Handle
+    // per slot whose id matches the scheme in edges.ts, so React-Flow
+    // can hang the arrow off the right place on each card.
     const rfEdges: RfEdge[] = canvasEdges.map((e) => ({
       id: e.id,
       source: e.source,
       target: e.target,
+      sourceHandle: e.sourceHandle,
       label: e.label,
       labelStyle: { fill: "#cbd5e1", fontSize: 11 },
       labelBgStyle: { fill: "#0f172a" },
@@ -222,6 +297,67 @@ export function FlowCanvas() {
       setSelectedNodeKey(node.id);
     },
     [],
+  );
+
+  // Drag-to-connect: React-Flow fires onConnect when the user drops a
+  // handle drag onto a target handle. We look up the source node,
+  // compute the right config patch via applyEdgeConnection (matches
+  // the same slot scheme as deriveCanvasEdges), and dispatch via
+  // updateNodeConfig. The resulting state change re-derives edges on
+  // the next render — no need to maintain a separate edge list.
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target || !connection.sourceHandle) {
+        return;
+      }
+      const sourceNode = builderNodes.find(
+        (n) => n.node_key === connection.source,
+      );
+      if (!sourceNode) return;
+      // Self-loops are a footgun (a button whose target is its own
+      // node = infinite reprompt). Reject silently — the user can
+      // still wire one via the per-node dropdown if they really want.
+      if (connection.source === connection.target) return;
+      const patch = applyEdgeConnection(
+        sourceNode,
+        connection.sourceHandle,
+        connection.target,
+      );
+      if (patch) updateNodeConfig(connection.source, patch);
+    },
+    [builderNodes, updateNodeConfig],
+  );
+
+  // Keyboard delete (Backspace / Delete) + drag-to-trash. React-Flow
+  // fires this with the set of deleted-node objects; we route each
+  // through the editor context's removeNode (which now also unlinks
+  // inbound references so no dangling arrows survive). Closing the
+  // side panel on delete keeps the UI honest if the user deleted the
+  // node currently being edited.
+  const handleNodesDelete = useCallback(
+    (deleted: RfNode<NodeData>[]) => {
+      for (const n of deleted) {
+        removeNode(n.id);
+        if (selectedNodeKey === n.id) setSelectedNodeKey(null);
+      }
+    },
+    [removeNode, selectedNodeKey],
+  );
+
+  // Edge delete: clear the source node's slot rather than removing
+  // anything. Edges are derived from configs, so the only way to
+  // "delete" one is to null out its underlying next_node_key.
+  const handleEdgesDelete = useCallback(
+    (deleted: RfEdge[]) => {
+      for (const e of deleted) {
+        if (!e.sourceHandle) continue;
+        const sourceNode = builderNodes.find((n) => n.node_key === e.source);
+        if (!sourceNode) continue;
+        const patch = applyEdgeConnection(sourceNode, e.sourceHandle, "");
+        if (patch) updateNodeConfig(e.source, patch);
+      }
+    },
+    [builderNodes, updateNodeConfig],
   );
 
   // Wrapped mutators that target the currently-selected node — pass to
@@ -265,10 +401,14 @@ export function FlowCanvas() {
           proOptions={{ hideAttribution: true }}
           onNodeDragStop={handleNodeDragStop}
           onNodeClick={handleNodeClick}
-          // Drag-to-connect + delete-by-keyboard still off — both land
-          // in PR 2b with per-slot handles + cascading edge cleanup.
-          nodesConnectable={false}
-          edgesFocusable={false}
+          onConnect={handleConnect}
+          onNodesDelete={handleNodesDelete}
+          onEdgesDelete={handleEdgesDelete}
+          // Default is "Backspace" only — accept both so Mac users
+          // hitting Delete (Fn+Backspace) get the same behavior.
+          deleteKeyCode={["Backspace", "Delete"]}
+          nodesConnectable={true}
+          edgesFocusable={true}
           elementsSelectable={true}
           // Lower default min/max zoom than the lib's defaults; the
           // tiles already truncate their summary at a reasonable
@@ -288,6 +428,9 @@ export function FlowCanvas() {
             maskColor="rgba(15, 23, 42, 0.7)"
             className="!border !border-slate-700 !bg-slate-900"
           />
+          <Panel position="bottom-right" className="!bottom-4 !right-4">
+            <CanvasAddNodeButton />
+          </Panel>
         </ReactFlow>
       </div>
 
@@ -389,5 +532,74 @@ function NodeEditSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ============================================================
+// Floating add-node button — bottom-right of the canvas. Mirrors
+// the list view's AddNodeButton (same dropdown menu, same NodeType
+// list, same icons via NODE_META) but drops the new node into the
+// center of the visible viewport rather than appending to a list.
+// ============================================================
+
+const ADD_NODE_TYPES: NodeType[] = [
+  "start",
+  "send_buttons",
+  "send_list",
+  "send_message",
+  "send_media",
+  "collect_input",
+  "condition",
+  "set_tag",
+  "handoff",
+  "end",
+];
+
+function CanvasAddNodeButton() {
+  const reactFlow = useReactFlow();
+  const { addNode, updateNodePosition } = useFlowEditor();
+
+  const handleAdd = (type: NodeType) => {
+    const key = addNode(type);
+    // Place the new node at the visible canvas center. The Panel's
+    // own DOM lives inside ReactFlow so we can climb up to find the
+    // .react-flow root and read its bounding rect. If we can't find
+    // it (test envs, etc.), addNode's default (0, 0) is the fallback
+    // and the user can drag the node into view.
+    const root = document.querySelector(".react-flow") as HTMLElement | null;
+    if (!root) return;
+    const rect = root.getBoundingClientRect();
+    const center = reactFlow.screenToFlowPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    });
+    // NODE_WIDTH / NODE_HEIGHT are the dagre layout defaults; offset
+    // so the card sits visually centered rather than top-left at the
+    // viewport center.
+    updateNodePosition(key, center.x - NODE_WIDTH / 2, center.y - NODE_HEIGHT / 2);
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-lg transition-colors hover:bg-slate-800"
+        aria-label="Add node"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add node
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="border-slate-700 bg-slate-900">
+        {ADD_NODE_TYPES.map((t) => {
+          const meta = NODE_META[t];
+          const Icon = meta.icon;
+          return (
+            <DropdownMenuItem key={t} onClick={() => handleAdd(t)}>
+              <Icon className={cn("h-3.5 w-3.5", meta.color)} />
+              {meta.label}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
