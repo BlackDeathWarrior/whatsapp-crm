@@ -405,7 +405,15 @@ export function TemplateManager() {
               <Label className="text-slate-300">Header Type</Label>
               <Select
                 value={form.header_type}
-                onValueChange={(val) => setForm({ ...form, header_type: val || '' })}
+                onValueChange={(val) =>
+                  // "none" is a sentinel (the Select disallows value="")
+                  // — normalize it back to empty string so the DB CHECK
+                  // constraint (text|image|video|document) doesn't reject it.
+                  setForm({
+                    ...form,
+                    header_type: !val || val === 'none' ? '' : val,
+                  })
+                }
               >
                 <SelectTrigger className="w-full bg-slate-800 border-slate-700 text-white">
                   <SelectValue placeholder="None" />
