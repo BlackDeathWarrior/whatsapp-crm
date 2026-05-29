@@ -9,6 +9,8 @@ import {
   RefreshCw,
   AlertCircle,
   X,
+  Pencil,
+  RotateCcw,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -125,6 +127,11 @@ export function TemplateManager() {
   const [submitting, setSubmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [form, setForm] = useState<TemplateFormData>(emptyForm);
+  // Non-null when the dialog is editing an existing row — switches the
+  // submit handler from POST /submit to PATCH /[id] and changes the
+  // dialog title + CTA. Set to the template id to pre-fill from a row.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Body variable indices — `[1, 2, 3]` for "{{1}} {{2}} {{3}}". We
   // re-run the extractor on every render to keep the sample-value rows
@@ -208,6 +215,30 @@ export function TemplateManager() {
     };
   }
 
+  function openEdit(template: MessageTemplate) {
+    setEditingId(template.id);
+    setForm({
+      name: template.name,
+      category: template.category,
+      language: template.language || 'en_US',
+      header_format: (template.header_type ?? 'none') as HeaderFormat,
+      header_content: template.header_content ?? '',
+      header_media_url: template.header_media_url ?? '',
+      header_sample: template.sample_values?.header?.[0] ?? '',
+      body_text: template.body_text,
+      body_samples: template.sample_values?.body ?? [],
+      footer_text: template.footer_text ?? '',
+      buttons: template.buttons ?? [],
+    });
+    setDialogOpen(true);
+  }
+
+  function openCreate() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setDialogOpen(true);
+  }
+
   async function handleSubmit() {
     if (form.category === 'Authentication') {
       toast.error(
@@ -217,22 +248,33 @@ export function TemplateManager() {
     }
     try {
       setSubmitting(true);
-      const res = await fetch('/api/whatsapp/templates/submit', {
-        method: 'POST',
+      const isEdit = editingId !== null;
+      const url = isEdit
+        ? `/api/whatsapp/templates/${editingId}`
+        : '/api/whatsapp/templates/submit';
+      const res = await fetch(url, {
+        method: isEdit ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildSubmitPayload()),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error || `Submit failed (HTTP ${res.status})`);
+        throw new Error(
+          data?.error || `${isEdit ? 'Edit' : 'Submit'} failed (HTTP ${res.status})`,
+        );
       }
       toast.success(
         data.dry_run
-          ? 'Template saved (dry-run — no Meta call)'
-          : 'Submitted to Meta — status will update once approved.',
+          ? isEdit
+            ? 'Template updated (dry-run — no Meta call)'
+            : 'Template saved (dry-run — no Meta call)'
+          : isEdit
+            ? 'Edit submitted — Meta will re-review.'
+            : 'Submitted to Meta — status will update once approved.',
       );
       setDialogOpen(false);
       setForm(emptyForm);
+      setEditingId(null);
       if (user) await fetchTemplates(user.id);
     } catch (err) {
       console.error('Submit error:', err);
@@ -281,17 +323,26 @@ export function TemplateManager() {
   }
 
   async function handleDelete(id: string) {
+    if (deletingId) return;
+    setDeletingId(id);
     try {
-      const { error } = await supabase
-        .from('message_templates')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      // Route handler scopes the Meta delete via hsm_id (so sibling
+      // language variants survive) and falls through to remove the
+      // local row. Local-only rows skip the Meta call.
+      const res = await fetch(`/api/whatsapp/templates/${id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `Delete failed (HTTP ${res.status})`);
+      }
       toast.success('Template deleted');
       setTemplates((prev) => prev.filter((t) => t.id !== id));
     } catch (err) {
       console.error('Delete error:', err);
-      toast.error('Failed to delete template');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete template');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -359,10 +410,7 @@ export function TemplateManager() {
             {syncing ? 'Syncing…' : 'Sync from Meta'}
           </Button>
           <Button
-            onClick={() => {
-              setForm(emptyForm);
-              setDialogOpen(true);
-            }}
+            onClick={openCreate}
             className="bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <Plus className="size-4" />
@@ -439,14 +487,48 @@ export function TemplateManager() {
                       </div>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(template.id)}
-                    className="text-slate-400 hover:text-red-400 hover:bg-red-950/30 shrink-0 ml-2"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <div className="flex items-center gap-0.5 shrink-0 ml-2">
+                    {statusKey === 'APPROVED' && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEdit(template)}
+                        title="Edit — Meta will re-review the changes"
+                        className="text-slate-400 hover:text-primary hover:bg-primary/10"
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                    )}
+                    {(statusKey === 'REJECTED' || statusKey === 'PAUSED') && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEdit(template)}
+                        title="Edit and resubmit for approval"
+                        className="text-slate-400 hover:text-primary hover:bg-primary/10"
+                      >
+                        <RotateCcw className="size-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(template.id)}
+                      disabled={deletingId === template.id}
+                      title={
+                        template.meta_template_id
+                          ? 'Delete from Meta and locally'
+                          : 'Delete locally'
+                      }
+                      className="text-slate-400 hover:text-red-400 hover:bg-red-950/30"
+                    >
+                      {deletingId === template.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -454,13 +536,25 @@ export function TemplateManager() {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setEditingId(null);
+            setForm(emptyForm);
+          }
+        }}
+      >
         <DialogContent className="bg-slate-900 border-slate-700 sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">New Message Template</DialogTitle>
+            <DialogTitle className="text-white">
+              {editingId ? 'Edit Message Template' : 'New Message Template'}
+            </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Build a template and submit it to Meta for approval. Once
-              approved, you can use it in broadcasts and the inbox.
+              {editingId
+                ? 'Save your changes to re-submit to Meta. Status will flip back to PENDING during review.'
+                : 'Build a template and submit it to Meta for approval. Once approved, you can use it in broadcasts and the inbox.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -483,10 +577,13 @@ export function TemplateManager() {
                 placeholder="e.g. order_confirmation"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                disabled={editingId !== null}
+                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed"
               />
               <p className="text-[11px] text-slate-500">
-                Lowercase letters, digits, and underscores only.
+                {editingId
+                  ? 'Name is fixed once a template exists on Meta — create a new template to change it.'
+                  : 'Lowercase letters, digits, and underscores only.'}
               </p>
             </div>
 
@@ -528,7 +625,8 @@ export function TemplateManager() {
                   onChange={(e) =>
                     setForm({ ...form, language: e.target.value })
                   }
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                  disabled={editingId !== null}
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
                 <datalist id="template-language-codes">
                   {COMMON_LANGUAGE_CODES.map((code) => (
@@ -536,8 +634,14 @@ export function TemplateManager() {
                   ))}
                 </datalist>
                 <p className="text-[11px] text-slate-500">
-                  Must match the exact code on Meta — <code>en_US</code> and{' '}
-                  <code>en</code> are distinct.
+                  {editingId
+                    ? 'Language is fixed once a template exists on Meta.'
+                    : (
+                        <>
+                          Must match the exact code on Meta — <code>en_US</code>{' '}
+                          and <code>en</code> are distinct.
+                        </>
+                      )}
                 </p>
               </div>
             </div>
@@ -819,8 +923,10 @@ export function TemplateManager() {
               {submitting ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  Submitting…
+                  {editingId ? 'Saving…' : 'Submitting…'}
                 </>
+              ) : editingId ? (
+                'Save & Resubmit'
               ) : (
                 'Submit for Approval'
               )}

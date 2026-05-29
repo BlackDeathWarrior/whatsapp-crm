@@ -240,6 +240,87 @@ export async function submitMessageTemplate(
   }
 }
 
+export interface EditMessageTemplateArgs {
+  /** Meta's template id (stored locally as `meta_template_id`). */
+  metaTemplateId: string
+  accessToken: string
+  /** Send the full components array — Meta replaces, not patches. */
+  components: MetaTemplateSubmitPayload['components']
+  /** Optional — only certain category transitions are allowed by Meta. */
+  category?: MetaTemplateSubmitPayload['category']
+}
+
+export interface EditMessageTemplateResult {
+  success: boolean
+}
+
+/**
+ * Edit an existing (APPROVED or REJECTED) message template.
+ *
+ * Meta caps edits at 10 per 30 days (and 1 per 24h for APPROVED
+ * templates). Every edit re-triggers review, so the status flips
+ * back to PENDING until Meta approves the new components.
+ *
+ * Note: PENDING / DISABLED / IN_APPEAL templates cannot be edited
+ * — the route handler enforces that before calling here.
+ */
+export async function editMessageTemplate(
+  args: EditMessageTemplateArgs
+): Promise<EditMessageTemplateResult> {
+  const { metaTemplateId, accessToken, components, category } = args
+  const body: Record<string, unknown> = { components }
+  if (category) body.category = category
+  const response = await fetch(`${META_API_BASE}/${metaTemplateId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const data = await response.json().catch(() => ({}))
+  return { success: data?.success !== false }
+}
+
+export interface DeleteMessageTemplateArgs {
+  wabaId: string
+  accessToken: string
+  name: string
+  /**
+   * Without `hsm_id`, Meta deletes EVERY language variant of the
+   * template with this `name`. Pass the row's `meta_template_id`
+   * to scope to a single variant.
+   */
+  metaTemplateId?: string
+}
+
+/**
+ * Delete a message template on Meta. Pass `metaTemplateId` to scope
+ * to a single language variant — otherwise Meta nukes every variant
+ * sharing the same `name`.
+ */
+export async function deleteMessageTemplate(
+  args: DeleteMessageTemplateArgs
+): Promise<void> {
+  const { wabaId, accessToken, name, metaTemplateId } = args
+  const params = new URLSearchParams({ name })
+  if (metaTemplateId) params.set('hsm_id', metaTemplateId)
+  const url = `${META_API_BASE}/${wabaId}/message_templates?${params.toString()}`
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  // Treat a 404 as a no-op — the template is already gone on Meta's
+  // side, and we still want the local row removed.
+  if (response.status === 404) return
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+}
+
 // ============================================================
 // Reactions
 // ============================================================
