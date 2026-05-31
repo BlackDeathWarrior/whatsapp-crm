@@ -86,18 +86,37 @@ const EDITABLE_ROLES: { value: AccountRole; label: string; hint: string }[] = [
   { value: 'viewer', label: 'Viewer', hint: 'Read-only across the app' },
 ];
 
-const ROLE_ICONS: Record<AccountRole, typeof Crown> = {
-  owner: Crown,
-  admin: Shield,
-  agent: UserCog,
-  viewer: UserIcon,
-};
-
-const ROLE_LABELS: Record<AccountRole, string> = {
-  owner: 'Owner',
-  admin: 'Admin',
-  agent: 'Agent',
-  viewer: 'Viewer',
+// Per-role chip metadata. The colour scale runs amber (owner —
+// scarce, immutable) → primary (admin — significant) → slate
+// (agent — operational default) → muted slate (viewer — read-
+// only). Mirrors the sidebar's ROLE_CHIP so the two surfaces
+// don't drift; once the surface stabilises this should hoist
+// into a shared module.
+const ROLE_CHIP: Record<
+  AccountRole,
+  { icon: typeof Crown; label: string; className: string }
+> = {
+  owner: {
+    icon: Crown,
+    label: 'Owner',
+    className:
+      'border-amber-500/40 bg-amber-500/10 text-amber-300',
+  },
+  admin: {
+    icon: Shield,
+    label: 'Admin',
+    className: 'border-primary/40 bg-primary/10 text-primary',
+  },
+  agent: {
+    icon: UserCog,
+    label: 'Agent',
+    className: 'border-slate-700 bg-slate-800 text-slate-300',
+  },
+  viewer: {
+    icon: UserIcon,
+    label: 'Viewer',
+    className: 'border-slate-800 bg-slate-900 text-slate-500',
+  },
 };
 
 function fmtDate(iso: string): string {
@@ -279,7 +298,8 @@ export function MembersTab() {
         <CardContent className="p-0">
           <ul className="divide-y divide-slate-800">
             {members.map((member) => {
-              const RoleIcon = ROLE_ICONS[member.role];
+              const roleMeta = ROLE_CHIP[member.role];
+              const RoleIcon = roleMeta.icon;
               const isSelf = member.user_id === user?.id;
               const isOwnerRow = member.role === 'owner';
               const isBusy = pendingMemberAction === member.user_id;
@@ -368,21 +388,28 @@ export function MembersTab() {
                         </SelectContent>
                       </Select>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-200">
-                        <RoleIcon className="size-3.5 text-slate-400" />
-                        {ROLE_LABELS[member.role]}
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${roleMeta.className}`}
+                      >
+                        <RoleIcon className="size-3.5" />
+                        {roleMeta.label}
                       </span>
                     )}
 
                     {/* Remove. Admin+ only; never on the owner row;
-                        never on yourself. */}
+                        never on yourself. Pre-polish styling was
+                        neutral-default + red-on-hover — the
+                        destructive intent was invisible until the
+                        user moused over. Now red is the default
+                        state with a darker shade on hover so the
+                        affordance reads at-a-glance. */}
                     {canManageMembers && !isOwnerRow && !isSelf && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setRemovingMember(member)}
                         disabled={isBusy}
-                        className="border-slate-700 text-slate-300 hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-300"
+                        className="border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
                       >
                         <Trash2 className="size-4" />
                       </Button>
@@ -398,7 +425,7 @@ export function MembersTab() {
       {/* Pending invitations — admin+ only */}
       <RequireRole min="admin">
         <div>
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-2 flex items-center gap-2">
             <UsersRound className="size-4 text-slate-400" />
             <h3 className="text-sm font-semibold text-white">
               Pending invitations
@@ -407,6 +434,18 @@ export function MembersTab() {
               {invitations.length}
             </Badge>
           </div>
+          {/* P10 — make the no-resend design explicit. Admins were
+              confused why the pending list shows roles + expiry but
+              no "copy link again" button. Stating the constraint up
+              front (rather than letting the user discover it by
+              looking for a button) keeps it from feeling like a bug. */}
+          {invitations.length > 0 ? (
+            <p className="mb-3 text-xs text-slate-500">
+              The plaintext invite URL is only shown once at creation
+              for security — to re-share, revoke the invite below and
+              create a new one.
+            </p>
+          ) : null}
 
           {invitations.length === 0 ? (
             <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
@@ -425,7 +464,10 @@ export function MembersTab() {
             <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
               <CardContent className="p-0">
                 <ul className="divide-y divide-slate-800">
-                  {invitations.map((inv) => (
+                  {invitations.map((inv) => {
+                    const inviteRoleMeta = ROLE_CHIP[inv.role];
+                    const InviteRoleIcon = inviteRoleMeta.icon;
+                    return (
                     <li
                       key={inv.id}
                       className="flex items-center gap-4 px-4 py-3"
@@ -435,8 +477,11 @@ export function MembersTab() {
                           <span className="text-sm font-medium text-white">
                             {inv.label || 'Untitled invite'}
                           </span>
-                          <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-300">
-                            {ROLE_LABELS[inv.role]}
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${inviteRoleMeta.className}`}
+                          >
+                            <InviteRoleIcon className="size-3" />
+                            {inviteRoleMeta.label}
                           </span>
                         </div>
                         <p className="mt-0.5 text-xs text-slate-500">
@@ -444,17 +489,22 @@ export function MembersTab() {
                         </p>
                       </div>
 
+                      {/* Revoke: red default state, mirrors the
+                          members-tab Remove button. Pre-polish version
+                          read as a neutral secondary button until
+                          hover. */}
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleRevoke(inv)}
-                        className="border-slate-700 text-slate-300 hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-300"
+                        className="border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
                       >
                         <MailX className="size-4" />
                         Revoke
                       </Button>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </CardContent>
             </Card>
