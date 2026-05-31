@@ -107,6 +107,24 @@ CREATE INDEX IF NOT EXISTS idx_account_invitations_account_pending
 ALTER TABLE account_invitations ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
+-- PROFILE EXTENSION
+--
+-- account_role lives on profiles (not a separate memberships table)
+-- because the design is one-account-per-user; this keeps reads cheap
+-- (one row, already loaded by the auth hook).
+--
+-- Added BEFORE the is_account_member helper below because LANGUAGE
+-- sql functions resolve column references at CREATE time (unlike
+-- plpgsql, which defers to call time).
+-- ============================================================
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS account_id UUID REFERENCES accounts(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS account_role account_role_enum;
+
+CREATE INDEX IF NOT EXISTS idx_profiles_account_role
+  ON profiles(account_id, account_role);
+
+-- ============================================================
 -- MEMBERSHIP HELPER
 --
 -- SECURITY DEFINER so the policy body can read `profiles` without
@@ -147,20 +165,6 @@ $$;
 
 ALTER FUNCTION is_account_member(UUID, account_role_enum) OWNER TO postgres;
 GRANT EXECUTE ON FUNCTION is_account_member(UUID, account_role_enum) TO authenticated, service_role;
-
--- ============================================================
--- PROFILE EXTENSION
---
--- account_role lives on profiles (not a separate memberships table)
--- because the design is one-account-per-user; this keeps reads cheap
--- (one row, already loaded by the auth hook).
--- ============================================================
-ALTER TABLE profiles
-  ADD COLUMN IF NOT EXISTS account_id UUID REFERENCES accounts(id) ON DELETE CASCADE,
-  ADD COLUMN IF NOT EXISTS account_role account_role_enum;
-
-CREATE INDEX IF NOT EXISTS idx_profiles_account_role
-  ON profiles(account_id, account_role);
 
 -- ============================================================
 -- ADD account_id TO EVERY PARENT TENANT TABLE
