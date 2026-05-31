@@ -225,6 +225,11 @@ export type FlowTriggerConfig =
 
 export interface FlowRow {
   id: string;
+  /** Account tenancy (NOT NULL post-017). The engine looks up active
+   *  flows for inbound dispatch using this field. */
+  account_id: string;
+  /** Author. Used as a default sender-of-record on engine sends and
+   *  preserved on flow_runs for log/audit display. */
   user_id: string;
   name: string;
   description: string | null;
@@ -253,6 +258,9 @@ export interface FlowNodeRow {
 export interface FlowRunRow {
   id: string;
   flow_id: string;
+  /** Tenancy. Matches flows.account_id; NOT NULL post-017. */
+  account_id: string;
+  /** Audit. Matches the parent flow.user_id. */
   user_id: string;
   contact_id: string | null;
   conversation_id: string | null;
@@ -322,6 +330,11 @@ export type ParsedInbound =
     };
 
 export interface DispatchInboundInput {
+  /** Account tenancy key. Drives the lookup of active flows and the
+   *  idempotency check for previously-seen inbound message_ids. */
+  accountId: string;
+  /** Sender-of-record for the bot's outbound prompts on engine
+   *  sends. Set by the webhook to the WhatsApp config owner. */
   userId: string;
   contactId: string;
   conversationId: string;

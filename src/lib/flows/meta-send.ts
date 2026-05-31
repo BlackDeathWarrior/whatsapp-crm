@@ -32,6 +32,13 @@ import { supabaseAdmin } from './admin-client'
 // ------------------------------------------------------------
 
 interface SendTextEngineArgs {
+  /** Account-level tenancy key. Drives contact + whatsapp_config
+   *  lookups so a flow authored by user A still sends through the
+   *  WhatsApp number user B saved on the same account. */
+  accountId: string
+  /** Original author of the flow — used for INSERT audit columns
+   *  and for resolving the agent's identity in logs. Not consulted
+   *  for tenancy. */
   userId: string
   conversationId: string
   contactId: string
@@ -59,10 +66,10 @@ export async function engineSendText(
     .from('contacts')
     .select('id, phone')
     .eq('id', args.contactId)
-    .eq('user_id', args.userId)
+    .eq('account_id', args.accountId)
     .maybeSingle()
   if (contactErr || !contact?.phone) {
-    throw new Error('contact not found for this user')
+    throw new Error('contact not found for this account')
   }
 
   const sanitized = sanitizePhoneForMeta(contact.phone)
@@ -73,7 +80,7 @@ export async function engineSendText(
   const { data: config, error: configErr } = await db
     .from('whatsapp_config')
     .select('*')
-    .eq('user_id', args.userId)
+    .eq('account_id', args.accountId)
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
@@ -138,6 +145,7 @@ export async function engineSendText(
 }
 
 interface SendMediaEngineArgs {
+  accountId: string
   userId: string
   conversationId: string
   contactId: string
@@ -167,10 +175,10 @@ export async function engineSendMedia(
     .from('contacts')
     .select('id, phone')
     .eq('id', args.contactId)
-    .eq('user_id', args.userId)
+    .eq('account_id', args.accountId)
     .maybeSingle()
   if (contactErr || !contact?.phone) {
-    throw new Error('contact not found for this user')
+    throw new Error('contact not found for this account')
   }
 
   const sanitized = sanitizePhoneForMeta(contact.phone)
@@ -181,7 +189,7 @@ export async function engineSendMedia(
   const { data: config, error: configErr } = await db
     .from('whatsapp_config')
     .select('*')
-    .eq('user_id', args.userId)
+    .eq('account_id', args.accountId)
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
@@ -254,6 +262,7 @@ export async function engineSendMedia(
 }
 
 interface SendInteractiveButtonsEngineArgs {
+  accountId: string
   userId: string
   conversationId: string
   contactId: string
@@ -264,6 +273,7 @@ interface SendInteractiveButtonsEngineArgs {
 }
 
 interface SendInteractiveListEngineArgs {
+  accountId: string
   userId: string
   conversationId: string
   contactId: string
@@ -310,19 +320,17 @@ async function sendInteractiveViaMeta(
 ): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
 
-  // Scope the contact lookup by user_id — same defense-in-depth
-  // rationale as automations/meta-send.ts. Service-role client
-  // bypasses RLS, so an attacker who could call into the engine
-  // with a contact_id from another tenant would otherwise send
-  // through their own WhatsApp config to a stranger's number.
+  // Scope the contact + whatsapp_config lookups by account_id —
+  // same defense-in-depth rationale as automations/meta-send.ts.
+  // Migration 017 moved both tables to account-scoped tenancy.
   const { data: contact, error: contactErr } = await db
     .from('contacts')
     .select('id, phone')
     .eq('id', input.contactId)
-    .eq('user_id', input.userId)
+    .eq('account_id', input.accountId)
     .maybeSingle()
   if (contactErr || !contact?.phone) {
-    throw new Error('contact not found for this user')
+    throw new Error('contact not found for this account')
   }
 
   const sanitized = sanitizePhoneForMeta(contact.phone)
@@ -333,7 +341,7 @@ async function sendInteractiveViaMeta(
   const { data: config, error: configErr } = await db
     .from('whatsapp_config')
     .select('*')
-    .eq('user_id', input.userId)
+    .eq('account_id', input.accountId)
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')

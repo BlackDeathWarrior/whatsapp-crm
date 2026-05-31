@@ -38,6 +38,20 @@ as the sole owner of their own account and sees identical data.
 - **The signup trigger (`handle_new_user`) now also creates a
   personal account** and links the new profile to it as `owner`.
 
+### Fixed
+
+- **Inbound WhatsApp messages now land in the shared inbox.** The
+  webhook + automations + flows engines used to route inbound
+  events by `user_id`, which after the 017 migration only matched
+  the WhatsApp config owner's automations / flows — teammates'
+  rules never fired. PR 8 of the multi-user series flips every
+  lookup to `account_id` so any member of the account sees the
+  inbound message and any teammate's automation or flow can react
+  to it. Also fixes incipient NOT NULL violations on
+  `automation_logs`, `automation_pending_executions`, `flow_runs`,
+  and `deals` — those tables gained `account_id NOT NULL` in 017
+  but the engines hadn't yet been updated to populate it.
+
 ### Added
 
 - **Account & member management API** — server-side endpoints
