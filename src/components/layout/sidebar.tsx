@@ -70,11 +70,17 @@ const ACCOUNT_SHARING_FLAG = "account_sharing";
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { profile, account, accountRole, signOut } = useAuth();
+  const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
-  const accountSharingEnabled = !!profile?.beta_features?.includes(
-    ACCOUNT_SHARING_FLAG,
-  );
+  // Match the settings page's check: only treat the flag as enabled
+  // once the profile has finished loading. Without this, the strip
+  // would briefly flash absent during the initial profile fetch
+  // (when `profile` is null and the boolean coerces to false), then
+  // pop in once the row resolves — visible as a layout jump in the
+  // sidebar footer.
+  const accountSharingEnabled =
+    !profileLoading &&
+    !!profile?.beta_features?.includes(ACCOUNT_SHARING_FLAG);
 
   // Close the drawer when route changes — users opened it to navigate,
   // so once they pick a destination the drawer should get out of the way.

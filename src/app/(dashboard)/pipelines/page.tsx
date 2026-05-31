@@ -27,13 +27,12 @@ import { Label } from "@/components/ui/label";
 import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
+import { GatedButton } from "@/components/ui/gated-button";
 
-// Pipeline creation is admin-class (it's a settings-tier write
-// under the new RLS), but deal creation is operational and only
-// requires agent+. The two CTAs gate on different capabilities.
-const PIPELINE_READ_ONLY_TITLE =
-  "Read-only — your role can't create pipelines";
-const DEAL_READ_ONLY_TITLE = "Read-only — your role can't create deals";
+// Pipeline creation is admin-class (settings-tier write under
+// the new RLS); deal creation is operational and only requires
+// agent+. The two CTAs gate on different `useCan` capabilities,
+// not on different copy.
 
 // Spec-defined seed — name and color per the product spec.
 const SPEC_DEFAULT_STAGES = [
@@ -356,27 +355,26 @@ export default function PipelinesPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
+          <GatedButton
             variant="outline"
+            canAct={canEditSettings}
+            gateReason="create pipelines"
             onClick={() => setNewPipelineOpen(true)}
-            disabled={!canEditSettings}
-            title={canEditSettings ? undefined : PIPELINE_READ_ONLY_TITLE}
             className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
           >
             <Plus className="mr-1 h-4 w-4" />
             Add Pipeline
-          </Button>
-          <Button
+          </GatedButton>
+          <GatedButton
+            canAct={canCreateDeals}
+            gateReason="create deals"
+            disabled={!selectedPipelineId || stages.length === 0}
             onClick={() => handleAddDeal()}
-            disabled={
-              !canCreateDeals || !selectedPipelineId || stages.length === 0
-            }
-            title={canCreateDeals ? undefined : DEAL_READ_ONLY_TITLE}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="mr-1 h-4 w-4" />
             Add Deal
-          </Button>
+          </GatedButton>
         </div>
       </div>
 
@@ -390,15 +388,15 @@ export default function PipelinesPage() {
           <p className="mt-2 text-sm text-slate-400">
             Create a pipeline to start tracking deals
           </p>
-          <Button
+          <GatedButton
+            canAct={canEditSettings}
+            gateReason="create pipelines"
             onClick={() => setNewPipelineOpen(true)}
-            disabled={!canEditSettings}
-            title={canEditSettings ? undefined : PIPELINE_READ_ONLY_TITLE}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="mr-1 h-4 w-4" />
             Create Pipeline
-          </Button>
+          </GatedButton>
         </div>
       ) : (
         <>

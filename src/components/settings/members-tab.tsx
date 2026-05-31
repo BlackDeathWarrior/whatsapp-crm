@@ -174,7 +174,16 @@ export function MembersTab() {
 
   async function handleRoleChange(member: Member, nextRole: AccountRole) {
     if (member.role === nextRole) return;
+    // Optimistic update — flip the dropdown immediately so the UI
+    // feels snappy. If the server PATCH fails we revert below so
+    // the dropdown doesn't lie about the persisted state.
+    const previousRole = member.role;
     setPendingMemberAction(member.user_id);
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.user_id === member.user_id ? { ...m, role: nextRole } : m,
+      ),
+    );
     try {
       const res = await fetch(`/api/account/members/${member.user_id}`, {
         method: 'PATCH',
@@ -182,17 +191,28 @@ export function MembersTab() {
         body: JSON.stringify({ role: nextRole }),
       });
       if (!res.ok) {
+        // Revert the optimistic flip. The toast on its own wasn't
+        // enough — the dropdown was left showing the new role
+        // forever, so the next interaction operated on a wrong
+        // baseline (re-trying the same change would no-op via the
+        // `member.role === nextRole` guard at the top).
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.user_id === member.user_id ? { ...m, role: previousRole } : m,
+          ),
+        );
         const payload = await res.json().catch(() => ({}));
         toast.error(payload.error || 'Failed to update role');
         return;
       }
       toast.success(`Updated ${member.full_name || 'member'} to ${nextRole}`);
+    } catch (err) {
+      // Same revert on network failure.
       setMembers((prev) =>
         prev.map((m) =>
-          m.user_id === member.user_id ? { ...m, role: nextRole } : m,
+          m.user_id === member.user_id ? { ...m, role: previousRole } : m,
         ),
       );
-    } catch (err) {
       console.error('[MembersTab] role change error:', err);
       toast.error('Could not reach the server');
     } finally {

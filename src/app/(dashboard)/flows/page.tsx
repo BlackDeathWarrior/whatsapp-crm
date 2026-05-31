@@ -20,6 +20,7 @@ import {
 
 import { useCan } from "@/hooks/use-can";
 import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/ui/gated-button";
 import {
   Dialog,
   DialogContent,
@@ -79,8 +80,6 @@ const TEMPLATE_ICONS = {
   HelpCircle,
   UserPlus,
 } as const;
-
-const READ_ONLY_TITLE = "Read-only — your role can't create flows";
 
 export default function FlowsPage() {
   const router = useRouter();
@@ -215,14 +214,14 @@ export default function FlowsPage() {
             menus, FAQs, and triage before a human steps in.
           </p>
         </div>
-        <Button
+        <GatedButton
+          canAct={canCreate}
+          gateReason="create flows"
           onClick={() => setCreateOpen(true)}
-          disabled={!canCreate}
-          title={canCreate ? undefined : READ_ONLY_TITLE}
         >
           <Plus className="h-4 w-4" />
           New flow
-        </Button>
+        </GatedButton>
       </header>
 
       {flows.length === 0 ? (
@@ -343,15 +342,15 @@ function EmptyState({
         bot. Customers tap buttons; the bot routes them to the right answer (or
         the right agent).
       </p>
-      <Button
+      <GatedButton
+        canAct={canCreate}
+        gateReason="create flows"
         onClick={onCreate}
-        disabled={!canCreate}
-        title={canCreate ? undefined : READ_ONLY_TITLE}
         className="mt-5"
       >
         <Plus className="h-4 w-4" />
         Create your first flow
-      </Button>
+      </GatedButton>
     </div>
   );
 }

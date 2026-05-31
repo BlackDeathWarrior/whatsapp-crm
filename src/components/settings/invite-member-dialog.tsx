@@ -62,6 +62,11 @@ const ROLE_DESCRIPTIONS: Record<InviteRole, string> = {
   viewer: 'Read-only access across every page. Cannot send or edit anything.',
 };
 
+// Server caps label at 80 chars (see src/app/api/account/invitations/route.ts).
+// Mirror it on the client so we short-circuit before the round-trip
+// rather than letting the user submit and bounce off a 400.
+const MAX_LABEL_LEN = 80;
+
 interface CreatedInvite {
   url: string;
   role: InviteRole;
@@ -92,6 +97,17 @@ export function InviteMemberDialog({
   }
 
   async function handleCreate() {
+    // Mirror the server's max-length check so we don't ship an
+    // obviously-too-long label across the wire just to bounce off
+    // a 400. The Input also has a `maxLength={MAX_LABEL_LEN}` cap
+    // but a paste can land an over-limit string into state before
+    // the limit kicks in on the next keystroke — this is the safety
+    // net for that path.
+    const trimmedLabel = label.trim();
+    if (trimmedLabel.length > MAX_LABEL_LEN) {
+      toast.error(`Label must be ${MAX_LABEL_LEN} characters or fewer`);
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch('/api/account/invitations', {
@@ -100,7 +116,7 @@ export function InviteMemberDialog({
         body: JSON.stringify({
           role,
           expiresInDays: Number(expiry),
-          label: label.trim() || undefined,
+          label: trimmedLabel || undefined,
         }),
       });
 
@@ -302,7 +318,7 @@ export function InviteMemberDialog({
                   placeholder="e.g. Sara — support team"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  maxLength={80}
+                  maxLength={MAX_LABEL_LEN}
                   className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
                 />
                 <p className="text-xs text-slate-500">
