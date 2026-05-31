@@ -56,6 +56,24 @@ as the sole owner of their own account and sees identical data.
     freshly-created personal account (mirror of the signup flow).
   - `POST /api/account/transfer-ownership` — owner only. Atomic
     swap with the named member.
+- **Invitation API + redeem flow** — the no-email, link-only
+  invite path. Backend is complete; the Members tab UI that
+  drives it lands in a follow-up.
+  - `GET /api/account/invitations` — list outstanding (admin+).
+  - `POST /api/account/invitations` — create an invite, returns
+    the plaintext token + share URL **exactly once** (we store
+    only the SHA-256 hash on the row). Body
+    `{ role, expiresInDays?, label? }`. Admin+.
+  - `DELETE /api/account/invitations/[id]` — revoke (admin+).
+  - `GET /api/invitations/[token]/peek` — public, per-IP
+    rate-limited. Returns `{ ok, account_name, role, expires_at }`
+    or `{ ok: false, reason }` so the join page can render
+    "You're being invited to <Account> as <Role>".
+  - `POST /api/invitations/[token]/redeem` — authenticated.
+    Atomically moves the caller's profile to the inviter's
+    account and cleans up the orphan personal account. Refuses
+    with 409 if the caller's current account already contains
+    domain data (no silent data loss).
 
 ### Migration required
 
@@ -76,6 +94,12 @@ Apply against your Supabase project before deploying this version:
   role and raise SQLSTATE `42501` / `22023` on forbidden / bad
   input so the API layer can map cleanly to 403 / 400.
   Idempotent.
+- `supabase/migrations/019_invitation_rpcs.sql` — adds two
+  `SECURITY DEFINER` RPCs: `peek_invitation` (anonymous read by
+  token hash, returns a fixed-shape JSON envelope) and
+  `redeem_invitation` (authenticated atomic move + orphan
+  cleanup, with a domain-data safety check). Both bypass the
+  RLS that would otherwise block their reads/writes. Idempotent.
 
 ## [0.2.2] — 2026-05-29
 
