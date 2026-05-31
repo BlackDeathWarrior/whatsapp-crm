@@ -15,13 +15,8 @@ import {
 } from '@/components/ui/table';
 import { Radio, Plus, Loader2 } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
+import { GatedButton } from '@/components/ui/gated-button';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
-
-// Tooltip copy reused across both "New broadcast" buttons on this
-// page. Centralised so a wording change is a one-line diff and the
-// two CTAs can't drift apart.
-const READ_ONLY_TITLE =
-  "Read-only — your role can't create broadcasts";
 
 /**
  * Poll cadence while any broadcast is sending. Kept modest so we don't
@@ -189,15 +184,15 @@ export default function BroadcastsPage() {
             Send bulk messages to your contacts using approved templates.
           </p>
         </div>
-        <Button
+        <GatedButton
+          canAct={canCreate}
+          gateReason="create broadcasts"
           onClick={() => router.push('/broadcasts/new')}
-          disabled={!canCreate}
-          title={canCreate ? undefined : READ_ONLY_TITLE}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
           New Broadcast
-        </Button>
+        </GatedButton>
       </div>
 
       {broadcasts.length === 0 ? (
@@ -207,15 +202,15 @@ export default function BroadcastsPage() {
           <p className="mt-1 text-xs text-slate-400">
             Create your first broadcast to reach your contacts at scale.
           </p>
-          <Button
+          <GatedButton
+            canAct={canCreate}
+            gateReason="create broadcasts"
             onClick={() => router.push('/broadcasts/new')}
-            disabled={!canCreate}
-            title={canCreate ? undefined : READ_ONLY_TITLE}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
             New Broadcast
-          </Button>
+          </GatedButton>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900">

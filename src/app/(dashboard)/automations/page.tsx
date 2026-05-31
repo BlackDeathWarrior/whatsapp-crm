@@ -22,6 +22,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useCan } from "@/hooks/use-can"
 import type { Automation } from "@/types"
 import { Button } from "@/components/ui/button"
+import { GatedButton } from "@/components/ui/gated-button"
 import { Switch } from "@/components/ui/switch"
 import {
   DropdownMenu,
@@ -55,9 +56,6 @@ const TEMPLATE_ICON: Record<TemplateSlug, typeof Zap> = {
   lead_qualifier: Users,
   follow_up_reminder: PhoneCall,
 }
-
-const READ_ONLY_TITLE =
-  "Read-only — your role can't create automations"
 
 export default function AutomationsPage() {
   const router = useRouter()
@@ -167,15 +165,15 @@ export default function AutomationsPage() {
             Build workflows that react to WhatsApp® events automatically.
           </p>
         </div>
-        <Button
+        <GatedButton
+          canAct={canCreate}
+          gateReason="create automations"
           onClick={() => router.push("/automations/new")}
-          disabled={!canCreate}
-          title={canCreate ? undefined : READ_ONLY_TITLE}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
           Create Automation
-        </Button>
+        </GatedButton>
       </div>
 
       {showTemplates && (

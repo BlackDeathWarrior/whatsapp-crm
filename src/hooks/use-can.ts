@@ -54,5 +54,14 @@ export function useCan(action: CanAction): boolean {
       return canDeleteAccount(accountRole);
     case "transfer-ownership":
       return canTransferOwnership(accountRole);
+    default: {
+      // Exhaustiveness check — adding a new `CanAction` without a
+      // case here fails the typecheck because TS narrows `action`
+      // to `never` in this branch. The runtime throw is unreachable
+      // for valid inputs; it only fires if someone bypasses the
+      // type system at the call site (e.g. with a wrong-typed cast).
+      const _exhaustive: never = action;
+      throw new Error(`Unknown CanAction: ${String(_exhaustive)}`);
+    }
   }
 }
