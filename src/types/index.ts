@@ -480,6 +480,12 @@ export type AutomationStepConfig =
 
 export interface Automation {
   id: string;
+  /** Account tenancy key — every automation belongs to one account
+   *  (migration 017 made the column NOT NULL). The engine looks up
+   *  active automations by this field on inbound webhook events. */
+  account_id: string;
+  /** Original author. Used for log audit + outbound message
+   *  sender-of-record, never for tenancy isolation. */
   user_id: string;
   name: string;
   description?: string;
