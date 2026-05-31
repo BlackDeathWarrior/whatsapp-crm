@@ -109,9 +109,33 @@ export default function JoinPage() {
   const [conflictMessage, setConflictMessage] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
+  // Extracted so the "Try again" button on the server_error card
+  // can re-run the same logic without remounting the component.
+  const loadPeekAndAuth = useCallback(async () => {
+    if (!token) return;
+    setPeek(null);
+    setAuthedUserId(undefined);
+    try {
+      const [peekRes, authRes] = await Promise.all([
+        fetch(`/api/invitations/${encodeURIComponent(token)}/peek`, {
+          cache: 'no-store',
+        }),
+        createClient().auth.getUser(),
+      ]);
+      const peekBody = (await peekRes.json()) as PeekResult;
+      setPeek(peekBody);
+      setAuthedUserId(authRes.data.user?.id ?? null);
+    } catch (err) {
+      console.error('[join] peek error:', err);
+      setPeek({ ok: false, reason: 'server_error' });
+      setAuthedUserId(null);
+    }
+  }, [token]);
+
   // Fetch peek + auth state on mount. The peek endpoint is
   // rate-limited per-IP (30/min) so double-mounting in React 19
-  // strict mode dev is harmless.
+  // strict mode dev is harmless. We also use the `cancelled` flag
+  // to drop setState calls if the component unmounts mid-fetch.
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
@@ -220,19 +244,47 @@ export default function JoinPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          <Link href="/signup">
-            <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-              Create a new account instead
-            </Button>
-          </Link>
-          <Link href="/login">
-            <Button
-              variant="outline"
-              className="w-full border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
-            >
-              Sign in
-            </Button>
-          </Link>
+          {/* For server_error the failure is transient — the network
+              flapped or the peek endpoint hiccupped. Try-again is
+              the right primary action; the "create account" /
+              "sign in" links stay as secondary options. Other
+              failure reasons (not_found / used / expired) are
+              terminal for this token, so no retry — just the
+              signup/sign-in escape hatches. */}
+          {peek.reason === 'server_error' ? (
+            <>
+              <Button
+                onClick={loadPeekAndAuth}
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                Try again
+              </Button>
+              <Link href="/signup">
+                <Button
+                  variant="outline"
+                  className="w-full border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+                >
+                  Create a new account instead
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/signup">
+                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                  Create a new account instead
+                </Button>
+              </Link>
+              <Link href="/login">
+                <Button
+                  variant="outline"
+                  className="w-full border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+                >
+                  Sign in
+                </Button>
+              </Link>
+            </>
+          )}
         </CardContent>
       </Card>
     );
