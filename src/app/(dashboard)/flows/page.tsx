@@ -18,6 +18,7 @@ import {
   FileText,
 } from "lucide-react";
 
+import { useCan } from "@/hooks/use-can";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -79,8 +80,11 @@ const TEMPLATE_ICONS = {
   UserPlus,
 } as const;
 
+const READ_ONLY_TITLE = "Read-only — your role can't create flows";
+
 export default function FlowsPage() {
   const router = useRouter();
+  const canCreate = useCan("send-messages");
   const [flows, setFlows] = useState<FlowRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -211,14 +215,21 @@ export default function FlowsPage() {
             menus, FAQs, and triage before a human steps in.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button
+          onClick={() => setCreateOpen(true)}
+          disabled={!canCreate}
+          title={canCreate ? undefined : READ_ONLY_TITLE}
+        >
           <Plus className="h-4 w-4" />
           New flow
         </Button>
       </header>
 
       {flows.length === 0 ? (
-        <EmptyState onCreate={() => setCreateOpen(true)} />
+        <EmptyState
+          onCreate={() => setCreateOpen(true)}
+          canCreate={canCreate}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {flows.map((flow) => (
@@ -312,7 +323,13 @@ export default function FlowsPage() {
   );
 }
 
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({
+  onCreate,
+  canCreate,
+}: {
+  onCreate: () => void;
+  canCreate: boolean;
+}) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-900/50 px-6 py-16 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-800">
@@ -326,7 +343,12 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         bot. Customers tap buttons; the bot routes them to the right answer (or
         the right agent).
       </p>
-      <Button onClick={onCreate} className="mt-5">
+      <Button
+        onClick={onCreate}
+        disabled={!canCreate}
+        title={canCreate ? undefined : READ_ONLY_TITLE}
+        className="mt-5"
+      >
         <Plus className="h-4 w-4" />
         Create your first flow
       </Button>

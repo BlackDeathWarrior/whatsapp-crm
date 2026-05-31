@@ -14,7 +14,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Radio, Plus, Loader2 } from 'lucide-react';
+import { useCan } from '@/hooks/use-can';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
+
+// Tooltip copy reused across both "New broadcast" buttons on this
+// page. Centralised so a wording change is a one-line diff and the
+// two CTAs can't drift apart.
+const READ_ONLY_TITLE =
+  "Read-only — your role can't create broadcasts";
 
 /**
  * Poll cadence while any broadcast is sending. Kept modest so we don't
@@ -56,6 +63,7 @@ function RateCell({
 
 export default function BroadcastsPage() {
   const router = useRouter();
+  const canCreate = useCan('send-messages');
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -183,6 +191,8 @@ export default function BroadcastsPage() {
         </div>
         <Button
           onClick={() => router.push('/broadcasts/new')}
+          disabled={!canCreate}
+          title={canCreate ? undefined : READ_ONLY_TITLE}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
@@ -199,6 +209,8 @@ export default function BroadcastsPage() {
           </p>
           <Button
             onClick={() => router.push('/broadcasts/new')}
+            disabled={!canCreate}
+            title={canCreate ? undefined : READ_ONLY_TITLE}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />

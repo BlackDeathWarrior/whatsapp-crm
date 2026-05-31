@@ -38,6 +38,21 @@ as the sole owner of their own account and sees identical data.
 - **The signup trigger (`handle_new_user`) now also creates a
   personal account** and links the new profile to it as `owner`.
 
+### Changed
+
+- **Role-aware UI gating across the app.** The inbox composer's
+  send button + textarea, the "New broadcast / automation / flow"
+  buttons, the "Add pipeline / deal" buttons, and the "Add /
+  Import contact" buttons are now disabled-with-tooltip for
+  viewers (and for agents on settings-class actions). Choice:
+  show-but-disable rather than hide, so the UI never feels
+  silently broken to a teammate looking at a feature they don't
+  yet have permission for.
+- **Sidebar surfaces the active account** above the user info
+  when the `account_sharing` beta flag is on. Solo users keep
+  the original layout (their account is named after them, so
+  duplicating it would just add visual noise).
+
 ### Fixed
 
 - **Inbound WhatsApp messages now land in the shared inbox.** The
