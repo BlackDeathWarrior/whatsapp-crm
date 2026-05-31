@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
+import { useCan } from "@/hooks/use-can"
 import type { Automation } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -55,8 +56,12 @@ const TEMPLATE_ICON: Record<TemplateSlug, typeof Zap> = {
   follow_up_reminder: PhoneCall,
 }
 
+const READ_ONLY_TITLE =
+  "Read-only — your role can't create automations"
+
 export default function AutomationsPage() {
   const router = useRouter()
+  const canCreate = useCan("send-messages")
   const [automations, setAutomations] = useState<Automation[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Automation | null>(null)
@@ -164,6 +169,8 @@ export default function AutomationsPage() {
         </div>
         <Button
           onClick={() => router.push("/automations/new")}
+          disabled={!canCreate}
+          title={canCreate ? undefined : READ_ONLY_TITLE}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />

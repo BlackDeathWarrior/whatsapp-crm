@@ -26,6 +26,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
 import { toast } from "sonner";
+import { useCan } from "@/hooks/use-can";
+
+// Pipeline creation is admin-class (it's a settings-tier write
+// under the new RLS), but deal creation is operational and only
+// requires agent+. The two CTAs gate on different capabilities.
+const PIPELINE_READ_ONLY_TITLE =
+  "Read-only — your role can't create pipelines";
+const DEAL_READ_ONLY_TITLE = "Read-only — your role can't create deals";
 
 // Spec-defined seed — name and color per the product spec.
 const SPEC_DEFAULT_STAGES = [
@@ -38,6 +46,8 @@ const SPEC_DEFAULT_STAGES = [
 
 export default function PipelinesPage() {
   const supabase = createClient();
+  const canEditSettings = useCan("edit-settings");
+  const canCreateDeals = useCan("send-messages");
 
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
@@ -349,6 +359,8 @@ export default function PipelinesPage() {
           <Button
             variant="outline"
             onClick={() => setNewPipelineOpen(true)}
+            disabled={!canEditSettings}
+            title={canEditSettings ? undefined : PIPELINE_READ_ONLY_TITLE}
             className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
           >
             <Plus className="mr-1 h-4 w-4" />
@@ -356,7 +368,10 @@ export default function PipelinesPage() {
           </Button>
           <Button
             onClick={() => handleAddDeal()}
-            disabled={!selectedPipelineId || stages.length === 0}
+            disabled={
+              !canCreateDeals || !selectedPipelineId || stages.length === 0
+            }
+            title={canCreateDeals ? undefined : DEAL_READ_ONLY_TITLE}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="mr-1 h-4 w-4" />
@@ -377,6 +392,8 @@ export default function PipelinesPage() {
           </p>
           <Button
             onClick={() => setNewPipelineOpen(true)}
+            disabled={!canEditSettings}
+            title={canEditSettings ? undefined : PIPELINE_READ_ONLY_TITLE}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="mr-1 h-4 w-4" />

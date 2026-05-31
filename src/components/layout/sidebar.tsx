@@ -17,6 +17,7 @@ import {
   Settings,
   LogOut,
   User,
+  UsersRound,
   X,
 } from "lucide-react";
 import {
@@ -63,10 +64,17 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+// Same flag key the Members tab and Settings page use. Flip per
+// profile via Supabase Studio to dogfood the multi-user surface.
+const ACCOUNT_SHARING_FLAG = "account_sharing";
+
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { profile, signOut } = useAuth();
+  const { profile, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
+  const accountSharingEnabled = !!profile?.beta_features?.includes(
+    ACCOUNT_SHARING_FLAG,
+  );
 
   // Close the drawer when route changes — users opened it to navigate,
   // so once they pick a destination the drawer should get out of the way.
@@ -216,6 +224,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
         {/* User section */}
         <div className="shrink-0 border-t border-slate-800 p-3">
+          {/* Account name display — only surfaced when the user is
+              opted into the account_sharing beta flag. For solo
+              users (the default) the account is named after them,
+              so showing it here would just duplicate the user name
+              below. Once the flag is on the user is at minimum
+              aware of which shared account they're acting in. */}
+          {accountSharingEnabled && account?.name ? (
+            <div className="mb-2 flex items-center gap-2 px-3 text-xs text-slate-500">
+              <UsersRound className="size-3.5" />
+              <span className="truncate">{account.name}</span>
+              {accountRole && accountRole !== "owner" ? (
+                <span className="ml-auto rounded-full border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-400">
+                  {accountRole}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-slate-800/60 focus:bg-slate-800/60 focus:outline-none data-popup-open:bg-slate-800/60">
               <Avatar className="size-8 shrink-0">
