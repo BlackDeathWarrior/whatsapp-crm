@@ -1,3 +1,4 @@
+import path from "node:path";
 import createNextIntlPlugin from "next-intl/plugin";
 import type { NextConfig } from "next";
 
@@ -57,6 +58,20 @@ const SECURITY_HEADERS = [
 ] as const;
 
 const nextConfig: NextConfig = {
+  // Pin file-tracing to this directory so Next.js doesn't ascend to the
+  // parent GHWebhosting folder (which has its own lockfile) and either
+  // bundle the wrong stuff or skip ours. Was visible as a workspace-root
+  // warning during builds. Also see `outputFileTracingIncludes` below —
+  // a wrong root makes the includes match incorrectly.
+  outputFileTracingRoot: path.join(__dirname),
+  // Force the production artifact to include the i18n message dictionaries.
+  // `src/i18n/request.ts` loads them via a static import map but the
+  // tracer can still miss JSON-only files that no code statically
+  // imports relative to this entry point. Belt-and-suspenders.
+  outputFileTracingIncludes: {
+    "/**/*": ["./messages/**/*.json"],
+  },
+
   /**
    * Cache-Control policy.
    *

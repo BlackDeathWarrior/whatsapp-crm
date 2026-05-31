@@ -33,11 +33,22 @@ export async function middleware(request: NextRequest) {
   //    routes don't live under [locale] and would be wrongly prefixed).
   //    If next-intl redirects (missing locale), return immediately;
   //    the redirected URL re-enters middleware with the prefix in place.
+  //
+  //    The intlMiddleware call is wrapped because an unhandled throw
+  //    here would cascade to a 503 in front of every page — we'd
+  //    rather degrade to "no locale routing applied for this request"
+  //    than take the whole site down. Errors are logged so they show
+  //    up in Hostinger's process logs without being swallowed silently.
   let intlResponse: NextResponse | null = null
   if (!isApiRoute) {
-    intlResponse = intlMiddleware(request)
-    if (intlResponse.headers.get('location')) {
-      return intlResponse
+    try {
+      intlResponse = intlMiddleware(request)
+      if (intlResponse.headers.get('location')) {
+        return intlResponse
+      }
+    } catch (err) {
+      console.error('[middleware] intl middleware threw, falling through to auth-only:', err)
+      intlResponse = null
     }
   }
 
