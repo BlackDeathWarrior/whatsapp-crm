@@ -6,12 +6,7 @@
 
 <p align="center">
   <a href="https://www.hostinger.com/web-apps-hosting">
-    <img src="./.github/assets/hostinger-deploy.webp" alt="Deploy on Hostinger" width="720">
-  </a>
-</p>
-<p align="center">
-  <a href="https://www.hostinger.com/web-apps-hosting">
-    <b>→ Deploy wacrm on Hostinger</b>
+    <img src="./.github/assets/hostinger-deploy.png" alt="Ship your Node.js app in one click — Deploy to Hostinger" width="900">
   </a>
 </p>
 
@@ -81,14 +76,10 @@ Open <http://localhost:3000>. You'll be redirected to `/login` (or
 
 <p align="center">
   <a href="https://www.hostinger.com/web-apps-hosting">
-    <img src="./.github/assets/hostinger-deploy.webp" alt="Deploy on Hostinger" width="820">
+    <img src="./.github/assets/hostinger-deploy.png" alt="Ship your Node.js app in one click — Deploy to Hostinger" width="1000">
   </a>
 </p>
 <p align="center">
-  <a href="https://www.hostinger.com/web-apps-hosting">
-    <img src="https://img.shields.io/badge/Deploy_your_fork-→-673DE6?style=for-the-badge&logo=hostinger&logoColor=white" alt="Deploy your fork" height="44">
-  </a>
-  &nbsp;
   <a href="https://wacrm.tech/docs/deployment-hostinger">
     <img src="https://img.shields.io/badge/Step--by--step_guide-wacrm.tech%2Fdocs-111?style=for-the-badge" alt="Step-by-step guide" height="44">
   </a>
