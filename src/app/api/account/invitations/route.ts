@@ -28,11 +28,57 @@ import {
 } from "@/lib/auth/invitations";
 import { isAccountRole } from "@/lib/auth/roles";
 
-// Resolve the base URL we publish invite links under. Mirrors the
-// .env.local.example default so dev / preview / forks all behave
-// without explicit config.
-function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL || "https://wacrm.tech";
+// Resolve the base URL we publish invite links under.
+//
+// Resolution order, first match wins:
+//
+//   1. `NEXT_PUBLIC_SITE_URL` — admin's explicit config. Trumps
+//      everything; if you set this, that's where links point.
+//   2. `X-Forwarded-Host` (+ `X-Forwarded-Proto`) — set by every
+//      reverse proxy in front of the app: Hostinger Managed
+//      Node.js, Vercel, Cloudflare, nginx. This is what makes
+//      invite links Just Work in production without forcing the
+//      operator to set an env var.
+//   3. `Host` header + the protocol the request arrived on —
+//      bare deployments without a proxy.
+//   4. Last-resort marketing-site fallback. Only hit if the
+//      request has no Host header at all, which is essentially
+//      impossible from a real browser. Logs a warning so the
+//      operator can spot the misconfig.
+//
+// Previous implementation hard-defaulted to `https://wacrm.tech`
+// (the docs/marketing site, a different repo). Forks that didn't
+// set `NEXT_PUBLIC_SITE_URL` got invite links pointing at the
+// marketing site, which 404s on `/join/<token>`. This resolution
+// chain removes the foot-gun.
+function getBaseUrl(request: Request): string {
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (explicit) return explicit.replace(/\/+$/, "");
+
+  const forwardedHost = request.headers
+    .get("x-forwarded-host")
+    ?.split(",")[0]
+    ?.trim();
+  const forwardedProto = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim();
+  if (forwardedHost) {
+    return `${forwardedProto || "https"}://${forwardedHost}`;
+  }
+
+  const host = request.headers.get("host")?.trim();
+  if (host) {
+    // The protocol on `request.url` is whatever the framework saw —
+    // reliable for bare deployments where no proxy is rewriting it.
+    const reqProto = new URL(request.url).protocol.replace(":", "");
+    return `${reqProto}://${host}`;
+  }
+
+  console.warn(
+    "[POST /api/account/invitations] could not derive base URL from request; falling back to marketing domain",
+  );
+  return "https://wacrm.tech";
 }
 
 const MAX_LABEL_LEN = 80;
@@ -133,7 +179,7 @@ export async function POST(request: Request) {
         invitation: data,
         // Plaintext payload — visible to the admin exactly once.
         token,
-        url: inviteUrl(token, getBaseUrl()),
+        url: inviteUrl(token, getBaseUrl(request)),
         expiresInDays: expiryDays,
       },
       { status: 201 },
