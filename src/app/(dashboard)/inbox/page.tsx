@@ -132,12 +132,27 @@ export default function InboxPage() {
 
       if (!user) return;
 
-      // Table is `whatsapp_config` (singular) — the previous "whatsapp_configs"
-      // query always returned no rows, so the banner always showed "not connected".
+      // whatsapp_config is one-row-per-account post-multi-user, so
+      // the previous `.eq('user_id', user.id)` would miss the row
+      // for any teammate who didn't personally save the config —
+      // the "WhatsApp not connected" banner would show in the
+      // shared inbox even though the admin had it configured.
+      // Resolve account_id via the profile and query by that.
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("account_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const accountId = profile?.account_id as string | undefined;
+      if (!accountId) {
+        setWhatsappConnected(false);
+        return;
+      }
+
       const { data } = await supabase
         .from("whatsapp_config")
         .select("status")
-        .eq("user_id", user.id)
+        .eq("account_id", accountId)
         .maybeSingle();
 
       setWhatsappConnected(data?.status === "connected");
