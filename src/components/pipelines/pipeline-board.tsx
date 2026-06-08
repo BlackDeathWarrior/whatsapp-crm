@@ -18,6 +18,8 @@ import type { Deal, PipelineStage } from "@/types";
 import { DealCard } from "./deal-card";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { formatCurrency } from "@/lib/currency";
 
 interface PipelineBoardProps {
   stages: PipelineStage[];
@@ -27,15 +29,6 @@ interface PipelineBoardProps {
   onEditDeal: (deal: Deal) => void;
 }
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 export function PipelineBoard({
   stages,
   deals,
@@ -43,6 +36,7 @@ export function PipelineBoard({
   onAddDeal,
   onEditDeal,
 }: PipelineBoardProps) {
+  const { defaultCurrency } = useAuth();
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
 
   const sortedStages = useMemo(
@@ -121,6 +115,7 @@ export function PipelineBoard({
               stage={stage}
               deals={stageDeals}
               totalValue={totalValue}
+              currency={defaultCurrency}
               onAddDeal={onAddDeal}
               onEditDeal={onEditDeal}
             />
@@ -194,12 +189,14 @@ function StageColumn({
   stage,
   deals,
   totalValue,
+  currency,
   onAddDeal,
   onEditDeal,
 }: {
   stage: PipelineStage;
   deals: Deal[];
   totalValue: number;
+  currency: string;
   onAddDeal: (stageId: string) => void;
   onEditDeal: (deal: Deal) => void;
 }) {
@@ -226,7 +223,9 @@ function StageColumn({
           {deals.length}
         </span>
       </div>
-      <p className="text-xs text-slate-400">{formatCurrency(totalValue)}</p>
+      <p className="text-xs text-slate-400">
+        {formatCurrency(totalValue, currency)}
+      </p>
 
       <div
         ref={setNodeRef}

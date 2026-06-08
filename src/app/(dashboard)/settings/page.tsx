@@ -8,6 +8,7 @@ import {
   User,
   Palette,
   UsersRound,
+  Coins,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
@@ -18,12 +19,14 @@ import { PasswordForm } from '@/components/settings/password-form';
 import { SessionsCard } from '@/components/settings/sessions-card';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { MembersTab } from '@/components/settings/members-tab';
+import { DealsSettings } from '@/components/settings/deals-settings';
 
 const TAB_VALUES = [
   'profile',
   'whatsapp',
   'templates',
   'tags',
+  'deals',
   'appearance',
   'members',
 ] as const;
@@ -91,6 +94,13 @@ export default function SettingsPage() {
             Tags
           </TabsTrigger>
           <TabsTrigger
+            value="deals"
+            className="data-active:bg-slate-800 data-active:text-primary text-slate-400"
+          >
+            <Coins className="size-4" />
+            Deals
+          </TabsTrigger>
+          <TabsTrigger
             value="appearance"
             className="data-active:bg-slate-800 data-active:text-primary text-slate-400"
           >
@@ -122,6 +132,10 @@ export default function SettingsPage() {
 
         <TabsContent value="tags">
           <TagManager />
+        </TabsContent>
+
+        <TabsContent value="deals">
+          <DealsSettings />
         </TabsContent>
 
         <TabsContent value="appearance">
