@@ -1,6 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
@@ -37,10 +43,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type {
+  AccountMember,
   AutomationStepType,
   AutomationTriggerType,
   KeywordMatchTriggerConfig,
+  MessageTemplate,
+  Tag as TagRecord,
 } from "@/types"
+import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 
 // ------------------------------------------------------------
@@ -153,6 +163,253 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
     default:
       return {}
   }
+}
+
+// ------------------------------------------------------------
+// Account resources (tags, members, approved templates)
+//
+// Loaded once at the builder root and shared via context so the
+// tag / agent / template pickers below can offer existing resources
+// by name instead of asking the user to paste raw UUIDs. Every picker
+// falls back to a raw input when its list is empty (fresh account or
+// an older deployment), so an automation is always authorable.
+// ------------------------------------------------------------
+
+interface AutomationResources {
+  tags: TagRecord[]
+  members: AccountMember[]
+  templates: MessageTemplate[]
+}
+
+const ResourcesContext = createContext<AutomationResources>({
+  tags: [],
+  members: [],
+  templates: [],
+})
+
+function useResources(): AutomationResources {
+  return useContext(ResourcesContext)
+}
+
+function ResourcesProvider({ children }: { children: ReactNode }) {
+  const [tags, setTags] = useState<TagRecord[]>([])
+  const [members, setMembers] = useState<AccountMember[]>([])
+  const [templates, setTemplates] = useState<MessageTemplate[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    const supabase = createClient()
+
+    // Tags and templates come straight from the DB — RLS scopes both
+    // to the caller's account. Only APPROVED templates can actually be
+    // sent (anything else 400s at send time), matching the broadcast
+    // picker.
+    void (async () => {
+      const [tagsRes, templatesRes] = await Promise.all([
+        supabase.from("tags").select("*").order("name"),
+        supabase
+          .from("message_templates")
+          .select("*")
+          .eq("status", "APPROVED")
+          .order("name"),
+      ])
+      if (cancelled) return
+      setTags((tagsRes.data as TagRecord[] | null) ?? [])
+      setTemplates((templatesRes.data as MessageTemplate[] | null) ?? [])
+    })()
+
+    // Members go through the API so we inherit its email-visibility
+    // rules (agents/viewers don't see emails). Unreachable on older
+    // deployments → pickers fall back to a raw agent-id input.
+    void (async () => {
+      try {
+        const res = await fetch("/api/account/members", { cache: "no-store" })
+        if (!res.ok) return
+        const json = (await res.json()) as { members?: AccountMember[] }
+        if (!cancelled) setMembers(json.members ?? [])
+      } catch {
+        // Members endpoint absent — caller falls back to raw input.
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return (
+    <ResourcesContext.Provider value={{ tags, members, templates }}>
+      {children}
+    </ResourcesContext.Provider>
+  )
+}
+
+const SELECT_CLASS =
+  "w-full rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-primary focus:outline-none"
+
+/** Tag dropdown by name + color, storing the tag's id. Falls back to a
+ *  raw id input when no tags exist yet. */
+function TagSelect({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const { tags } = useResources()
+  if (tags.length === 0) {
+    return (
+      <Input
+        placeholder="Tag id"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-slate-800 text-white"
+      />
+    )
+  }
+  const selected = tags.find((t) => t.id === value)
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="h-3 w-3 shrink-0 rounded-full border border-slate-600"
+        style={{ backgroundColor: selected?.color ?? "transparent" }}
+        aria-hidden
+      />
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={SELECT_CLASS}
+      >
+        <option value="">Select a tag…</option>
+        {tags.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+        {/* Preserve a saved tag that's since been deleted so editing an
+            existing automation doesn't silently drop it. */}
+        {value && !selected && (
+          <option value={value}>{value} (unknown tag)</option>
+        )}
+      </select>
+    </div>
+  )
+}
+
+/** Agent dropdown by name, storing the member's user_id. Falls back to
+ *  a raw id input when the member list is unavailable. */
+function AgentSelect({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const { members } = useResources()
+  if (members.length === 0) {
+    return (
+      <Input
+        placeholder="Agent id"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-slate-800 text-white"
+      />
+    )
+  }
+  const selected = members.find((m) => m.user_id === value)
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={SELECT_CLASS}
+    >
+      <option value="">Select an agent…</option>
+      {members.map((m) => (
+        <option key={m.user_id} value={m.user_id}>
+          {m.full_name || m.email || m.user_id}
+        </option>
+      ))}
+      {value && !selected && (
+        <option value={value}>{value} (unknown agent)</option>
+      )}
+    </select>
+  )
+}
+
+/** Template dropdown showing approved templates by name + language,
+ *  storing both template_name and language. Falls back to manual name +
+ *  language inputs when no approved templates are synced yet. */
+function SendTemplateFields({
+  templateName,
+  language,
+  onChange,
+}: {
+  templateName: string
+  language: string
+  onChange: (patch: { template_name: string; language: string }) => void
+}) {
+  const { templates } = useResources()
+
+  if (templates.length === 0) {
+    return (
+      <>
+        <FieldBlock label="Template name">
+          <Input
+            value={templateName}
+            onChange={(e) =>
+              onChange({ template_name: e.target.value, language })
+            }
+            className="bg-slate-800 text-white"
+          />
+        </FieldBlock>
+        <FieldBlock label="Language">
+          <Input
+            value={language}
+            onChange={(e) =>
+              onChange({ template_name: templateName, language: e.target.value })
+            }
+            className="bg-slate-800 text-white"
+          />
+        </FieldBlock>
+      </>
+    )
+  }
+
+  // Encode name + language in the option value so two templates that
+  // share a name across languages stay distinct.
+  const toValue = (name: string, lang: string) => `${name}::${lang}`
+  const current = templateName ? toValue(templateName, language) : ""
+  const hasMatch = templates.some(
+    (t) => toValue(t.name, t.language ?? "en_US") === current,
+  )
+
+  return (
+    <FieldBlock label="Template">
+      <select
+        value={current}
+        onChange={(e) => {
+          const [name, lang] = e.target.value.split("::")
+          onChange({ template_name: name ?? "", language: lang ?? "" })
+        }}
+        className={SELECT_CLASS}
+      >
+        <option value="">Select a template…</option>
+        {templates.map((t) => {
+          const lang = t.language ?? "en_US"
+          return (
+            <option key={t.id} value={toValue(t.name, lang)}>
+              {t.name} ({lang})
+            </option>
+          )
+        })}
+        {current && !hasMatch && (
+          <option value={current}>
+            {templateName} ({language || "unknown"}) — not in approved list
+          </option>
+        )}
+      </select>
+    </FieldBlock>
+  )
 }
 
 // ------------------------------------------------------------
@@ -286,22 +543,24 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
       <div className="relative flex-1 overflow-y-auto">
         <div className="absolute inset-0 bg-[radial-gradient(circle,#1e293b_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none" />
         <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-0 px-4 py-10">
-          <TriggerCard
-            type={state.trigger_type}
-            config={state.trigger_config}
-            onTypeChange={(t) => patchTop("trigger_type", t)}
-            onConfigChange={(c) => patchTop("trigger_config", c)}
-          />
-          <StepList
-            steps={state.steps}
-            parentPath={[]}
-            expandedId={expandedId}
-            setExpandedId={setExpandedId}
-            updateStep={updateStep}
-            addStepAt={addStepAt}
-            deleteStepAt={deleteStepAt}
-            moveStepAt={moveStepAt}
-          />
+          <ResourcesProvider>
+            <TriggerCard
+              type={state.trigger_type}
+              config={state.trigger_config}
+              onTypeChange={(t) => patchTop("trigger_type", t)}
+              onConfigChange={(c) => patchTop("trigger_config", c)}
+            />
+            <StepList
+              steps={state.steps}
+              parentPath={[]}
+              expandedId={expandedId}
+              setExpandedId={setExpandedId}
+              updateStep={updateStep}
+              addStepAt={addStepAt}
+              deleteStepAt={deleteStepAt}
+              moveStepAt={moveStepAt}
+            />
+          </ResourcesProvider>
         </div>
       </div>
     </div>
@@ -375,14 +634,15 @@ function TriggerCard({
               />
             )}
             {type === "tag_added" && (
-              <Input
-                placeholder="Tag id"
-                value={(config.tag_id as string) ?? ""}
-                onChange={(e) =>
-                  onConfigChange({ ...config, tag_id: e.target.value })
-                }
-                className="bg-slate-800 text-white"
-              />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">
+                  Tag
+                </label>
+                <TagSelect
+                  value={(config.tag_id as string) ?? ""}
+                  onChange={(v) => onConfigChange({ ...config, tag_id: v })}
+                />
+              </div>
             )}
             {type === "time_based" && (
               <Input
@@ -409,6 +669,23 @@ function KeywordMatchConfig({
   onChange: (c: Record<string, unknown>) => void
 }) {
   const keywords = config?.keywords ?? []
+  // Keep a local draft string so the comma and trailing space aren't
+  // stripped on every keystroke (which made multi-word, comma-separated
+  // entry like "SEO, search engine optimization" impossible to type).
+  // We only parse into the keywords array on blur, then re-display the
+  // cleaned, rejoined form. Seeded once on mount; this component remounts
+  // when the trigger type changes, so the seed stays in sync.
+  const [draft, setDraft] = useState(keywords.join(", "))
+
+  function commit() {
+    const parsed = draft
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+    setDraft(parsed.join(", "))
+    onChange({ ...config, keywords: parsed })
+  }
+
   return (
     <div className="space-y-2">
       <div>
@@ -416,16 +693,16 @@ function KeywordMatchConfig({
           Keywords (comma-separated)
         </label>
         <Input
-          value={keywords.join(", ")}
-          onChange={(e) =>
-            onChange({
-              ...config,
-              keywords: e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean),
-            })
-          }
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              commit()
+            }
+          }}
+          placeholder="e.g. pricing, demo request, talk to sales"
           className="bg-slate-800 text-white"
         />
       </div>
@@ -724,31 +1001,19 @@ function StepEditor({
       )
     case "send_template":
       return (
-        <>
-          <FieldBlock label="Template name">
-            <Input
-              value={(cfg.template_name as string) ?? ""}
-              onChange={(e) => set({ template_name: e.target.value })}
-              className="bg-slate-800 text-white"
-            />
-          </FieldBlock>
-          <FieldBlock label="Language">
-            <Input
-              value={(cfg.language as string) ?? ""}
-              onChange={(e) => set({ language: e.target.value })}
-              className="bg-slate-800 text-white"
-            />
-          </FieldBlock>
-        </>
+        <SendTemplateFields
+          templateName={(cfg.template_name as string) ?? ""}
+          language={(cfg.language as string) ?? ""}
+          onChange={(patch) => set(patch)}
+        />
       )
     case "add_tag":
     case "remove_tag":
       return (
-        <FieldBlock label="Tag id">
-          <Input
+        <FieldBlock label="Tag">
+          <TagSelect
             value={(cfg.tag_id as string) ?? ""}
-            onChange={(e) => set({ tag_id: e.target.value })}
-            className="bg-slate-800 text-white"
+            onChange={(v) => set({ tag_id: v })}
           />
         </FieldBlock>
       )
@@ -766,11 +1031,10 @@ function StepEditor({
             </select>
           </FieldBlock>
           {cfg.mode === "specific" && (
-            <FieldBlock label="Agent id">
-              <Input
+            <FieldBlock label="Agent">
+              <AgentSelect
                 value={(cfg.agent_id as string) ?? ""}
-                onChange={(e) => set({ agent_id: e.target.value })}
-                className="bg-slate-800 text-white"
+                onChange={(v) => set({ agent_id: v })}
               />
             </FieldBlock>
           )}
