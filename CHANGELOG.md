@@ -100,6 +100,15 @@ always did.
 
 ### Added
 
+- **Configurable default deal currency.** Each account can now pick
+  its default currency under **Settings → Deals** (admin+); the app
+  previously hardcoded USD throughout. New deals default to it, and
+  pipeline-stage totals, the dashboard "Open Deals Value" card, the
+  pipeline-value donut, and automation-created deals all use it.
+  Existing deals keep the currency they were saved with — totals are
+  shown in the account default with no exchange-rate conversion (one
+  currency per account). Full guide:
+  [Default currency](https://wacrm.tech/docs/settings#deals).
 - **Members tab in Settings.** The user-facing surface for the
   multi-user APIs below, available to everyone (no beta flag). From
   Settings → **Members** an admin or owner can: see who's on the
@@ -169,6 +178,12 @@ Apply against your Supabase project before deploying this version:
   `redeem_invitation` (authenticated atomic move + orphan
   cleanup, with a domain-data safety check). Both bypass the
   RLS that would otherwise block their reads/writes. Idempotent.
+- `supabase/migrations/021_account_default_currency.sql` — adds
+  `accounts.default_currency` (`TEXT NOT NULL DEFAULT 'USD'`, with a
+  3-letter-code `CHECK`) backing the configurable default currency.
+  Idempotent; existing accounts backfill to `USD`. **Apply before
+  deploying** — the app now reads this column when loading the
+  account, so an un-migrated database breaks account loading.
 
 ## [0.2.2] — 2026-05-29
 
