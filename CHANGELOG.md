@@ -100,6 +100,18 @@ always did.
 
 ### Added
 
+- **Duplicate phone numbers are now prevented across contacts.** A
+  phone number can no longer become more than one contact in the same
+  account. Adding a contact whose number already exists is blocked
+  with a link to the existing record (and a softer warning for
+  near-matches that share their last 8 digits); CSV import de-dupes
+  within the file and against existing contacts, reporting
+  "X imported, Y duplicates skipped". The rule is enforced by a
+  database unique index on the normalized number, so the WhatsApp
+  webhook, the form, import, and any future path all agree. Existing
+  duplicates are merged into the oldest contact on upgrade (their
+  conversations, deals, notes, and tags are re-pointed, nothing is
+  lost). Closes #212.
 - **Configurable default deal currency.** Each account can now pick
   its default currency under **Settings → Deals** (admin+); the app
   previously hardcoded USD throughout. New deals default to it, and
@@ -184,6 +196,14 @@ Apply against your Supabase project before deploying this version:
   Idempotent; existing accounts backfill to `USD`. **Apply before
   deploying** — the app now reads this column when loading the
   account, so an un-migrated database breaks account loading.
+- `supabase/migrations/022_contact_phone_dedup.sql` — adds the
+  generated `contacts.phone_normalized` column, **merges existing
+  duplicate contacts into the oldest** (re-pointing conversations,
+  deals, notes, tags, custom values, and broadcast recipients — no
+  data loss), then adds a `UNIQUE (account_id, phone_normalized)`
+  index. Idempotent. **Apply before deploying** — CSV import reads
+  `phone_normalized`, and the index is what enforces de-duplication
+  for every write path. The one-shot merge runs inside the migration.
 
 ## [0.2.2] — 2026-05-29
 

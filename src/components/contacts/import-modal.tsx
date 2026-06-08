@@ -3,6 +3,11 @@
 import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import {
+  dedupeByPhone,
+  isUniqueViolation,
+  normalizeKey,
+} from '@/lib/contacts/dedupe';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -13,7 +18,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Upload, FileText, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
 interface ImportModalProps {
   open: boolean;
@@ -86,7 +91,11 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ imported: number; failed: number } | null>(null);
+  const [result, setResult] = useState<{
+    imported: number;
+    skipped: number;
+    failed: number;
+  } | null>(null);
 
   function reset() {
     setFile(null);
@@ -132,12 +141,39 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
       if (!accountId) throw new Error('Your profile is not linked to an account.');
 
       let imported = 0;
+      let skipped = 0;
       let failed = 0;
 
-      // Batch insert in chunks of 50
+      // 1) De-dupe within the file by normalized phone (keep first).
+      const { unique, duplicates: inFileDupes } = dedupeByPhone(parsedRows);
+      skipped += inFileDupes;
+
+      // 2) Skip numbers already in this account. One read of the
+      //    generated `phone_normalized` column (migration 022) → Set.
+      const { data: existingRows } = await supabase
+        .from('contacts')
+        .select('phone_normalized')
+        .eq('account_id', accountId);
+      const existing = new Set(
+        (existingRows ?? [])
+          .map((r) => (r as { phone_normalized: string | null }).phone_normalized)
+          .filter((p): p is string => !!p),
+      );
+
+      const toInsert = unique.filter((row) => {
+        if (existing.has(normalizeKey(row.phone))) {
+          skipped++;
+          return false;
+        }
+        return true;
+      });
+
+      // 3) Batch insert the genuinely-new rows in chunks of 50. The DB
+      //    unique index is the backstop: a 23505 (race, or a format
+      //    that normalizes equal) counts as skipped, not failed.
       const chunkSize = 50;
-      for (let i = 0; i < parsedRows.length; i += chunkSize) {
-        const chunk = parsedRows.slice(i, i + chunkSize);
+      for (let i = 0; i < toInsert.length; i += chunkSize) {
+        const chunk = toInsert.slice(i, i + chunkSize);
         const rows = chunk.map((row) => ({
           user_id: user.id,
           account_id: accountId,
@@ -153,13 +189,16 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
           .select('id');
 
         if (error) {
-          // Try individual inserts for this chunk
+          // Retry individually so one bad/duplicate row doesn't sink
+          // the whole chunk.
           for (const row of rows) {
             const { error: singleErr } = await supabase.from('contacts').insert(row);
-            if (singleErr) {
-              failed++;
-            } else {
+            if (!singleErr) {
               imported++;
+            } else if (isUniqueViolation(singleErr)) {
+              skipped++;
+            } else {
+              failed++;
             }
           }
         } else {
@@ -167,10 +206,13 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
         }
       }
 
-      setResult({ imported, failed });
+      setResult({ imported, skipped, failed });
       if (imported > 0) {
         toast.success(`${imported} contact${imported !== 1 ? 's' : ''} imported`);
         onImported();
+      }
+      if (skipped > 0) {
+        toast.info(`${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped`);
       }
       if (failed > 0) {
         toast.error(`${failed} contact${failed !== 1 ? 's' : ''} failed to import`);
@@ -271,11 +313,17 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
           {result && (
             <div className="rounded-lg border border-slate-700 p-4 space-y-2">
               <p className="text-sm font-medium text-white">Import Complete</p>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 {result.imported > 0 && (
                   <div className="flex items-center gap-1.5 text-primary text-sm">
                     <CheckCircle className="size-4" />
                     {result.imported} imported
+                  </div>
+                )}
+                {result.skipped > 0 && (
+                  <div className="flex items-center gap-1.5 text-amber-400 text-sm">
+                    <AlertTriangle className="size-4" />
+                    {result.skipped} duplicate{result.skipped !== 1 ? 's' : ''} skipped
                   </div>
                 )}
                 {result.failed > 0 && (

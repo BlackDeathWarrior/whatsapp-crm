@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
-import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
+import { normalizePhone } from '@/lib/whatsapp/phone-utils'
+import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
@@ -875,43 +876,17 @@ async function findOrCreateContact(
   phone: string,
   name: string
 ): Promise<ContactOutcome | null> {
-  // Look up existing contacts for this account. We pre-filter in SQL
-  // by the phone's last-8-digit suffix so we don't ship every contact
-  // in the account over the wire just to JS-filter to one row. This
-  // matters at scale: a shared account with 5 teammates × 100 contacts
-  // each is 500 rows — the prior implementation pulled all of them on
-  // every inbound message.
-  //
-  // The `phonesMatch` helper considers two phones equal if they share
-  // the last 8 digits (trunk-prefix tolerance). We mirror that here as
-  // a `like` pattern, then re-run the strict comparison in JS on the
-  // narrowed candidate set. The candidate set is typically 0-2 rows,
-  // so the JS pass is effectively free.
-  //
-  // The trailing-suffix `like` cannot use a B-tree index, but the
-  // `account_id` filter on top of `idx_contacts_account` (017) means
-  // we sequential-scan a small, account-scoped subset.
-  const normalizedSender = phone.replace(/\D/g, '')
-  const phoneSuffix =
-    normalizedSender.length >= 8
-      ? normalizedSender.slice(-8)
-      : normalizedSender
-
-  const { data: contacts, error: contactsError } = await supabaseAdmin()
-    .from('contacts')
-    .select('*')
-    .eq('account_id', accountId)
-    .like('phone', `%${phoneSuffix}`)
-
-  if (contactsError) {
-    console.error('Error fetching contacts:', contactsError)
-    return null
-  }
-
-  // Re-apply phonesMatch on the candidate set for correctness — the
-  // SQL `like` is a coarse pre-filter; phonesMatch handles edge cases
-  // like leading-`+` and explicit trunk-zero handling.
-  const existingContact = contacts?.find((c: ContactRow) => phonesMatch(c.phone, phone))
+  // Find an existing contact for this account by phone. The shared
+  // helper pre-filters in SQL by the last-8-digit suffix (so we don't
+  // pull every contact on every inbound message) then applies the
+  // strict `phonesMatch` in JS on the small candidate set. The same
+  // helper backs the manual contact form and CSV import, so all three
+  // paths agree on what "same number" means (issue #212).
+  const existingContact = await findExistingContact(
+    supabaseAdmin(),
+    accountId,
+    phone,
+  )
 
   if (existingContact) {
     // Update name if it changed
@@ -940,6 +915,14 @@ async function findOrCreateContact(
     .single()
 
   if (createError) {
+    // Lost a race: a concurrent inbound delivery (or another path)
+    // created this contact between our lookup and insert, and the
+    // unique index (migration 022) rejected the duplicate. Re-resolve
+    // the existing row instead of dropping the message.
+    if (isUniqueViolation(createError)) {
+      const raced = await findExistingContact(supabaseAdmin(), accountId, phone)
+      if (raced) return { contact: raced, wasCreated: false }
+    }
     console.error('Error creating contact:', createError)
     return null
   }
