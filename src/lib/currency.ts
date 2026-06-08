@@ -49,17 +49,34 @@ export const CURRENCIES: CurrencyOption[] = [
  * (no minor units) — deal values are tracked to the dollar across
  * the app. `currency` defaults to USD so callers with nothing better
  * stay safe, but pass the account/deal currency wherever known.
+ *
+ * Total by design: `Intl.NumberFormat` throws a RangeError on a
+ * structurally invalid currency code, and `deals.currency` carries
+ * NO DB CHECK (only `accounts.default_currency` does), so legacy
+ * rows, imports, or hand-edited data can hold malformed values like
+ * "United States". We never let that crash a render — on a bad code
+ * we fall back to "CODE 1,234".
  */
 export function formatCurrency(
   value: number,
   currency: string = DEFAULT_CURRENCY,
 ): string {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: currency || DEFAULT_CURRENCY,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
+  const code = (currency || DEFAULT_CURRENCY).trim();
+  const amount = Number(value) || 0;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    // Invalid ISO code — show the raw code + grouped number so the
+    // value is still legible instead of throwing.
+    return `${code} ${new Intl.NumberFormat(undefined, {
+      maximumFractionDigits: 0,
+    }).format(amount)}`;
+  }
 }
 
 /**
