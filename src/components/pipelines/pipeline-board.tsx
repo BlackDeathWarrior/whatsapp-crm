@@ -104,8 +104,10 @@ export function PipelineBoard({
     >
       {/* snap-x + snap-mandatory on mobile so swipes land the next
           stage cleanly at the viewport edge instead of mid-column.
-          Disabled on lg+ because the full board fits without scroll
-          there and snapping would interfere with the natural layout. */}
+          Disabled on lg+ where snapping would interfere with the
+          natural layout. The board can still overflow horizontally on
+          lg+ once a pipeline has many stages (columns keep a 260px
+          min-width), so a thin scrollbar stays visible on desktop. */}
       <div className="pipeline-scroll flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 lg:snap-none">
         {sortedStages.map((stage) => {
           const stageDeals = dealsByStage.get(stage.id) ?? [];
@@ -150,13 +152,37 @@ export function PipelineBoard({
         .pipeline-scroll {
           scroll-behavior: smooth;
         }
-        @media (hover: hover) and (pointer: fine) {
+        /* On touch devices the peek/snap layout already signals there's
+           more to swipe, so the scrollbar is hidden for a clean look.
+           On desktop (mouse) the board can overflow with many stages
+           and there is no peek hint, so keep a thin, themed scrollbar
+           visible to make the overflow discoverable and usable. */
+        @media (hover: none), (pointer: coarse) {
           .pipeline-scroll::-webkit-scrollbar {
             height: 0;
             display: none;
           }
           .pipeline-scroll {
             scrollbar-width: none;
+          }
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .pipeline-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: rgb(51 65 85) transparent;
+          }
+          .pipeline-scroll::-webkit-scrollbar {
+            height: 8px;
+          }
+          .pipeline-scroll::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .pipeline-scroll::-webkit-scrollbar-thumb {
+            background-color: rgb(51 65 85);
+            border-radius: 9999px;
+          }
+          .pipeline-scroll::-webkit-scrollbar-thumb:hover {
+            background-color: rgb(71 85 105);
           }
         }
       `}</style>
