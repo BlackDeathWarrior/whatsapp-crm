@@ -39,6 +39,7 @@ const contactFields = [
 const SAMPLE_CONTACT: Contact = {
   id: 'sample',
   user_id: '',
+  account_id: '',
   name: 'John Doe',
   phone: '+1234567890',
   email: 'john@example.com',

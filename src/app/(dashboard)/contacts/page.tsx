@@ -446,6 +446,10 @@ export default function ContactsPage() {
           fetchContacts();
           fetchTags();
         }}
+        onViewExisting={(id) => {
+          setFormOpen(false);
+          openDetail(id);
+        }}
       />
 
       {/* Contact Detail Sheet */}
