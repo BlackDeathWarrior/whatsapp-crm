@@ -203,6 +203,55 @@ export function FlowBuilder() {
 
 
 // ============================================================
+// Keyword trigger input
+// ============================================================
+
+/**
+ * Comma-separated keyword entry. Keeps a local draft string so the
+ * comma (and trailing space) the user types survive until they're done
+ * — parsing into the keywords array on every keystroke stripped the
+ * trailing comma the instant it was typed, making it impossible to
+ * start a second keyword (issue #234). We commit on blur / Enter, then
+ * re-display the cleaned, rejoined form. Seeded once on mount; the
+ * component unmounts/remounts when the trigger type changes, so the
+ * seed stays in sync. Mirrors the automations builder's KeywordMatchConfig.
+ */
+function KeywordsInput({
+  keywords,
+  onChange,
+}: {
+  keywords: string[];
+  onChange: (keywords: string[]) => void;
+}) {
+  const [draft, setDraft] = useState(keywords.join(", "));
+
+  function commit() {
+    const parsed = draft
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    setDraft(parsed.join(", "));
+    onChange(parsed);
+  }
+
+  return (
+    <Input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        }
+      }}
+      placeholder="support, help, hi"
+      className="bg-slate-800"
+    />
+  );
+}
+
+// ============================================================
 // Trigger panel
 // ============================================================
 
@@ -253,26 +302,18 @@ function TriggerPanel({
             <label className="mb-1 block text-xs text-slate-400">
               Keywords (comma-separated)
             </label>
-            <Input
-              value={
+            <KeywordsInput
+              keywords={
                 Array.isArray(state.trigger_config.keywords)
-                  ? (state.trigger_config.keywords as string[]).join(", ")
-                  : ""
+                  ? (state.trigger_config.keywords as string[])
+                  : []
               }
-              onChange={(e) =>
+              onChange={(keywords) =>
                 setState((s) => ({
                   ...s,
-                  trigger_config: {
-                    ...s.trigger_config,
-                    keywords: e.target.value
-                      .split(",")
-                      .map((k) => k.trim())
-                      .filter(Boolean),
-                  },
+                  trigger_config: { ...s.trigger_config, keywords },
                 }))
               }
-              placeholder="support, help, hi"
-              className="bg-slate-800"
             />
           </div>
         )}
