@@ -119,6 +119,8 @@ export interface ContactTag {
 export interface CustomField {
   id: string;
   user_id: string;
+  /** Tenancy key — NOT NULL since migration 017. */
+  account_id: string;
   field_name: string;
   field_type: string;
   field_options?: Record<string, unknown>;
@@ -433,7 +435,15 @@ export interface AssignConversationStepConfig {
 }
 
 export interface UpdateContactFieldStepConfig {
+  /**
+   * Either a built-in contact column (`name` | `email` | `company`) or a
+   * custom field encoded as `custom:<custom_field_id>`. The `custom:` prefix
+   * is how the engine distinguishes a `contact_custom_values` write from a
+   * direct `contacts` column update. Older configs store the bare column name,
+   * so this stays backward compatible.
+   */
   field: string;
+  /** Supports `{{ vars.* }}` / `{{ message.text }}` interpolation at runtime. */
   value: string;
 }
 

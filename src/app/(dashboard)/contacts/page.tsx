@@ -40,10 +40,12 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
+import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 
@@ -56,6 +58,7 @@ interface ContactWithTags extends Contact {
 export default function ContactsPage() {
   const supabase = createClient();
   const canEdit = useCan('send-messages');
+  const canEditSettings = useCan('edit-settings');
 
   const [contacts, setContacts] = useState<ContactWithTags[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +73,7 @@ export default function ContactsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -219,6 +223,16 @@ export default function ContactsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {canEditSettings && (
+            <Button
+              variant="outline"
+              onClick={() => setCustomFieldsOpen(true)}
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            >
+              <SlidersHorizontal className="size-4" />
+              Custom fields
+            </Button>
+          )}
           <GatedButton
             variant="outline"
             canAct={canEdit}
@@ -466,6 +480,14 @@ export default function ContactsPage() {
         onOpenChange={setImportOpen}
         onImported={fetchContacts}
       />
+
+      {/* Custom Fields Manager (admin+) */}
+      {canEditSettings && (
+        <CustomFieldsManager
+          open={customFieldsOpen}
+          onOpenChange={setCustomFieldsOpen}
+        />
+      )}
 
       {/* Delete Confirmation */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

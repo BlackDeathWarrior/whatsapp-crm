@@ -46,6 +46,7 @@ import type {
   AccountMember,
   AutomationStepType,
   AutomationTriggerType,
+  CustomField,
   KeywordMatchTriggerConfig,
   MessageTemplate,
   Tag as TagRecord,
@@ -179,12 +180,14 @@ interface AutomationResources {
   tags: TagRecord[]
   members: AccountMember[]
   templates: MessageTemplate[]
+  customFields: CustomField[]
 }
 
 const ResourcesContext = createContext<AutomationResources>({
   tags: [],
   members: [],
   templates: [],
+  customFields: [],
 })
 
 function useResources(): AutomationResources {
@@ -195,27 +198,30 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
   const [tags, setTags] = useState<TagRecord[]>([])
   const [members, setMembers] = useState<AccountMember[]>([])
   const [templates, setTemplates] = useState<MessageTemplate[]>([])
+  const [customFields, setCustomFields] = useState<CustomField[]>([])
 
   useEffect(() => {
     let cancelled = false
     const supabase = createClient()
 
-    // Tags and templates come straight from the DB — RLS scopes both
-    // to the caller's account. Only APPROVED templates can actually be
-    // sent (anything else 400s at send time), matching the broadcast
-    // picker.
+    // Tags, templates and custom fields come straight from the DB — RLS
+    // scopes them to the caller's account. Only APPROVED templates can
+    // actually be sent (anything else 400s at send time), matching the
+    // broadcast picker.
     void (async () => {
-      const [tagsRes, templatesRes] = await Promise.all([
+      const [tagsRes, templatesRes, customFieldsRes] = await Promise.all([
         supabase.from("tags").select("*").order("name"),
         supabase
           .from("message_templates")
           .select("*")
           .eq("status", "APPROVED")
           .order("name"),
+        supabase.from("custom_fields").select("*").order("field_name"),
       ])
       if (cancelled) return
       setTags((tagsRes.data as TagRecord[] | null) ?? [])
       setTemplates((templatesRes.data as MessageTemplate[] | null) ?? [])
+      setCustomFields((customFieldsRes.data as CustomField[] | null) ?? [])
     })()
 
     // Members go through the API so we inherit its email-visibility
@@ -238,7 +244,7 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <ResourcesContext.Provider value={{ tags, members, templates }}>
+    <ResourcesContext.Provider value={{ tags, members, templates, customFields }}>
       {children}
     </ResourcesContext.Provider>
   )
@@ -293,6 +299,46 @@ function TagSelect({
         )}
       </select>
     </div>
+  )
+}
+
+/** Contact-field dropdown for "Update Contact Field": built-in columns plus
+ *  any account custom fields (stored as `custom:<id>`). A saved custom field
+ *  that's since been deleted is preserved as a labelled option so editing an
+ *  existing automation doesn't silently drop it. */
+function ContactFieldSelect({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const { customFields } = useResources()
+  const customValue = value.startsWith("custom:") ? value : ""
+  const knownCustom =
+    customValue && customFields.some((f) => `custom:${f.id}` === customValue)
+  return (
+    <select
+      value={value || "name"}
+      onChange={(e) => onChange(e.target.value)}
+      className={SELECT_CLASS}
+    >
+      <option value="name">Name</option>
+      <option value="email">Email</option>
+      <option value="company">Company</option>
+      {customFields.length > 0 && (
+        <optgroup label="Custom fields">
+          {customFields.map((f) => (
+            <option key={f.id} value={`custom:${f.id}`}>
+              {f.field_name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {customValue && !knownCustom && (
+        <option value={customValue}>{customValue} (unknown field)</option>
+      )}
+    </select>
   )
 }
 
@@ -1044,20 +1090,16 @@ function StepEditor({
       return (
         <>
           <FieldBlock label="Field">
-            <select
+            <ContactFieldSelect
               value={(cfg.field as string) ?? "name"}
-              onChange={(e) => set({ field: e.target.value })}
-              className="w-full rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white"
-            >
-              <option value="name">Name</option>
-              <option value="email">Email</option>
-              <option value="company">Company</option>
-            </select>
+              onChange={(v) => set({ field: v })}
+            />
           </FieldBlock>
           <FieldBlock label="Value">
             <Input
               value={(cfg.value as string) ?? ""}
               onChange={(e) => set({ value: e.target.value })}
+              placeholder="Text or {{ vars.x }} / {{ message.text }}"
               className="bg-slate-800 text-white"
             />
           </FieldBlock>
