@@ -22,15 +22,39 @@ interface CustomFieldsManagerProps {
 }
 
 /**
- * Create / rename / delete account-wide custom contact field definitions.
- * Per-contact values are edited elsewhere (contact detail → Custom Fields);
- * this only manages the field catalogue. Admin+ gated by the caller — the
- * `custom_fields` RLS also rejects non-admin writes as defense in depth.
+ * Dialog wrapper around {@link CustomFieldsPanel}, used on the Contacts page.
+ * The same panel is rendered inline under Settings → Custom Fields, so the
+ * editing UI lives in one place. Radix unmounts the dialog content on close,
+ * so the panel remounts (and refetches) on each open.
  */
 export function CustomFieldsManager({
   open,
   onOpenChange,
 }: CustomFieldsManagerProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="border-slate-700 bg-slate-900 text-slate-200 sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-white">Custom fields</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            Define extra contact fields (e.g. ZIP code, lead source). They
+            appear on every contact and in the “Update Contact Field” automation
+            action.
+          </DialogDescription>
+        </DialogHeader>
+        <CustomFieldsPanel />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Create / rename / delete account-wide custom contact field definitions.
+ * Per-contact values are edited elsewhere (contact detail → Custom Fields);
+ * this only manages the field catalogue. Admin+ gated by the caller — the
+ * `custom_fields` RLS also rejects non-admin writes as defense in depth.
+ */
+export function CustomFieldsPanel() {
   const supabase = createClient();
   const { user, accountId } = useAuth();
 
@@ -51,27 +75,21 @@ export function CustomFieldsManager({
     setLoading(false);
   }, [supabase, accountId]);
 
-  // Load the field list when the dialog opens. The setters inside
-  // fetchFields run after the Supabase await — not synchronously in the
-  // effect body — so the cascade the lint rule warns about doesn't apply.
+  // Load the field list on mount once the account is known. The setters
+  // inside fetchFields run after the Supabase await — not synchronously in
+  // the effect body — so the cascade the lint rule warns about doesn't apply.
   useEffect(() => {
-    if (open && accountId) {
+    if (accountId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchFields();
     }
-  }, [open, accountId, fetchFields]);
-
-  // Clear the draft on close (handler, not effect) so reopening starts fresh.
-  function handleOpenChange(next: boolean) {
-    if (!next) setNewName('');
-    onOpenChange(next);
-  }
+  }, [accountId, fetchFields]);
 
   /** Case-insensitive name clash within the loaded list. */
   function isDuplicate(name: string, exceptId?: string): boolean {
     const lower = name.toLowerCase();
     return fields.some(
-      (f) => f.id !== exceptId && f.field_name.toLowerCase() === lower,
+      (f) => f.id !== exceptId && f.field_name.toLowerCase() === lower
     );
   }
 
@@ -107,7 +125,10 @@ export function CustomFieldsManager({
 
   /** Returns true on success so the row can keep the new name, false so it
    *  reverts to the previous one. No-ops (blank / unchanged) count as success. */
-  async function handleRename(field: CustomField, nextName: string): Promise<boolean> {
+  async function handleRename(
+    field: CustomField,
+    nextName: string
+  ): Promise<boolean> {
     const name = nextName.trim();
     if (!name || name === field.field_name) return true;
     if (isDuplicate(name, field.id)) {
@@ -131,7 +152,7 @@ export function CustomFieldsManager({
   async function handleDelete(field: CustomField) {
     if (
       !window.confirm(
-        `Delete "${field.field_name}"? This also removes its stored value on every contact. This cannot be undone.`,
+        `Delete "${field.field_name}"? This also removes its stored value on every contact. This cannot be undone.`
       )
     ) {
       return;
@@ -151,71 +172,61 @@ export function CustomFieldsManager({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-white">Custom fields</DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Define extra contact fields (e.g. ZIP code, lead source). They appear
-            on every contact and in the “Update Contact Field” automation action.
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Create */}
-        <div className="flex items-center gap-2">
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void handleCreate();
-              }
-            }}
-            placeholder="New field name…"
-            className="bg-slate-800 text-white"
-          />
-          <Button
-            onClick={handleCreate}
-            disabled={creating || !newName.trim()}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
-          >
-            {creating ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Plus className="size-4" />
-            )}
-            Add
-          </Button>
-        </div>
-
-        {/* List */}
-        <div className="max-h-72 overflow-y-auto rounded-md border border-slate-800">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-500">
-              <Loader2 className="size-4 animate-spin" />
-              Loading…
-            </div>
-          ) : fields.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">
-              No custom fields yet.
-            </p>
+    <div className="space-y-4">
+      {/* Create */}
+      <div className="flex items-center gap-2">
+        <Input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void handleCreate();
+            }
+          }}
+          placeholder="New field name…"
+          className="bg-slate-800 text-white"
+        />
+        <Button
+          onClick={handleCreate}
+          disabled={creating || !newName.trim()}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
+        >
+          {creating ? (
+            <Loader2 className="size-4 animate-spin" />
           ) : (
-            <ul className="divide-y divide-slate-800">
-              {fields.map((field) => (
-                <FieldRow
-                  key={field.id}
-                  field={field}
-                  busy={busyId === field.id}
-                  onRename={handleRename}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </ul>
+            <Plus className="size-4" />
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          Add
+        </Button>
+      </div>
+
+      {/* List */}
+      <div className="max-h-72 overflow-y-auto rounded-md border border-slate-800">
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-500">
+            <Loader2 className="size-4 animate-spin" />
+            Loading…
+          </div>
+        ) : fields.length === 0 ? (
+          <p className="py-8 text-center text-sm text-slate-500">
+            No custom fields yet.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-800">
+            {fields.map((field) => (
+              <FieldRow
+                key={field.id}
+                field={field}
+                busy={busyId === field.id}
+                onRename={handleRename}
+                onDelete={handleDelete}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -254,7 +265,7 @@ function FieldRow({
           if (e.key === 'Enter') e.currentTarget.blur();
         }}
         aria-label={`Rename ${field.field_name}`}
-        className="h-8 border-transparent bg-transparent text-white hover:border-slate-700 focus:border-primary"
+        className="focus:border-primary h-8 border-transparent bg-transparent text-white hover:border-slate-700"
       />
       <Button
         variant="ghost"
