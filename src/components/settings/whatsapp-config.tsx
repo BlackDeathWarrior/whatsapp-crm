@@ -233,6 +233,16 @@ export function WhatsAppConfig() {
           `Saved, but Meta couldn't register the number: ${data.registration_error}`,
           { duration: 12000 },
         );
+      } else if (data.registration_skipped) {
+        // Credentials saved + verified, but /register was skipped
+        // because no PIN was supplied (e.g. a Meta test number).
+        // Don't claim the number is "Live" — point at the
+        // Registration status banner instead.
+        toast.success(
+          'Credentials saved and verified. Inbound registration was skipped (no PIN) — see Registration status below.',
+          { duration: 10000 },
+        );
+        setPin('');
       } else {
         toast.success(
           data.phone_info?.verified_name
@@ -604,9 +614,7 @@ export function WhatsAppConfig() {
             <div className="space-y-2">
               <Label className="text-slate-300">
                 Two-step verification PIN
-                {!isRegistered && (
-                  <span className="ml-1 text-red-400">*</span>
-                )}
+                <span className="ml-1 text-slate-500">(optional)</span>
               </Label>
               <Input
                 type="text"
@@ -620,16 +628,19 @@ export function WhatsAppConfig() {
                 className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 tracking-widest"
               />
               <p className="text-xs text-slate-500 leading-relaxed">
-                Required the first time you connect a number, and any
-                time you swap to a different number. Set it in{' '}
+                Needed only to wire <strong className="text-slate-300">inbound</strong> messages
+                for a <strong className="text-slate-300">production</strong> number. Set it in{' '}
                 <strong className="text-slate-300">
                   Meta Business Manager → WhatsApp Accounts → Phone
                   Numbers → Two-step verification
                 </strong>
-                . Without this PIN, Meta saves your credentials but
-                won&apos;t actually route inbound messages to wacrm —
-                the symptom that hits second numbers under a shared
-                WABA. Leave blank to keep an existing registration
+                , then paste it here so wacrm can subscribe the number —
+                otherwise Meta routes inbound events to whichever app
+                last claimed it (the symptom that hits second numbers
+                under a shared WABA).{' '}
+                <strong className="text-slate-300">Meta test numbers</strong> have no
+                PIN and are pre-registered — leave this blank for them.
+                Leaving it blank also keeps an existing registration
                 untouched.
               </p>
             </div>
