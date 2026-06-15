@@ -8,6 +8,12 @@ import {
   isUniqueViolation,
   normalizeKey,
 } from '@/lib/contacts/dedupe';
+import { parseContactCsv } from '@/lib/contacts/parse-contact-csv';
+import {
+  assignImportedContactTags,
+  resolveImportTagIds,
+  type ContactTagAssignment,
+} from '@/lib/contacts/resolve-import-tags';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -26,75 +32,19 @@ interface ImportModalProps {
   onImported: () => void;
 }
 
-interface ParsedRow {
-  phone: string;
-  name?: string;
-  email?: string;
-  company?: string;
-}
-
-function parseCSV(text: string): ParsedRow[] {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) return [];
-
-  const headerLine = lines[0];
-  const headers = headerLine.split(',').map((h) => h.trim().toLowerCase().replace(/["']/g, ''));
-
-  const phoneIdx = headers.indexOf('phone');
-  if (phoneIdx === -1) return [];
-
-  const nameIdx = headers.indexOf('name');
-  const emailIdx = headers.indexOf('email');
-  const companyIdx = headers.indexOf('company');
-
-  const rows: ParsedRow[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    // Simple CSV parse (handles quoted fields)
-    const values: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (const char of line) {
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        values.push(current.trim());
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    values.push(current.trim());
-
-    const phone = values[phoneIdx]?.replace(/["']/g, '').trim();
-    if (!phone) continue;
-
-    rows.push({
-      phone,
-      name: nameIdx >= 0 ? values[nameIdx]?.replace(/["']/g, '').trim() || undefined : undefined,
-      email: emailIdx >= 0 ? values[emailIdx]?.replace(/["']/g, '').trim() || undefined : undefined,
-      company:
-        companyIdx >= 0 ? values[companyIdx]?.replace(/["']/g, '').trim() || undefined : undefined,
-    });
-  }
-
-  return rows;
-}
-
 export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps) {
   const supabase = createClient();
-  const { accountId } = useAuth();
+  const { accountId, canEditSettings } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
-  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [parsedRows, setParsedRows] = useState<ReturnType<typeof parseContactCsv>>([]);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{
     imported: number;
     skipped: number;
     failed: number;
+    tagsAssigned: number;
   } | null>(null);
 
   function reset() {
@@ -117,7 +67,7 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
     setResult(null);
 
     const text = await selected.text();
-    const rows = parseCSV(text);
+    const rows = parseContactCsv(text);
 
     if (rows.length === 0) {
       toast.error('No valid rows found. Ensure CSV has a "phone" column header.');
@@ -168,9 +118,19 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
         return true;
       });
 
-      // 3) Batch insert the genuinely-new rows in chunks of 50. The DB
-      //    unique index is the backstop: a 23505 (race, or a format
-      //    that normalizes equal) counts as skipped, not failed.
+      // 3) Resolve tag names → ids (create missing tags for admin+).
+      const allTagNames = toInsert.flatMap((row) => row.tagNames);
+      const { tagIdByKey, skippedNames } = await resolveImportTagIds(supabase, {
+        accountId,
+        userId: user.id,
+        tagNames: allTagNames,
+        canCreateTags: canEditSettings,
+      });
+
+      const tagAssignments: ContactTagAssignment[] = [];
+
+      // 4) Batch insert contacts in chunks of 50. The DB unique index is
+      //    the backstop: a 23505 counts as skipped, not failed.
       const chunkSize = 50;
       for (let i = 0; i < toInsert.length; i += chunkSize) {
         const chunk = toInsert.slice(i, i + chunkSize);
@@ -191,10 +151,23 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
         if (error) {
           // Retry individually so one bad/duplicate row doesn't sink
           // the whole chunk.
-          for (const row of rows) {
-            const { error: singleErr } = await supabase.from('contacts').insert(row);
-            if (!singleErr) {
+          for (let j = 0; j < rows.length; j++) {
+            const row = rows[j];
+            const source = chunk[j];
+            const { data: singleData, error: singleErr } = await supabase
+              .from('contacts')
+              .insert(row)
+              .select('id')
+              .single();
+
+            if (!singleErr && singleData) {
               imported++;
+              if (source.tagNames.length > 0) {
+                tagAssignments.push({
+                  contactId: singleData.id,
+                  tagNames: source.tagNames,
+                });
+              }
             } else if (isUniqueViolation(singleErr)) {
               skipped++;
             } else {
@@ -202,14 +175,43 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
             }
           }
         } else {
-          imported += data?.length ?? chunk.length;
+          const inserted = data ?? [];
+          imported += inserted.length;
+          for (let j = 0; j < inserted.length; j++) {
+            const source = chunk[j];
+            if (!source || source.tagNames.length === 0) continue;
+            tagAssignments.push({
+              contactId: inserted[j].id,
+              tagNames: source.tagNames,
+            });
+          }
         }
       }
 
-      setResult({ imported, skipped, failed });
+      // 5) Wire tags onto the contacts we just created.
+      const tagsAssigned = await assignImportedContactTags(
+        supabase,
+        tagAssignments,
+        tagIdByKey,
+      );
+
+      setResult({ imported, skipped, failed, tagsAssigned });
       if (imported > 0) {
         toast.success(`${imported} contact${imported !== 1 ? 's' : ''} imported`);
         onImported();
+      }
+      if (tagsAssigned > 0) {
+        toast.success(
+          `${tagsAssigned} tag assignment${tagsAssigned !== 1 ? 's' : ''} applied`,
+        );
+      }
+      if (skippedNames.length > 0) {
+        const sample = skippedNames.slice(0, 3).join(', ');
+        const more =
+          skippedNames.length > 3 ? ` (+${skippedNames.length - 3} more)` : '';
+        toast.info(
+          `Unknown tags skipped (create them in Settings first): ${sample}${more}`,
+        );
       }
       if (skipped > 0) {
         toast.info(`${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped`);
@@ -226,6 +228,7 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
   }
 
   const preview = parsedRows.slice(0, 5);
+  const hasTagsColumn = parsedRows.some((row) => row.tagNames.length > 0);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -234,7 +237,8 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
           <DialogTitle className="text-white">Import Contacts</DialogTitle>
           <DialogDescription className="text-slate-400">
             Upload a CSV file with a &quot;phone&quot; column (required). Optional columns:
-            name, email, company.
+            name, email, company, tags (comma-separated tag names — quote the
+            cell if a tag list contains commas, e.g. &quot;VIP, Lead&quot;).
           </DialogDescription>
         </DialogHeader>
 
@@ -287,6 +291,9 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
                       <th className="px-3 py-1.5 text-left text-slate-400 font-medium">Name</th>
                       <th className="px-3 py-1.5 text-left text-slate-400 font-medium">Email</th>
                       <th className="px-3 py-1.5 text-left text-slate-400 font-medium">Company</th>
+                      {hasTagsColumn && (
+                        <th className="px-3 py-1.5 text-left text-slate-400 font-medium">Tags</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -296,6 +303,11 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
                         <td className="px-3 py-1.5 text-slate-300">{row.name || '-'}</td>
                         <td className="px-3 py-1.5 text-slate-300">{row.email || '-'}</td>
                         <td className="px-3 py-1.5 text-slate-300">{row.company || '-'}</td>
+                        {hasTagsColumn && (
+                          <td className="px-3 py-1.5 text-slate-300">
+                            {row.tagNames.length > 0 ? row.tagNames.join(', ') : '-'}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -318,6 +330,12 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
                   <div className="flex items-center gap-1.5 text-primary text-sm">
                     <CheckCircle className="size-4" />
                     {result.imported} imported
+                  </div>
+                )}
+                {result.tagsAssigned > 0 && (
+                  <div className="flex items-center gap-1.5 text-cyan-400 text-sm">
+                    <CheckCircle className="size-4" />
+                    {result.tagsAssigned} tag{result.tagsAssigned !== 1 ? 's' : ''} assigned
                   </div>
                 )}
                 {result.skipped > 0 && (
