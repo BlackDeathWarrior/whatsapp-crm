@@ -8,7 +8,7 @@ import {
   isUniqueViolation,
   normalizeKey,
 } from '@/lib/contacts/dedupe';
-import { parseContactCsv } from '@/lib/contacts/parse-contact-csv';
+import { parseContactCsv, type ParsedContactRow } from '@/lib/contacts/parse-contact-csv';
 import {
   assignImportedContactTags,
   resolveImportTagIds,
@@ -26,6 +26,41 @@ import {
 import { Button } from '@/components/ui/button';
 import { Upload, FileText, Loader2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
+const DEFAULT_TAG_COLOR = '#3b82f6';
+
+function ImportPreviewTags({
+  tagNames,
+  tagColorByKey,
+}: {
+  tagNames: string[];
+  tagColorByKey: Map<string, string>;
+}) {
+  if (tagNames.length === 0) {
+    return <span className="text-slate-500">-</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {tagNames.map((name) => {
+        const color = tagColorByKey.get(name.trim().toLowerCase()) ?? DEFAULT_TAG_COLOR;
+        return (
+          <span
+            key={name}
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
+            style={{
+              backgroundColor: `${color}20`,
+              color,
+              border: `1px solid ${color}40`,
+            }}
+          >
+            {name}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 interface ImportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -38,7 +73,9 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
-  const [parsedRows, setParsedRows] = useState<ReturnType<typeof parseContactCsv>>([]);
+  const [parsedRows, setParsedRows] = useState<ParsedContactRow[]>([]);
+  const [hasTagsColumn, setHasTagsColumn] = useState(false);
+  const [tagColorByKey, setTagColorByKey] = useState<Map<string, string>>(new Map());
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{
     imported: number;
@@ -50,6 +87,8 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
   function reset() {
     setFile(null);
     setParsedRows([]);
+    setHasTagsColumn(false);
+    setTagColorByKey(new Map());
     setResult(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
@@ -67,15 +106,34 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
     setResult(null);
 
     const text = await selected.text();
-    const rows = parseContactCsv(text);
+    const { rows, hasTagsColumn: csvHasTags } = parseContactCsv(text);
 
     if (rows.length === 0) {
       toast.error('No valid rows found. Ensure CSV has a "phone" column header.');
       setParsedRows([]);
+      setHasTagsColumn(false);
+      setTagColorByKey(new Map());
       return;
     }
 
     setParsedRows(rows);
+    setHasTagsColumn(csvHasTags);
+
+    if (csvHasTags && accountId) {
+      const { data: tags } = await supabase
+        .from('tags')
+        .select('name, color')
+        .eq('account_id', accountId);
+
+      const colors = new Map<string, string>();
+      for (const tag of tags ?? []) {
+        const key = tag.name.trim().toLowerCase();
+        if (!colors.has(key)) colors.set(key, tag.color);
+      }
+      setTagColorByKey(colors);
+    } else {
+      setTagColorByKey(new Map());
+    }
   }
 
   async function handleImport() {
@@ -228,7 +286,7 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
   }
 
   const preview = parsedRows.slice(0, 5);
-  const hasTagsColumn = parsedRows.some((row) => row.tagNames.length > 0);
+  const previewHasTags = hasTagsColumn || preview.some((row) => row.tagNames.length > 0);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -291,7 +349,7 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
                       <th className="px-3 py-1.5 text-left text-slate-400 font-medium">Name</th>
                       <th className="px-3 py-1.5 text-left text-slate-400 font-medium">Email</th>
                       <th className="px-3 py-1.5 text-left text-slate-400 font-medium">Company</th>
-                      {hasTagsColumn && (
+                      {previewHasTags && (
                         <th className="px-3 py-1.5 text-left text-slate-400 font-medium">Tags</th>
                       )}
                     </tr>
@@ -303,9 +361,12 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
                         <td className="px-3 py-1.5 text-slate-300">{row.name || '-'}</td>
                         <td className="px-3 py-1.5 text-slate-300">{row.email || '-'}</td>
                         <td className="px-3 py-1.5 text-slate-300">{row.company || '-'}</td>
-                        {hasTagsColumn && (
+                        {previewHasTags && (
                           <td className="px-3 py-1.5 text-slate-300">
-                            {row.tagNames.length > 0 ? row.tagNames.join(', ') : '-'}
+                            <ImportPreviewTags
+                              tagNames={row.tagNames}
+                              tagColorByKey={tagColorByKey}
+                            />
                           </td>
                         )}
                       </tr>

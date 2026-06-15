@@ -30,36 +30,42 @@ describe("parseContactCsv", () => {
 +15551234567,Alice,"VIP, Lead"
 +15559876543,Bob,Customer`;
 
-    expect(parseContactCsv(csv)).toEqual([
-      {
-        phone: "+15551234567",
-        name: "Alice",
-        email: undefined,
-        company: undefined,
-        tagNames: ["VIP", "Lead"],
-      },
-      {
-        phone: "+15559876543",
-        name: "Bob",
-        email: undefined,
-        company: undefined,
-        tagNames: ["Customer"],
-      },
-    ]);
+    expect(parseContactCsv(csv)).toEqual({
+      hasTagsColumn: true,
+      rows: [
+        {
+          phone: "+15551234567",
+          name: "Alice",
+          email: undefined,
+          company: undefined,
+          tagNames: ["VIP", "Lead"],
+        },
+        {
+          phone: "+15559876543",
+          name: "Bob",
+          email: undefined,
+          company: undefined,
+          tagNames: ["Customer"],
+        },
+      ],
+    });
   });
 
   it("returns empty tagNames when tags column is absent", () => {
     const csv = `phone,name
 +15551234567,Alice`;
 
-    expect(parseContactCsv(csv)).toEqual([
-      {
-        phone: "+15551234567",
-        name: "Alice",
-        email: undefined,
-        company: undefined,
-        tagNames: [],
-      },
-    ]);
+    expect(parseContactCsv(csv)).toEqual({
+      hasTagsColumn: false,
+      rows: [
+        {
+          phone: "+15551234567",
+          name: "Alice",
+          email: undefined,
+          company: undefined,
+          tagNames: [],
+        },
+      ],
+    });
   });
 });
