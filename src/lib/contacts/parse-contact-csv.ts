@@ -35,18 +35,24 @@ export interface ParseContactCsvResult {
   rows: ParsedContactRow[];
   /** True when the CSV header includes a `tags` column. */
   hasTagsColumn: boolean;
+  /** True when the CSV header includes a `company` column. */
+  hasCompanyColumn: boolean;
 }
 
 export function parseContactCsv(text: string): ParseContactCsvResult {
   const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) return { rows: [], hasTagsColumn: false };
+  if (lines.length < 2) {
+    return { rows: [], hasTagsColumn: false, hasCompanyColumn: false };
+  }
 
   const headers = lines[0]
     .split(",")
     .map((h) => h.trim().toLowerCase().replace(/["']/g, ""));
 
   const phoneIdx = headers.indexOf("phone");
-  if (phoneIdx === -1) return { rows: [], hasTagsColumn: false };
+  if (phoneIdx === -1) {
+    return { rows: [], hasTagsColumn: false, hasCompanyColumn: false };
+  }
 
   const nameIdx = headers.indexOf("name");
   const emailIdx = headers.indexOf("email");
@@ -82,7 +88,11 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
     });
   }
 
-  return { rows, hasTagsColumn: tagsIdx >= 0 };
+  return {
+    rows,
+    hasTagsColumn: tagsIdx >= 0,
+    hasCompanyColumn: companyIdx >= 0,
+  };
 }
 
 /** Simple CSV line parse (handles quoted fields). */
