@@ -12,14 +12,14 @@ export function CustomFieldsSettings() {
   return (
     <div className="mt-4 space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-white">Custom fields</h2>
-        <p className="text-sm text-slate-400">
+        <h2 className="text-lg font-semibold text-foreground">Custom fields</h2>
+        <p className="text-sm text-muted-foreground">
           Define extra contact fields (e.g. ZIP code, lead source). They appear
           on every contact and in the “Update Contact Field” automation action.
         </p>
       </div>
 
-      <Card className="border-slate-700 bg-slate-900 ring-0 ring-transparent">
+      <Card className="border-border bg-card ring-0 ring-transparent">
         <CardContent className="pt-4">
           <CustomFieldsPanel />
         </CardContent>

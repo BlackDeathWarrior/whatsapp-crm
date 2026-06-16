@@ -69,39 +69,39 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Manage your profile, WhatsApp® integration, message templates, and
           tags.
         </p>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => onChange(v as TabValue)}>
-        <TabsList className="border border-slate-700 bg-slate-900">
+        <TabsList className="border border-border bg-card">
           <TabsTrigger
             value="profile"
-            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+            className="data-active:text-primary text-muted-foreground data-active:bg-muted"
           >
             <User className="size-4" />
             Profile
           </TabsTrigger>
           <TabsTrigger
             value="whatsapp"
-            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+            className="data-active:text-primary text-muted-foreground data-active:bg-muted"
           >
             <Settings className="size-4" />
             WhatsApp Config
           </TabsTrigger>
           <TabsTrigger
             value="templates"
-            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+            className="data-active:text-primary text-muted-foreground data-active:bg-muted"
           >
             <MessageSquare className="size-4" />
             Templates
           </TabsTrigger>
           <TabsTrigger
             value="tags"
-            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+            className="data-active:text-primary text-muted-foreground data-active:bg-muted"
           >
             <Tag className="size-4" />
             Tags
@@ -109,7 +109,7 @@ export default function SettingsPage() {
           {canEditSettings && (
             <TabsTrigger
               value="custom-fields"
-              className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+              className="data-active:text-primary text-muted-foreground data-active:bg-muted"
             >
               <SlidersHorizontal className="size-4" />
               Custom Fields
@@ -117,21 +117,21 @@ export default function SettingsPage() {
           )}
           <TabsTrigger
             value="deals"
-            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+            className="data-active:text-primary text-muted-foreground data-active:bg-muted"
           >
             <Coins className="size-4" />
             Deals
           </TabsTrigger>
           <TabsTrigger
             value="appearance"
-            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+            className="data-active:text-primary text-muted-foreground data-active:bg-muted"
           >
             <Palette className="size-4" />
             Appearance
           </TabsTrigger>
           <TabsTrigger
             value="members"
-            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+            className="data-active:text-primary text-muted-foreground data-active:bg-muted"
           >
             <UsersRound className="size-4" />
             Members
