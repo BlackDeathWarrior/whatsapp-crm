@@ -284,41 +284,48 @@ export async function POST(request: Request) {
 
     // Step 1: register the phone number for inbound webhooks.
     //
-    // Required on first save AND whenever the user supplies a fresh
+    // Attempted on first save AND whenever the user supplies a fresh
     // PIN (e.g. they rotated the 2FA PIN in Meta Manager). Skipped
     // when the same number is already registered and no PIN was
     // supplied — re-registering an already-active number with a
     // stale PIN would actually fail and undo the active subscription.
     let registeredAt: string | null = existing?.registered_at ?? null
     let registrationError: string | null = null
+    // True when registration was deliberately skipped because no PIN
+    // was supplied (see below). Distinct from registrationError — this
+    // is not a failure, just an incomplete-but-valid save.
+    let registrationSkipped = false
 
     const needsRegistration = !sameNumber || (typeof pin === 'string' && pin.length > 0)
     if (needsRegistration) {
       if (!pin) {
-        return NextResponse.json(
-          {
-            error:
-              'Two-step verification PIN is required to subscribe this number to wacrm. ' +
-              'Set a 6-digit PIN in Meta WhatsApp Manager → Phone Numbers → Two-step verification, then paste it below.',
-          },
-          { status: 400 }
-        )
-      }
-      try {
-        await registerPhoneNumber({
-          phoneNumberId: phone_number_id,
-          accessToken: access_token,
-          pin,
-        })
-        registeredAt = new Date().toISOString()
-      } catch (err) {
-        registrationError =
-          err instanceof Error ? err.message : 'Unknown Meta API error'
-        console.error('Phone number /register failed:', registrationError)
-        // We deliberately fall through and still save the row so the
-        // user can retry without re-entering everything. The UI
-        // surfaces `last_registration_error` so they see WHY it's
-        // not actually live yet.
+        // No PIN provided. Meta TEST numbers (Developer Console) are
+        // pre-registered by Meta and expose no two-step verification
+        // PIN to set, so requiring one made them impossible to connect
+        // (issue #242). The /register + PIN step only matters for
+        // production numbers under a shared WABA (issue #136), so treat
+        // it as best-effort: skip it, save the (already Meta-verified)
+        // credentials as connected, and leave registered_at null. The
+        // UI surfaces a separate "Not registered" banner with a path to
+        // add a PIN later for users who do need inbound webhook routing.
+        registrationSkipped = true
+      } else {
+        try {
+          await registerPhoneNumber({
+            phoneNumberId: phone_number_id,
+            accessToken: access_token,
+            pin,
+          })
+          registeredAt = new Date().toISOString()
+        } catch (err) {
+          registrationError =
+            err instanceof Error ? err.message : 'Unknown Meta API error'
+          console.error('Phone number /register failed:', registrationError)
+          // We deliberately fall through and still save the row so the
+          // user can retry without re-entering everything. The UI
+          // surfaces `last_registration_error` so they see WHY it's
+          // not actually live yet.
+        }
       }
     }
 
@@ -410,7 +417,12 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       saved: true,
-      registered: true,
+      registered: registeredAt != null,
+      // Credentials are valid and saved, but inbound webhook
+      // registration was skipped because no PIN was supplied (e.g. a
+      // Meta test number). The UI shows the "Not registered" banner
+      // rather than claiming the number is fully live.
+      registration_skipped: registrationSkipped,
       phone_info: phoneInfo,
     })
   } catch (error) {
