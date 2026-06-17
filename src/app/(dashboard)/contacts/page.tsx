@@ -48,6 +48,7 @@ import { ImportModal } from '@/components/contacts/import-modal';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const PAGE_SIZE = 25;
 
@@ -78,6 +79,10 @@ export default function ContactsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Bulk selection (page-scoped — only the loaded rows are selectable)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
   // All tags for display
   const [tagsMap, setTagsMap] = useState<Record<string, Tag>>({});
 
@@ -92,6 +97,10 @@ export default function ContactsPage() {
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
+    // The visible rows are about to change — drop any selection that
+    // referred to the old page/search results so the bulk bar can't
+    // act on rows the user can no longer see.
+    setSelected(new Set());
 
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
@@ -208,6 +217,50 @@ export default function ContactsPage() {
     setDeleteTarget(null);
   }
 
+  const allOnPageSelected =
+    contacts.length > 0 && contacts.every((c) => selected.has(c.id));
+  const someOnPageSelected = contacts.some((c) => selected.has(c.id));
+
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) {
+        contacts.forEach((c) => next.delete(c.id));
+      } else {
+        contacts.forEach((c) => next.add(c.id));
+      }
+      return next;
+    });
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setDeleting(true);
+
+    const { error } = await supabase.from('contacts').delete().in('id', ids);
+
+    if (error) {
+      toast.error('Failed to delete contacts');
+    } else {
+      toast.success(`${ids.length} contact${ids.length === 1 ? '' : 's'} deleted`);
+      setSelected(new Set());
+      fetchContacts();
+    }
+
+    setDeleting(false);
+    setBulkDeleteOpen(false);
+  }
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const hasNext = page < totalPages - 1;
   const hasPrev = page > 0;
@@ -271,11 +324,50 @@ export default function ContactsPage() {
         />
       </div>
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 px-4 py-2">
+          <p className="text-sm text-foreground">
+            <span className="font-medium">{selected.size}</span>{' '}
+            {selected.size === 1 ? 'contact' : 'contacts'} selected
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelected(new Set())}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Clear
+            </Button>
+            <GatedButton
+              variant="destructive"
+              size="sm"
+              canAct={canEdit}
+              gateReason="delete contacts"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 className="size-4" />
+              Delete selected
+            </GatedButton>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-lg border border-border overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allOnPageSelected}
+                  indeterminate={!allOnPageSelected && someOnPageSelected}
+                  onCheckedChange={toggleSelectAll}
+                  disabled={contacts.length === 0}
+                  aria-label="Select all contacts on this page"
+                />
+              </TableHead>
               <TableHead className="text-muted-foreground">Name</TableHead>
               <TableHead className="text-muted-foreground">Phone</TableHead>
               <TableHead className="text-muted-foreground hidden md:table-cell">Email</TableHead>
@@ -288,7 +380,7 @@ export default function ContactsPage() {
           <TableBody>
             {loading ? (
               <TableRow className="border-border">
-                <TableCell colSpan={7} className="text-center py-12">
+                <TableCell colSpan={8} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="size-6 animate-spin text-primary" />
                     <p className="text-sm text-muted-foreground">Loading contacts...</p>
@@ -297,7 +389,7 @@ export default function ContactsPage() {
               </TableRow>
             ) : contacts.length === 0 ? (
               <TableRow className="border-border">
-                <TableCell colSpan={7} className="text-center py-12">
+                <TableCell colSpan={8} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2">
                     <Users className="size-8 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">
@@ -324,6 +416,13 @@ export default function ContactsPage() {
                   className="border-border hover:bg-muted/50 cursor-pointer"
                   onClick={() => openDetail(contact.id)}
                 >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selected.has(contact.id)}
+                      onCheckedChange={() => toggleSelect(contact.id)}
+                      aria-label={`Select ${contact.name || contact.phone}`}
+                    />
+                  </TableCell>
                   <TableCell className="text-foreground font-medium">
                     {contact.name || <span className="text-muted-foreground italic">Unnamed</span>}
                   </TableCell>
@@ -513,6 +612,41 @@ export default function ContactsPage() {
             <Button
               variant="destructive"
               onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 className="size-4 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-popover-foreground">
+              Delete {selected.size} {selected.size === 1 ? 'Contact' : 'Contacts'}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Are you sure you want to delete{' '}
+              <span className="text-popover-foreground font-medium">
+                {selected.size} {selected.size === 1 ? 'contact' : 'contacts'}
+              </span>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="bg-popover border-border">
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(false)}
+              className="border-border text-muted-foreground hover:bg-muted"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
               disabled={deleting}
             >
               {deleting && <Loader2 className="size-4 animate-spin" />}
