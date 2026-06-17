@@ -241,7 +241,7 @@ export function TagManager() {
                     className="relative size-8 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-popover"
                     style={{
                       backgroundColor: color.value,
-                      boxShadow: selectedColor === color.value ? `0 0 0 2px rgb(15 23 42), 0 0 0 4px ${color.value}` : 'none',
+                      boxShadow: selectedColor === color.value ? `0 0 0 2px var(--popover), 0 0 0 4px ${color.value}` : 'none',
                     }}
                     title={color.name}
                   />

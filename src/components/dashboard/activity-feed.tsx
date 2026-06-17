@@ -85,9 +85,10 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
             {visible.map((it, i) => {
               const theme = KIND_THEME[it.kind]
               const Icon = theme.icon
-              // Alternating row background for scanability — dark-theme
-              // translation of the spec's white / #f9fafb stripes.
-              const stripe = i % 2 === 0 ? 'bg-transparent' : 'bg-card/40'
+              // Alternating row background for scanability. bg-muted/40
+              // keeps the stripe visible in both light and dark modes
+              // (bg-card/40 vanishes against a white card surface in light).
+              const stripe = i % 2 === 0 ? 'bg-transparent' : 'bg-muted/40'
               const row = (
                 <div className="flex items-center gap-3 px-5 py-2.5">
                   <span

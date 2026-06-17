@@ -292,7 +292,9 @@ export function PipelineSettings({
                       style={{
                         backgroundColor: color,
                         borderColor:
-                          newStageColor === color ? "white" : "transparent",
+                          newStageColor === color
+                            ? "var(--foreground)"
+                            : "transparent",
                       }}
                       aria-label={`Pick color ${color}`}
                     />
@@ -450,7 +452,8 @@ function ColorSwatch({
                 className="h-5 w-5 rounded-full border-2 transition-transform hover:scale-110"
                 style={{
                   backgroundColor: c,
-                  borderColor: c === value ? "white" : "transparent",
+                  borderColor:
+                    c === value ? "var(--foreground)" : "transparent",
                 }}
               />
             ))}

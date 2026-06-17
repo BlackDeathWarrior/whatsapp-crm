@@ -463,7 +463,7 @@ export function ImportModal({
             ) : (
               <>
                 <div className="flex size-10 items-center justify-center rounded-lg bg-muted/80 ring-1 ring-border/80 transition-colors group-hover:bg-muted">
-                  <Upload className="size-5 text-muted-foreground group-hover:text-muted-foreground" />
+                  <Upload className="size-5 text-muted-foreground group-hover:text-foreground" />
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Click to choose a CSV file

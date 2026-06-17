@@ -115,7 +115,9 @@ const ROLE_CHIP: Record<
   viewer: {
     icon: UserIcon,
     label: 'Viewer',
-    className: 'border-border bg-card text-muted-foreground',
+    // Outline-only so it stays quieter than the filled Agent chip in
+    // both modes — bg-card would blend into a card surface in light mode.
+    className: 'border-border bg-transparent text-muted-foreground',
   },
 };
 

@@ -164,7 +164,7 @@ export function PipelineBoard({
         @media (hover: hover) and (pointer: fine) {
           .pipeline-scroll {
             scrollbar-width: thin;
-            scrollbar-color: rgb(51 65 85) transparent;
+            scrollbar-color: var(--border) transparent;
           }
           .pipeline-scroll::-webkit-scrollbar {
             height: 8px;
@@ -173,11 +173,11 @@ export function PipelineBoard({
             background: transparent;
           }
           .pipeline-scroll::-webkit-scrollbar-thumb {
-            background-color: rgb(51 65 85);
+            background-color: var(--border);
             border-radius: 9999px;
           }
           .pipeline-scroll::-webkit-scrollbar-thumb:hover {
-            background-color: rgb(71 85 105);
+            background-color: var(--muted-foreground);
           }
         }
       `}</style>

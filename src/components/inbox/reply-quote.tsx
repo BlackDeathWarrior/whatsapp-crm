@@ -14,25 +14,38 @@ interface ReplyQuoteProps {
   /** Present → renders the composer-chip variant with an X button. Absent →
    *  renders the embedded-in-bubble variant. */
   onDismiss?: () => void;
+  /** True when embedded inside an outbound (primary-filled) bubble, so the
+   *  quote must read against the primary surface rather than the neutral
+   *  foreground — otherwise it goes low-contrast in light mode. */
+  onPrimary?: boolean;
 }
 
 export function ReplyQuote({
   authorLabel,
   preview,
   onDismiss,
+  onPrimary = false,
 }: ReplyQuoteProps) {
   const isChip = !!onDismiss;
   return (
     <div
       className={cn(
-        "flex items-start gap-2 border-l-2 border-primary px-2 py-1",
+        "flex items-start gap-2 border-l-2 px-2 py-1",
+        onPrimary ? "border-primary-foreground/50" : "border-primary",
         isChip
           ? "rounded-md bg-muted/80"
-          : "mb-1.5 rounded-md bg-background/20",
+          : onPrimary
+            ? "mb-1.5 rounded-md bg-primary-foreground/15"
+            : "mb-1.5 rounded-md bg-background/20",
       )}
     >
       <div className="min-w-0 flex-1 overflow-hidden">
-        <div className="truncate text-[11px] font-medium text-primary">
+        <div
+          className={cn(
+            "truncate text-[11px] font-medium",
+            onPrimary ? "text-primary-foreground" : "text-primary",
+          )}
+        >
           {authorLabel}
         </div>
         {/* Wrap the preview instead of truncating to a single line.

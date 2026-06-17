@@ -269,7 +269,11 @@ export function MessageBubble({
         )}
       >
         {reply && (
-          <ReplyQuote authorLabel={reply.authorLabel} preview={reply.preview} />
+          <ReplyQuote
+            authorLabel={reply.authorLabel}
+            preview={reply.preview}
+            onPrimary={isAgent}
+          />
         )}
         <MessageContent message={message} />
         <div
