@@ -110,12 +110,14 @@ const ROLE_CHIP: Record<
   agent: {
     icon: UserCog,
     label: 'Agent',
-    className: 'border-slate-700 bg-slate-800 text-slate-300',
+    className: 'border-border bg-muted text-muted-foreground',
   },
   viewer: {
     icon: UserIcon,
     label: 'Viewer',
-    className: 'border-slate-800 bg-slate-900 text-slate-500',
+    // Outline-only so it stays quieter than the filled Agent chip in
+    // both modes — bg-card would blend into a card surface in light mode.
+    className: 'border-border bg-transparent text-muted-foreground',
   },
 };
 
@@ -296,8 +298,8 @@ export function MembersTab() {
       {/* Header + invite button */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-white">Account members</h2>
-          <p className="text-sm text-slate-400">
+          <h2 className="text-lg font-semibold text-foreground">Account members</h2>
+          <p className="text-sm text-muted-foreground">
             People with access to this account. Roles control what each
             teammate can do.
           </p>
@@ -314,9 +316,9 @@ export function MembersTab() {
       </div>
 
       {/* Roster */}
-      <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+      <Card className="bg-card border-border ring-0 ring-transparent">
         <CardContent className="p-0">
-          <ul className="divide-y divide-slate-800">
+          <ul className="divide-y divide-border">
             {members.map((member) => {
               const roleMeta = ROLE_CHIP[member.role];
               const RoleIcon = roleMeta.icon;
@@ -351,17 +353,17 @@ export function MembersTab() {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-white">
+                        <span className="truncate text-sm font-medium text-foreground">
                           {member.full_name || 'Unnamed'}
                         </span>
                         {isSelf && (
-                          <Badge className="bg-slate-800 text-slate-300 border-slate-700 text-[10px] uppercase tracking-wide">
+                          <Badge className="bg-muted text-muted-foreground border-border text-[10px] uppercase tracking-wide">
                             You
                           </Badge>
                         )}
                       </div>
                       {member.email && (
-                        <p className="truncate text-xs text-slate-500">
+                        <p className="truncate text-xs text-muted-foreground">
                           {member.email}
                         </p>
                       )}
@@ -370,7 +372,7 @@ export function MembersTab() {
 
                   {/* Joined date stays desktop-only. The mobile row's
                       vertical density makes the joined date noise. */}
-                  <div className="hidden sm:block text-right text-xs text-slate-500">
+                  <div className="hidden sm:block text-right text-xs text-muted-foreground">
                     Joined {fmtDate(member.joined_at)}
                   </div>
 
@@ -394,7 +396,7 @@ export function MembersTab() {
                         }
                       >
                         <SelectTrigger
-                          className="w-32 bg-slate-800 border-slate-700 text-slate-200"
+                          className="w-32 bg-muted border-border text-foreground"
                           disabled={isBusy}
                         >
                           <SelectValue />
@@ -446,11 +448,11 @@ export function MembersTab() {
       <RequireRole min="admin">
         <div>
           <div className="mb-2 flex items-center gap-2">
-            <UsersRound className="size-4 text-slate-400" />
-            <h3 className="text-sm font-semibold text-white">
+            <UsersRound className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">
               Pending invitations
             </h3>
-            <Badge className="bg-slate-800 text-slate-400 border-slate-700">
+            <Badge className="bg-muted text-muted-foreground border-border">
               {invitations.length}
             </Badge>
           </div>
@@ -460,7 +462,7 @@ export function MembersTab() {
               front (rather than letting the user discover it by
               looking for a button) keeps it from feeling like a bug. */}
           {invitations.length > 0 ? (
-            <p className="mb-3 text-xs text-slate-500">
+            <p className="mb-3 text-xs text-muted-foreground">
               The plaintext invite URL is only shown once at creation
               for security — to re-share, revoke the invite below and
               create a new one.
@@ -468,22 +470,22 @@ export function MembersTab() {
           ) : null}
 
           {invitations.length === 0 ? (
-            <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+            <Card className="bg-card border-border ring-0 ring-transparent">
               <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-                <Mail className="size-6 text-slate-600" />
-                <p className="mt-2 text-sm text-slate-400">
+                <Mail className="size-6 text-muted-foreground" />
+                <p className="mt-2 text-sm text-muted-foreground">
                   No pending invitations.
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Click <span className="text-slate-300">Invite member</span>{' '}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Click <span className="text-muted-foreground">Invite member</span>{' '}
                   above to generate a shareable link.
                 </p>
               </CardContent>
             </Card>
           ) : (
-            <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+            <Card className="bg-card border-border ring-0 ring-transparent">
               <CardContent className="p-0">
-                <ul className="divide-y divide-slate-800">
+                <ul className="divide-y divide-border">
                   {invitations.map((inv) => {
                     const inviteRoleMeta = ROLE_CHIP[inv.role];
                     const InviteRoleIcon = inviteRoleMeta.icon;
@@ -494,7 +496,7 @@ export function MembersTab() {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-white">
+                          <span className="text-sm font-medium text-foreground">
                             {inv.label || 'Untitled invite'}
                           </span>
                           <span
@@ -504,7 +506,7 @@ export function MembersTab() {
                             {inviteRoleMeta.label}
                           </span>
                         </div>
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           Created {fmtDate(inv.created_at)} · {fmtExpiresIn(inv.expires_at)}
                         </p>
                       </div>
@@ -544,15 +546,15 @@ export function MembersTab() {
           if (!open) setRemovingMember(null);
         }}
       >
-        <DialogContent className="bg-slate-900 border-slate-700 sm:max-w-sm">
+        <DialogContent className="bg-popover border-border sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-white">
+            <DialogTitle className="flex items-center gap-2 text-popover-foreground">
               <AlertTriangle className="size-4 text-amber-400" />
               Remove member
             </DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription className="text-muted-foreground">
               Remove{' '}
-              <span className="font-medium text-slate-300">
+              <span className="font-medium text-muted-foreground">
                 {removingMember?.full_name || 'this teammate'}
               </span>{' '}
               from the account? They&apos;ll be signed out of this account
@@ -560,11 +562,11 @@ export function MembersTab() {
               login isn&apos;t deleted.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="bg-slate-900 border-slate-700">
+          <DialogFooter className="bg-popover border-border">
             <Button
               variant="outline"
               onClick={() => setRemovingMember(null)}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              className="border-border text-muted-foreground hover:bg-muted"
             >
               Cancel
             </Button>

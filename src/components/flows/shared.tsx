@@ -110,7 +110,7 @@ export const NODE_META: Record<
     icon: UserPlus,
     color: "text-amber-400",
   },
-  end: { label: "End", icon: Flag, color: "text-slate-400" },
+  end: { label: "End", icon: Flag, color: "text-muted-foreground" },
 };
 
 // ============================================================

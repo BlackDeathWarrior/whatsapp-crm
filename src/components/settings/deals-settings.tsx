@@ -68,13 +68,13 @@ export function DealsSettings() {
 
   return (
     <section className="mt-4 space-y-4">
-      <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+      <Card className="bg-card border-border ring-0 ring-transparent">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
+          <CardTitle className="flex items-center gap-2 text-foreground">
             <Coins className="size-4 text-primary" />
             Default currency
           </CardTitle>
-          <CardDescription className="text-slate-400">
+          <CardDescription className="text-muted-foreground">
             New deals default to this currency, and pipeline and
             dashboard totals are shown in it. Existing deals keep the
             currency they were saved with.
@@ -82,12 +82,12 @@ export function DealsSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2 sm:max-w-xs">
-            <Label className="text-slate-300">Currency</Label>
+            <Label className="text-muted-foreground">Currency</Label>
             <select
               value={selected}
               onChange={(e) => setSelected(e.target.value)}
               disabled={!canEditSettings || profileLoading}
-              className="h-9 w-full rounded-lg border border-slate-700 bg-slate-800 px-2.5 text-sm text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
             >
               {CURRENCIES.map((c) => (
                 <option key={c.code} value={c.code}>
@@ -96,7 +96,7 @@ export function DealsSettings() {
               ))}
             </select>
             {!canEditSettings && (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 Only account admins can change the default currency.
               </p>
             )}

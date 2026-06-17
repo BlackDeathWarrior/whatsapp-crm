@@ -152,8 +152,8 @@ export function TagManager() {
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-white">Tags</h2>
-          <p className="text-sm text-slate-400">Organize your contacts with color-coded tags.</p>
+          <h2 className="text-lg font-semibold text-foreground">Tags</h2>
+          <p className="text-sm text-muted-foreground">Organize your contacts with color-coded tags.</p>
         </div>
         <Button
           onClick={() => {
@@ -169,14 +169,14 @@ export function TagManager() {
       </div>
 
       {tags.length === 0 ? (
-        <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+        <Card className="bg-card border-border ring-0 ring-transparent">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-slate-400 text-sm">No tags yet.</p>
-            <p className="text-slate-500 text-xs mt-1">Create tags to categorize your contacts.</p>
+            <p className="text-muted-foreground text-sm">No tags yet.</p>
+            <p className="text-muted-foreground text-xs mt-1">Create tags to categorize your contacts.</p>
           </CardContent>
         </Card>
       ) : (
-        <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+        <Card className="bg-card border-border ring-0 ring-transparent">
           <CardContent className="pt-4">
             <div className="flex flex-wrap gap-2">
               {tags.map((tag) => (
@@ -196,7 +196,7 @@ export function TagManager() {
                   {tag.name}
                   <button
                     onClick={() => confirmDelete(tag)}
-                    className="ml-0.5 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/10"
+                    className="ml-0.5 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted"
                   >
                     <X className="size-3" />
                   </button>
@@ -209,22 +209,22 @@ export function TagManager() {
 
       {/* New Tag Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-700 sm:max-w-sm">
+        <DialogContent className="bg-popover border-border sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">New Tag</DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogTitle className="text-popover-foreground">New Tag</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Create a new tag with a name and color.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label className="text-slate-300">Tag Name</Label>
+              <Label className="text-muted-foreground">Tag Name</Label>
               <Input
                 placeholder="e.g. VIP Customer"
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCreate();
                 }}
@@ -232,16 +232,16 @@ export function TagManager() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-slate-300">Color</Label>
+              <Label className="text-muted-foreground">Color</Label>
               <div className="flex gap-2 flex-wrap">
                 {PRESET_COLORS.map((color) => (
                   <button
                     key={color.value}
                     onClick={() => setSelectedColor(color.value)}
-                    className="relative size-8 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900"
+                    className="relative size-8 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-popover"
                     style={{
                       backgroundColor: color.value,
-                      boxShadow: selectedColor === color.value ? `0 0 0 2px rgb(15 23 42), 0 0 0 4px ${color.value}` : 'none',
+                      boxShadow: selectedColor === color.value ? `0 0 0 2px var(--popover), 0 0 0 4px ${color.value}` : 'none',
                     }}
                     title={color.name}
                   />
@@ -251,7 +251,7 @@ export function TagManager() {
 
             {/* Preview */}
             <div className="space-y-2">
-              <Label className="text-slate-300">Preview</Label>
+              <Label className="text-muted-foreground">Preview</Label>
               <div>
                 <span
                   className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium"
@@ -271,11 +271,11 @@ export function TagManager() {
             </div>
           </div>
 
-          <DialogFooter className="bg-slate-900 border-slate-700">
+          <DialogFooter className="bg-popover border-border">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              className="border-border text-muted-foreground hover:bg-muted"
             >
               Cancel
             </Button>
@@ -299,19 +299,19 @@ export function TagManager() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-700 sm:max-w-sm">
+        <DialogContent className="bg-popover border-border sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Delete Tag</DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogTitle className="text-popover-foreground">Delete Tag</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Are you sure you want to delete the tag &quot;{tagToDelete?.name}&quot;? This will remove
               it from all contacts. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="bg-slate-900 border-slate-700">
+          <DialogFooter className="bg-popover border-border">
             <Button
               variant="outline"
               onClick={() => setDeleteDialogOpen(false)}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              className="border-border text-muted-foreground hover:bg-muted"
             >
               Cancel
             </Button>

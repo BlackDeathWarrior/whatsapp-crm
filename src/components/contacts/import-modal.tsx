@@ -80,7 +80,7 @@ function ImportPreviewTags({
   tagColorByKey: Map<string, string>;
 }) {
   if (tagNames.length === 0) {
-    return <span className="text-slate-600">—</span>;
+    return <span className="text-muted-foreground">—</span>;
   }
 
   return (
@@ -398,31 +398,31 @@ export function ImportModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[min(90vh,720px)] flex-col gap-0 overflow-hidden border-slate-700/80 bg-slate-900 p-0 text-slate-200 sm:max-w-2xl">
-        <div className="shrink-0 space-y-4 border-b border-slate-800/80 px-6 pt-6 pb-5">
+      <DialogContent className="flex max-h-[min(90vh,720px)] flex-col gap-0 overflow-hidden border-border/80 bg-popover p-0 text-popover-foreground sm:max-w-2xl">
+        <div className="shrink-0 space-y-4 border-b border-border/80 px-6 pt-6 pb-5">
           <DialogHeader className="gap-1.5">
-            <DialogTitle className="text-lg text-white">
+            <DialogTitle className="text-lg text-popover-foreground">
               Import Contacts
             </DialogTitle>
-            <DialogDescription className="leading-relaxed text-slate-400">
+            <DialogDescription className="leading-relaxed text-muted-foreground">
               Upload a CSV with a required{' '}
-              <code className="rounded bg-slate-800 px-1 py-0.5 text-[11px] text-slate-300">
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
                 phone
               </code>{' '}
               column. Optional:{' '}
-              <code className="rounded bg-slate-800 px-1 py-0.5 text-[11px] text-slate-300">
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
                 name
               </code>
               ,{' '}
-              <code className="rounded bg-slate-800 px-1 py-0.5 text-[11px] text-slate-300">
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
                 email
               </code>
               ,{' '}
-              <code className="rounded bg-slate-800 px-1 py-0.5 text-[11px] text-slate-300">
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
                 company
               </code>
               ,{' '}
-              <code className="rounded bg-slate-800 px-1 py-0.5 text-[11px] text-slate-300">
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
                 tags
               </code>{' '}
               (comma-separated; quote multi-tag cells).
@@ -441,7 +441,7 @@ export function ImportModal({
               'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-5 transition-all',
               file
                 ? 'border-primary/35 bg-primary/[0.04]'
-                : 'hover:border-primary/40 border-slate-700/80 bg-slate-950/40 hover:bg-slate-950/70'
+                : 'hover:border-primary/40 border-border/80 bg-background/40 hover:bg-background/70'
             )}
           >
             {file ? (
@@ -450,25 +450,25 @@ export function ImportModal({
                   <FileText className="text-primary size-5" />
                 </div>
                 <p
-                  className="max-w-full truncate px-2 text-sm font-medium text-slate-200"
+                  className="max-w-full truncate px-2 text-sm font-medium text-popover-foreground"
                   title={file.name}
                 >
                   {truncateFilename(file.name)}
                 </p>
-                <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-[11px] font-medium text-slate-400">
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                   {parsedRows.length} row{parsedRows.length !== 1 ? 's' : ''}{' '}
                   ready
                 </span>
               </>
             ) : (
               <>
-                <div className="flex size-10 items-center justify-center rounded-lg bg-slate-800/80 ring-1 ring-slate-700/80 transition-colors group-hover:bg-slate-800">
-                  <Upload className="size-5 text-slate-500 group-hover:text-slate-400" />
+                <div className="flex size-10 items-center justify-center rounded-lg bg-muted/80 ring-1 ring-border/80 transition-colors group-hover:bg-muted">
+                  <Upload className="size-5 text-muted-foreground group-hover:text-foreground" />
                 </div>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-muted-foreground">
                   Click to choose a CSV file
                 </p>
-                <p className="text-[11px] text-slate-600">
+                <p className="text-[11px] text-muted-foreground">
                   .csv up to your browser limit
                 </p>
               </>
@@ -488,12 +488,12 @@ export function ImportModal({
           {preview.length > 0 && !result && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                   Preview · first {preview.length}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {tagStats.rowsWithTags > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-800/90 px-2 py-0.5 text-[11px] text-slate-400">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-muted/90 px-2 py-0.5 text-[11px] text-muted-foreground">
                       <Tag className="text-primary/80 size-3" />
                       {tagStats.unique} tag{tagStats.unique !== 1 ? 's' : ''} ·{' '}
                       {tagStats.rowsWithTags} contact
@@ -503,59 +503,59 @@ export function ImportModal({
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-slate-800 ring-1 ring-slate-800/50">
+              <div className="overflow-hidden rounded-xl border border-border ring-1 ring-border/50">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[32rem] text-xs">
                     <thead>
-                      <tr className="border-b border-slate-800 bg-slate-950/60">
-                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-slate-500">
+                      <tr className="border-b border-border bg-background/60">
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
                           Phone
                         </th>
-                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-slate-500">
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
                           Name
                         </th>
-                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-slate-500">
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
                           Email
                         </th>
                         {previewHasCompany && (
-                          <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-slate-500">
+                          <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
                             Company
                           </th>
                         )}
                         {previewHasTags && (
-                          <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-slate-500">
+                          <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
                             Tags
                           </th>
                         )}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/70">
+                    <tbody className="divide-y divide-border/70">
                       {preview.map((row, i) => (
                         <tr
                           key={i}
-                          className="bg-slate-900/40 transition-colors hover:bg-slate-800/30"
+                          className="bg-popover/40 transition-colors hover:bg-muted/30"
                         >
-                          <td className="px-3 py-2 whitespace-nowrap text-slate-300">
+                          <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
                             <PreviewCell
                               value={row.phone}
                               mono
                               maxWidth="max-w-[7.5rem]"
                             />
                           </td>
-                          <td className="px-3 py-2 text-slate-200">
+                          <td className="px-3 py-2 text-popover-foreground">
                             <PreviewCell
                               value={row.name || '—'}
                               maxWidth="max-w-[8.5rem]"
                             />
                           </td>
-                          <td className="px-3 py-2 text-slate-400">
+                          <td className="px-3 py-2 text-muted-foreground">
                             <PreviewCell
                               value={row.email || '—'}
                               maxWidth="max-w-[10rem]"
                             />
                           </td>
                           {previewHasCompany && (
-                            <td className="px-3 py-2 text-slate-400">
+                            <td className="px-3 py-2 text-muted-foreground">
                               <PreviewCell
                                 value={row.company || '—'}
                                 maxWidth="max-w-[7rem]"
@@ -578,7 +578,7 @@ export function ImportModal({
               </div>
 
               {parsedRows.length > PREVIEW_LIMIT && (
-                <p className="text-center text-[11px] text-slate-600">
+                <p className="text-center text-[11px] text-muted-foreground">
                   + {parsedRows.length - PREVIEW_LIMIT} more row
                   {parsedRows.length - PREVIEW_LIMIT !== 1 ? 's' : ''} not shown
                 </p>
@@ -587,8 +587,8 @@ export function ImportModal({
           )}
 
           {result && (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-              <p className="text-sm font-medium text-white">Import complete</p>
+            <div className="rounded-xl border border-border bg-background/50 p-4">
+              <p className="text-sm font-medium text-popover-foreground">Import complete</p>
               <div className="mt-3 flex flex-wrap gap-3">
                 {result.imported > 0 && (
                   <div className="text-primary flex items-center gap-1.5 text-sm">
@@ -620,12 +620,12 @@ export function ImportModal({
           )}
         </div>
 
-        <DialogFooter className="mt-0 shrink-0 gap-2 border-t border-slate-800/80 bg-slate-950/50 px-6 py-4 sm:justify-end">
+        <DialogFooter className="mt-0 shrink-0 gap-2 border-t border-border/80 bg-background/50 px-6 py-4 sm:justify-end">
           <Button
             type="button"
             variant="outline"
             onClick={() => handleOpenChange(false)}
-            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            className="border-border text-muted-foreground hover:bg-muted"
           >
             {result ? 'Close' : 'Cancel'}
           </Button>

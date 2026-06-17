@@ -161,14 +161,14 @@ export function FlowBuilder() {
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-sm font-semibold text-foreground">
             Nodes ({state.nodes.length})
           </h2>
           <AddNodeButton onAdd={addNode} />
         </div>
 
         {state.nodes.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/50 p-8 text-center text-sm text-slate-400">
+          <div className="rounded-lg border border-dashed border-border bg-card/50 p-8 text-center text-sm text-muted-foreground">
             Add a <strong>Start</strong> node, then a <strong>Send buttons</strong>
             {" "}node, then a <strong>Handoff</strong> — that&apos;s the welcome-menu
             shape from the brief.
@@ -246,7 +246,7 @@ function KeywordsInput({
         }
       }}
       placeholder="support, help, hi"
-      className="bg-slate-800"
+      className="bg-muted"
     />
   );
 }
@@ -265,11 +265,11 @@ function TriggerPanel({
   triggerIssues: ValidationIssue[];
 }) {
   return (
-    <section className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-      <h2 className="mb-3 text-sm font-semibold text-white">Trigger</h2>
+    <section className="rounded-lg border border-border bg-card p-4">
+      <h2 className="mb-3 text-sm font-semibold text-foreground">Trigger</h2>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs text-slate-400">When…</label>
+          <label className="mb-1 block text-xs text-muted-foreground">When…</label>
           <Select
             value={state.trigger_type}
             onValueChange={(v) =>
@@ -281,7 +281,7 @@ function TriggerPanel({
               }))
             }
           >
-            <SelectTrigger className="bg-slate-800">
+            <SelectTrigger className="bg-muted">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -299,7 +299,7 @@ function TriggerPanel({
         </div>
         {state.trigger_type === "keyword" && (
           <div>
-            <label className="mb-1 block text-xs text-slate-400">
+            <label className="mb-1 block text-xs text-muted-foreground">
               Keywords (comma-separated)
             </label>
             <KeywordsInput
@@ -342,9 +342,9 @@ function EntryPicker({
 }) {
   if (state.nodes.length === 0) return null;
   return (
-    <section className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 p-3">
+    <section className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
       <CornerDownRight className="h-4 w-4 shrink-0 text-primary" />
-      <span className="text-xs text-slate-400">Entry node:</span>
+      <span className="text-xs text-muted-foreground">Entry node:</span>
       <NodeKeySelect
         value={state.entry_node_id}
         nodes={state.nodes}
@@ -396,14 +396,14 @@ function NodeCard({
     <div
       ref={cardRef}
       className={cn(
-        "rounded-lg border bg-slate-900 transition-shadow duration-500",
+        "rounded-lg border bg-card transition-shadow duration-500",
         hasError
           ? "border-red-500/40"
           : isEntry
             ? "border-primary/50"
-            : "border-slate-800",
+            : "border-border",
         isFlashed &&
-          "ring-2 ring-primary ring-offset-2 ring-offset-slate-950",
+          "ring-2 ring-primary ring-offset-2 ring-offset-background",
       )}
     >
       <button
@@ -414,10 +414,10 @@ function NodeCard({
         <meta.icon className={cn("h-4 w-4 shrink-0", meta.color)} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-white">
+            <span className="truncate text-sm font-medium text-foreground">
               {meta.label}
             </span>
-            <code className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">
+            <code className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
               {node.node_key}
             </code>
             {isEntry && (
@@ -430,7 +430,7 @@ function NodeCard({
             )}
           </div>
           {!expanded && preview && (
-            <p className="mt-0.5 truncate text-xs text-slate-500">
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {preview}
             </p>
           )}
@@ -439,20 +439,20 @@ function NodeCard({
           <CircleAlert className="h-3.5 w-3.5 shrink-0 text-red-400" />
         )}
         {expanded ? (
-          <ChevronUp className="h-4 w-4 text-slate-500" />
+          <ChevronUp className="h-4 w-4 text-muted-foreground" />
         ) : (
-          <ChevronDown className="h-4 w-4 text-slate-500" />
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
         )}
       </button>
       {expanded && (
-        <div className="border-t border-slate-800 px-4 py-4">
+        <div className="border-t border-border px-4 py-4">
           <NodeConfigWithAdvanced
             node={node}
             allNodes={allNodes}
             onUpdate={onUpdate}
             onUpdateConfig={onUpdateConfig}
           />
-          <div className="mt-4 flex items-center justify-between border-t border-slate-800 pt-3">
+          <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
             <div className="flex items-center gap-2">
               {!isEntry && (
                 <Button variant="ghost" size="sm" onClick={onSetEntry}>
@@ -511,11 +511,11 @@ function NodeConfigWithAdvanced({
         showAdvanced={showAdvanced}
         onUpdateConfig={onUpdateConfig}
       />
-      <div className="border-t border-slate-800 pt-3">
+      <div className="border-t border-border pt-3">
         <button
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           {showAdvanced ? (
             <ChevronUp className="h-3 w-3" />
@@ -527,7 +527,7 @@ function NodeConfigWithAdvanced({
         {showAdvanced && (
           <div className="mt-3 flex flex-col gap-3">
             <div>
-              <label className="mb-1 block text-xs text-slate-400">
+              <label className="mb-1 block text-xs text-muted-foreground">
                 Node key (internal identifier — keep stable for analytics)
               </label>
               <Input
@@ -535,11 +535,11 @@ function NodeConfigWithAdvanced({
                 onChange={(e) =>
                   onUpdate({ node_key: slugify(e.target.value, node.node_key) })
                 }
-                className="bg-slate-800 font-mono text-xs"
+                className="bg-muted font-mono text-xs"
               />
             </div>
             {hasReplyIds && (
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[10px] text-muted-foreground">
                 Reply IDs for each option are shown inline above. They&apos;re
                 returned by WhatsApp when a customer taps; you usually don&apos;t
                 need to touch them.
@@ -573,13 +573,13 @@ function AddNodeButton({ onAdd }: { onAdd: (type: NodeType) => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-800"
+        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
         aria-label="Add node"
       >
         <Plus className="h-3.5 w-3.5" />
         Add node
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="border-slate-700 bg-slate-900">
+      <DropdownMenuContent align="end" className="border-border bg-popover">
         {types.map((t) => {
           const meta = NODE_META[t];
           return (

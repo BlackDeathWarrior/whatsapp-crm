@@ -85,7 +85,7 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
             <div
               role="group"
               aria-label="Editor view"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 p-0.5 text-xs"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-card p-0.5 text-xs"
             >
               <ToggleButton
                 active={effectiveView === "canvas"}
@@ -108,7 +108,7 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
         {/* Sticky-bottom validation panel mirrors the placement used
             when this lived inside FlowBuilder — the activate-readiness
             status follows the user as they scroll, in either view. */}
-        <div className="sticky bottom-4 z-10 shadow-xl shadow-slate-950/60">
+        <div className="sticky bottom-4 z-10 shadow-xl shadow-background/60">
           <ValidationPanel />
         </div>
       </div>
@@ -157,8 +157,8 @@ function ToggleButton({
       className={cn(
         "inline-flex items-center gap-1.5 rounded px-2 py-1 transition-colors",
         active
-          ? "bg-slate-700 text-slate-100"
-          : "text-slate-400 hover:bg-slate-800 hover:text-slate-200",
+          ? "bg-secondary text-secondary-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       {icon}
