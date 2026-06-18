@@ -68,7 +68,7 @@ export function DealsSettings() {
   }
 
   return (
-    <section className="animate-in fade-in-50 duration-200">
+    <section className="max-w-2xl animate-in fade-in-50 duration-200">
       <SettingsPanelHead
         title="Deals & currency"
         description="The currency used for new deals and for pipeline and dashboard totals."

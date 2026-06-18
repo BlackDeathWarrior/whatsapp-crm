@@ -205,7 +205,7 @@ export function ProfileForm() {
     : '—';
 
   return (
-    <section className="animate-in fade-in-50 duration-200">
+    <section className="max-w-2xl animate-in fade-in-50 duration-200">
       <SettingsPanelHead
         title="Your profile"
         description="How you show up across the app. Your avatar and name appear in the header, sidebar, and anywhere your teammates see you."
