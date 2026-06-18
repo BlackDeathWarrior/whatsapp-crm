@@ -62,7 +62,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-[1040px]">
+    <div>
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Settings
@@ -73,7 +73,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[236px_1fr] lg:items-start">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
         <SettingsRail active={section} onSelect={go} hints={hints} />
         <div className="min-w-0">{panel[section]}</div>
       </div>
