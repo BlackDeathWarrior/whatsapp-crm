@@ -927,9 +927,14 @@ function StepRenderer({
         )}
       </div>
 
-      <AddButton
-        onPick={(t) => props.addStepAt(parentScope, index + 1, t)}
-      />
+      {/* A condition branches into Yes/No (rendered above by
+          ConditionBranches), so it has no linear "continue" path — adding
+          the trailing connector here would produce a spurious third output. */}
+      {!isCondition && (
+        <AddButton
+          onPick={(t) => props.addStepAt(parentScope, index + 1, t)}
+        />
+      )}
     </>
   )
 }
