@@ -14,13 +14,8 @@ import {
   AvatarFallback,
   AvatarImage,
 } from '@/components/ui/avatar';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { SettingsPanelHead } from './settings-panel-head';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set([
@@ -210,17 +205,14 @@ export function ProfileForm() {
     : '—';
 
   return (
-    <Card className="bg-card/40 border-border">
-      <CardHeader>
-        <CardTitle className="text-foreground">Profile</CardTitle>
-        <CardDescription className="text-muted-foreground">
-          How you show up across the app. Your avatar and name appear in the
-          header, sidebar, and anywhere your teammates see you.
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent>
-        <form onSubmit={onSubmit} className="space-y-6">
+    <section className="animate-in fade-in-50 duration-200">
+      <SettingsPanelHead
+        title="Your profile"
+        description="How you show up across the app. Your avatar and name appear in the header, sidebar, and anywhere your teammates see you."
+      />
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Card>
+          <CardContent className="space-y-6">
           {/* Avatar row */}
           <div className="flex flex-wrap items-center gap-5">
             <Avatar size="lg" className="size-16">
@@ -297,7 +289,7 @@ export function ProfileForm() {
               required
             />
             {emailChangePending && (
-              <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+              <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                 <Mail className="mt-0.5 size-3.5 shrink-0" />
                 <span>
                   Check the inbox for <strong>{profile?.email}</strong> and{' '}
@@ -309,7 +301,7 @@ export function ProfileForm() {
           </div>
 
           {/* Read-only block */}
-          <div className="rounded-lg border border-border bg-card/60 p-4">
+          <div className="rounded-lg border border-border bg-muted p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Account details
             </p>
@@ -340,20 +332,22 @@ export function ProfileForm() {
             </p>
           )}
 
-          <div className="flex justify-end">
-            <Button type="submit" disabled={saving || !dirty || !profile}>
-              {saving ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Saving…
-                </>
-              ) : (
-                'Save changes'
-              )}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+        </CardContent>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={saving || !dirty || !profile}>
+            {saving ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              'Save changes'
+            )}
+          </Button>
+        </div>
+      </form>
+    </section>
   );
 }

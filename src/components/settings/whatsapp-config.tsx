@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { SettingsPanelHead } from './settings-panel-head';
 import {
   Accordion,
   AccordionItem,
@@ -360,16 +361,27 @@ export function WhatsAppConfig() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="size-6 animate-spin text-primary" />
-      </div>
+      <section className="animate-in fade-in-50 duration-200">
+        <SettingsPanelHead
+          title="WhatsApp connection"
+          description="Connect your Meta WhatsApp Business API. Credentials, webhook, and setup steps all live here."
+        />
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-6 animate-spin text-primary" />
+        </div>
+      </section>
     );
   }
 
   const showResetBanner = resetReason === 'token_corrupted';
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_380px] mt-4">
+    <section className="animate-in fade-in-50 duration-200">
+      <SettingsPanelHead
+        title="WhatsApp connection"
+        description="Connect your Meta WhatsApp Business API. Credentials, webhook, and setup steps all live here."
+      />
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
       {/* Main config form */}
       <div className="space-y-6">
         {/* Corrupted-token reset banner */}
@@ -536,7 +548,7 @@ export function WhatsAppConfig() {
         )}
 
         {/* API Credentials */}
-        <Card className="bg-card border-border ring-0 ring-transparent">
+        <Card>
           <CardHeader>
             <CardTitle className="text-foreground">API Credentials</CardTitle>
             <CardDescription className="text-muted-foreground">
@@ -648,7 +660,7 @@ export function WhatsAppConfig() {
         </Card>
 
         {/* Webhook URL */}
-        <Card className="bg-card border-border ring-0 ring-transparent">
+        <Card>
           <CardHeader>
             <CardTitle className="text-foreground">Webhook Configuration</CardTitle>
             <CardDescription className="text-muted-foreground">
@@ -736,7 +748,7 @@ export function WhatsAppConfig() {
 
       {/* Setup Instructions Sidebar */}
       <div>
-        <Card className="bg-card border-border ring-0 ring-transparent">
+        <Card>
           <CardHeader>
             <CardTitle className="text-foreground text-base">Setup Instructions</CardTitle>
             <CardDescription className="text-muted-foreground">
@@ -829,5 +841,6 @@ export function WhatsAppConfig() {
         </Card>
       </div>
     </div>
+    </section>
   );
 }

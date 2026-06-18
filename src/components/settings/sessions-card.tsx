@@ -49,7 +49,7 @@ export function SessionsCard() {
 
   return (
     <>
-      <Card className="bg-card/40 border-border">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
             <LogOut className="size-4 text-primary" />
