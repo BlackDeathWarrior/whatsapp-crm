@@ -108,14 +108,10 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-/** A recording can skip the transcode round-trip only if it's already
- *  OGG/Opus — the one format WhatsApp reliably renders as a voice note
- *  with a waveform. Everything else (Chromium WebM, Safari MP4/AAC) is
- *  remuxed server-side so the voice-note UX is consistent across
- *  browsers, not a plain audio attachment on some of them. */
-function isOggOpus(mime: string): boolean {
-  return mime.split(";")[0].trim().toLowerCase() === "audio/ogg";
-}
+/** Worker that encodes mic input to Ogg/Opus entirely in the browser
+ *  (vendored from opus-recorder into /public). Recording client-side in a
+ *  Meta-accepted format means no server ffmpeg / transcode step. */
+const OPUS_ENCODER_PATH = "/opus/encoderWorker.min.js";
 
 export function MessageComposer({
   conversationId,
@@ -151,12 +147,11 @@ export function MessageComposer({
     void deleteAccountMedia(CHAT_MEDIA_BUCKET, path).catch(() => {});
   }, []);
 
-  // Voice recording state.
+  // Voice recording state. The recorder encodes Ogg/Opus in-browser
+  // (opus-recorder) so there's no server-side transcode.
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<import("opus-recorder").default | null>(null);
   const cancelledRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -185,7 +180,9 @@ export function MessageComposer({
   useEffect(() => {
     return () => {
       clearTimer();
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      cancelledRef.current = true;
+      // stop() releases the mic stream + audio context inside opus-recorder.
+      void recorderRef.current?.stop().catch(() => {});
       removeStaged(draftRef.current?.path);
     };
   }, [clearTimer, removeStaged]);
@@ -269,41 +266,29 @@ export function MessageComposer({
     [stageUpload],
   );
 
-  // ---- Voice recording ----------------------------------------------
+  // ---- Voice recording (client-side Ogg/Opus, no server transcode) ---
 
+  // The encoded Ogg/Opus file from opus-recorder → upload as an audio
+  // draft. WhatsApp renders Ogg/Opus as a playable voice note.
   const finalizeRecording = useCallback(
-    async (blob: Blob, mime: string) => {
+    async (bytes: Uint8Array) => {
+      // Uint8Array is a valid BlobPart at runtime; the cast sidesteps the
+      // lib.dom ArrayBufferLike-vs-ArrayBuffer generic mismatch.
+      const file = new File([bytes as unknown as BlobPart], `voice-${Date.now()}.ogg`, {
+        type: "audio/ogg",
+      });
+      if (file.size === 0) return; // cancelled / empty take
+      if (file.size > MEDIA_MAX_BYTES_BY_KIND.audio) {
+        toast.error("Recording is too long (over 16 MB).");
+        return;
+      }
       setBusy(true);
       try {
-        let file: File;
-        if (isOggOpus(mime)) {
-          // Firefox records OGG/Opus directly — upload as-is.
-          file = new File([blob], `voice-${Date.now()}.ogg`, { type: "audio/ogg" });
-        } else {
-          // Chromium (WebM) and Safari (MP4) are remuxed to OGG/Opus so
-          // WhatsApp renders a voice note, not a plain audio attachment.
-          const form = new FormData();
-          form.append("file", blob, "recording");
-          const res = await fetch("/api/whatsapp/transcode-audio", {
-            method: "POST",
-            body: form,
-          });
-          if (!res.ok) {
-            const payload = await res.json().catch(() => ({}));
-            throw new Error(payload?.error || `Transcode failed (HTTP ${res.status})`);
-          }
-          const ogg = await res.blob();
-          file = new File([ogg], `voice-${Date.now()}.ogg`, { type: "audio/ogg" });
-        }
-        if (file.size > MEDIA_MAX_BYTES_BY_KIND.audio) {
-          toast.error("Recording is too long (over 16 MB).");
-          return;
-        }
         const { publicUrl, path } = await uploadAccountMedia(CHAT_MEDIA_BUCKET, file);
         removeStaged(draftRef.current?.path);
         setDraft({ kind: "audio", mediaUrl: publicUrl, path, filename: file.name, caption: "" });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Could not process the recording.");
+        toast.error(err instanceof Error ? err.message : "Upload failed.");
       } finally {
         setBusy(false);
       }
@@ -313,41 +298,34 @@ export function MessageComposer({
 
   const startRecording = useCallback(async () => {
     if (inputsDisabled || busy || recording) return;
-    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === "undefined") {
       toast.error("Voice recording isn't supported in this browser.");
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      // Prefer a Meta-accepted container (Firefox supports ogg/opus) so
-      // we can skip the transcode round-trip; Chromium falls back to webm.
-      const preferred = ["audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm"];
-      const mimeType = preferred.find((t) => MediaRecorder.isTypeSupported(t)) || "";
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      chunksRef.current = [];
+      // Lazy-load the encoder (≈400 KB worker) only when the user records,
+      // keeping it out of the main bundle.
+      const { default: Recorder } = await import("opus-recorder");
+      const recorder = new Recorder({
+        encoderPath: OPUS_ENCODER_PATH,
+        numberOfChannels: 1,
+        encoderApplication: 2048, // VOIP — tuned for speech
+        encoderSampleRate: 48000,
+        streamPages: false, // one callback with the complete file on stop
+      });
       cancelledRef.current = false;
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-        const chunks = chunksRef.current;
-        chunksRef.current = [];
+      recorder.ondataavailable = (bytes) => {
         if (cancelledRef.current) return;
-        const type = recorder.mimeType || mimeType || "audio/webm";
-        const blob = new Blob(chunks, { type });
-        if (blob.size > 0) void finalizeRecording(blob, type);
+        void finalizeRecording(bytes);
       };
       recorderRef.current = recorder;
-      recorder.start();
+      await recorder.start();
       setRecording(true);
       setRecordSeconds(0);
       timerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
     } catch {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+      void recorderRef.current?.stop().catch(() => {});
+      recorderRef.current = null;
       toast.error("Microphone access denied or unavailable.");
     }
   }, [inputsDisabled, busy, recording, finalizeRecording]);
@@ -355,18 +333,18 @@ export function MessageComposer({
   const stopRecording = useCallback(() => {
     clearTimer();
     setRecording(false);
-    recorderRef.current?.stop();
+    void recorderRef.current?.stop().catch(() => {});
   }, [clearTimer]);
 
   const cancelRecording = useCallback(() => {
     cancelledRef.current = true;
     clearTimer();
     setRecording(false);
-    recorderRef.current?.stop();
+    void recorderRef.current?.stop().catch(() => {});
   }, [clearTimer]);
 
   // Auto-stop at the cap so a forgotten recording can't blow the
-  // upload/transcode limits.
+  // upload size limit.
   useEffect(() => {
     if (recording && recordSeconds >= MAX_RECORDING_SECONDS) {
       stopRecording();
