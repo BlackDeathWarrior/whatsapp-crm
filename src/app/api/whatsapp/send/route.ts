@@ -21,7 +21,6 @@ import {
 } from '@/lib/rate-limit'
 import type { MessageTemplate } from '@/types'
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard'
-import { hasBetaFeature, CHAT_MEDIA_BETA } from '@/lib/auth/beta-features'
 
 export async function POST(request: Request) {
   try {
@@ -52,7 +51,7 @@ export async function POST(request: Request) {
     // returned nothing for teammates who didn't author the row.
     const { data: profile } = await supabase
       .from('profiles')
-      .select('account_id, beta_features')
+      .select('account_id')
       .eq('user_id', user.id)
       .maybeSingle()
     const accountId = profile?.account_id as string | undefined
@@ -117,17 +116,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: `media_url is required for ${message_type} messages` },
         { status: 400 }
-      )
-    }
-
-    // Media sends are beta-gated (issue #213). Text + templates stay
-    // available to everyone; only accounts opted into 'chat_media' may
-    // send media — mirrors the client gate so the endpoint can't be
-    // driven ahead of the rollout.
-    if (isMediaKind && !hasBetaFeature(profile?.beta_features, CHAT_MEDIA_BETA)) {
-      return NextResponse.json(
-        { error: 'Media messages are not enabled for your account.' },
-        { status: 403 }
       )
     }
 
