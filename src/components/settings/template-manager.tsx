@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -11,8 +11,13 @@ import {
   X,
   Pencil,
   RotateCcw,
+  Upload,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import {
+  uploadAccountMedia,
+  MEDIA_MAX_BYTES_BY_KIND,
+} from '@/lib/storage/upload-media';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -137,6 +142,11 @@ export function TemplateManager() {
   // doesn't take the template off Meta as well as locally.
   const [templateToDelete, setTemplateToDelete] =
     useState<MessageTemplate | null>(null);
+  // Header-image upload (issue #230). Uploads to the account-scoped
+  // chat-media bucket and stores the public URL in header_media_url; the
+  // submit route turns that into a Meta Resumable-Upload handle.
+  const [uploadingHeader, setUploadingHeader] = useState(false);
+  const headerFileRef = useRef<HTMLInputElement>(null);
 
   // Body variable indices — `[1, 2, 3]` for "{{1}} {{2}} {{3}}". We
   // re-run the extractor on every render to keep the sample-value rows
@@ -444,6 +454,29 @@ export function TemplateManager() {
 
   const headerNeedsMedia =
     form.header_format !== 'none' && form.header_format !== 'text';
+
+  async function handleHeaderImageFile(file: File) {
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      toast.error('Header image must be a JPEG or PNG.');
+      return;
+    }
+    if (file.size > MEDIA_MAX_BYTES_BY_KIND.image) {
+      toast.error(
+        `Image is ${(file.size / 1024 / 1024).toFixed(1)} MB — Meta's limit is 5 MB.`,
+      );
+      return;
+    }
+    setUploadingHeader(true);
+    try {
+      const { publicUrl } = await uploadAccountMedia('chat-media', file);
+      setForm((f) => ({ ...f, header_media_url: publicUrl }));
+      toast.success('Image uploaded.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setUploadingHeader(false);
+    }
+  }
 
   return (
     <div className="space-y-4 mt-4">
@@ -777,24 +810,62 @@ export function TemplateManager() {
 
               {headerNeedsMedia && (
                 <div className="space-y-2 mt-2">
+                  {form.header_format === 'image' && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={headerFileRef}
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void handleHeaderImageFile(f);
+                          e.target.value = '';
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={uploadingHeader}
+                        onClick={() => headerFileRef.current?.click()}
+                      >
+                        {uploadingHeader ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="h-3.5 w-3.5" />
+                        )}
+                        Upload image
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">
+                        JPEG or PNG, ≤5 MB
+                      </span>
+                    </div>
+                  )}
                   <Input
-                    placeholder={`https://… (public link to a sample ${form.header_format})`}
+                    placeholder={`https://… (or paste a public ${form.header_format} link)`}
                     value={form.header_media_url}
                     onChange={(e) =>
                       setForm({ ...form, header_media_url: e.target.value })
                     }
                     className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
                   />
+                  {form.header_format === 'image' && form.header_media_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={form.header_media_url}
+                      alt="Header sample"
+                      className="max-h-28 rounded-md border border-border object-contain"
+                    />
+                  )}
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Must be publicly accessible HTTPS. Meta fetches it once
-                    during review, so the file needs to stay live for ~24 hrs.
-                    {form.header_format === 'image' &&
-                      ' Recommended: JPEG or PNG, ≥800×418 px, ≤5 MB.'}
+                    {form.header_format === 'image'
+                      ? 'Upload a JPEG/PNG (≤5 MB, ≥800×418 px recommended) or paste a public HTTPS link — we upload it to Meta for review automatically.'
+                      : 'Must be a publicly accessible HTTPS link. Meta fetches it once during review, so it needs to stay live for ~24 hrs.'}
                     {form.header_format === 'video' &&
                       ' Recommended: MP4 / 3GPP, ≤16 MB, ≤60 seconds.'}
                     {form.header_format === 'document' &&
                       ' Recommended: PDF, ≤100 MB.'}
-                    {' '}Direct file upload is coming in a follow-up.
                   </p>
                 </div>
               )}
