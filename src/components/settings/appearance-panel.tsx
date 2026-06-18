@@ -1,10 +1,11 @@
 "use client";
 
-import { Check, Moon, Sun } from "lucide-react";
+import { Check, Moon, Palette, SunMoon, Sun } from "lucide-react";
 
 import { useTheme } from "@/hooks/use-theme";
 import { MODES, THEMES, type Mode, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { SettingsPanelHead } from "./settings-panel-head";
 
 /**
  * Appearance panel — light/dark mode + accent-color picker.
@@ -21,16 +22,17 @@ import { cn } from "@/lib/utils";
 export function AppearancePanel() {
   const { theme, setTheme, mode, setMode } = useTheme();
   return (
-    <section className="space-y-8">
+    <section className="animate-in fade-in-50 duration-200">
+      <SettingsPanelHead
+        title="Appearance"
+        description="Set the mode and accent colour used across the app. Saved to this device — try it, it changes live."
+      />
+
       <div className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Mode</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Choose light or dark. Light is easier on the eyes in bright
-            rooms; dark is the original look. Works with any accent
-            color below. Saved to this device.
-          </p>
-        </div>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <SunMoon className="size-4 text-muted-foreground" />
+          Mode
+        </h3>
 
         <div
           role="radiogroup"
@@ -48,16 +50,11 @@ export function AppearancePanel() {
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            Accent color
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Pick the accent color used across the app — buttons, active
-            nav, and badges. Saved to this device.
-          </p>
-        </div>
+      <div className="mt-8 space-y-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Palette className="size-4 text-muted-foreground" />
+          Accent color
+        </h3>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {THEMES.map((t) => (

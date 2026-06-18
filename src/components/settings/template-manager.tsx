@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { SettingsPanelHead } from './settings-panel-head';
 import {
   Dialog,
   DialogContent,
@@ -479,38 +480,33 @@ export function TemplateManager() {
   }
 
   return (
-    <div className="space-y-4 mt-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Message Templates</h2>
-          <p className="text-sm text-muted-foreground">
-            Create message templates and submit them to Meta for approval. Use
-            &quot;Sync from Meta&quot; to pull templates approved elsewhere.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={handleSyncFromMeta}
-            disabled={syncing}
-            className="border-border bg-transparent text-muted-foreground hover:bg-muted"
-            title="Pull approved templates from your Meta WhatsApp Business Account"
-          >
-            <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing…' : 'Sync from Meta'}
-          </Button>
-          <Button
-            onClick={openCreate}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            <Plus className="size-4" />
-            New Template
-          </Button>
-        </div>
-      </div>
+    <section className="animate-in fade-in-50 space-y-4 duration-200">
+      <SettingsPanelHead
+        title="Message templates"
+        description={
+          'Create templates and submit them to Meta for approval. Use "Sync from Meta" to pull templates approved elsewhere.'
+        }
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleSyncFromMeta}
+              disabled={syncing}
+              title="Pull approved templates from your Meta WhatsApp Business Account"
+            >
+              <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing…' : 'Sync from Meta'}
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="size-4" />
+              New Template
+            </Button>
+          </div>
+        }
+      />
 
       {templates.length === 0 ? (
-        <Card className="bg-card border-border ring-0 ring-transparent">
+        <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground text-sm">No templates yet.</p>
             <p className="text-muted-foreground text-xs mt-1">
@@ -524,10 +520,7 @@ export function TemplateManager() {
             const statusKey = template.status || 'DRAFT';
             const status = templateStatusConfig[statusKey];
             return (
-              <Card
-                key={template.id}
-                className="bg-card border-border ring-0 ring-transparent"
-              >
+              <Card key={template.id}>
                 <CardContent className="flex items-start justify-between pt-4">
                   <div className="space-y-2 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -1136,6 +1129,6 @@ export function TemplateManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </section>
   );
 }
