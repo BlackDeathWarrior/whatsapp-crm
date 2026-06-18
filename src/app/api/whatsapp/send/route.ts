@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
+import {
+  sendTextMessage,
+  sendTemplateMessage,
+  sendMediaMessage,
+  type MediaKind,
+} from '@/lib/whatsapp/meta-api'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
 import {
@@ -63,6 +68,7 @@ export async function POST(request: Request) {
       message_type,
       content_text,
       media_url,
+      filename,
       template_name,
       template_language,
       template_params,
@@ -77,6 +83,11 @@ export async function POST(request: Request) {
       )
     }
 
+    // Media kinds (image/video/document/audio) are sent to Meta via a
+    // public URL the composer already uploaded to the chat-media bucket.
+    const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const
+    const isMediaKind = (MEDIA_KINDS as readonly string[]).includes(message_type)
+
     if (message_type === 'text' && !content_text) {
       return NextResponse.json(
         { error: 'content_text is required for text messages' },
@@ -87,6 +98,13 @@ export async function POST(request: Request) {
     if (message_type === 'template' && !template_name) {
       return NextResponse.json(
         { error: 'template_name is required for template messages' },
+        { status: 400 }
+      )
+    }
+
+    if (isMediaKind && !media_url) {
+      return NextResponse.json(
+        { error: `media_url is required for ${message_type} messages` },
         { status: 400 }
       )
     }
@@ -242,6 +260,22 @@ export async function POST(request: Request) {
           // Legacy body-only fallback — only consulted when
           // messageParams.body isn't set.
           params: template_params || [],
+          contextMessageId,
+        })
+        return result.messageId
+      }
+      if (isMediaKind) {
+        // content_text doubles as the caption (ignored for audio inside
+        // sendMediaMessage). filename surfaces in the recipient's chat
+        // for documents only.
+        const result = await sendMediaMessage({
+          phoneNumberId: config.phone_number_id,
+          accessToken,
+          to: phone,
+          kind: message_type as MediaKind,
+          link: media_url,
+          caption: content_text || undefined,
+          filename: filename || undefined,
           contextMessageId,
         })
         return result.messageId
