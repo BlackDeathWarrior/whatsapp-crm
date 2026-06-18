@@ -444,6 +444,83 @@ export async function sendTemplateMessage(
 }
 
 // ============================================================
+// Resumable Upload (media handles for template headers)
+// ============================================================
+//
+// Creating a message template with a media HEADER (image/video/
+// document) requires an `example.header_handle` — Meta does NOT accept
+// a plain public URL at creation time. The handle comes from the
+// two-step Resumable Upload API, which is keyed on the Meta APP id (not
+// the phone number / WABA):
+//
+//   1. POST /{app_id}/uploads?file_name&file_length&file_type&access_token
+//        → { id: "upload:<session>" }
+//   2. POST /{id}  (Authorization: OAuth <token>, file_offset: 0, raw bytes)
+//        → { h: "<handle>" }
+//
+// See https://developers.facebook.com/docs/graph-api/guides/upload
+
+export interface UploadResumableMediaArgs {
+  /** Meta App id (env META_APP_ID) — resumable upload is app-scoped. */
+  appId: string
+  accessToken: string
+  fileName: string
+  mimeType: string
+  bytes: Uint8Array
+}
+
+/**
+ * Upload a file via the Resumable Upload API and return the media
+ * handle to use as `example.header_handle` when creating/editing a
+ * template with a media header.
+ */
+export async function uploadResumableMedia(
+  args: UploadResumableMediaArgs,
+): Promise<{ handle: string }> {
+  const { appId, accessToken, fileName, mimeType, bytes } = args
+
+  // Step 1 — open an upload session.
+  const startParams = new URLSearchParams({
+    file_name: fileName,
+    file_length: String(bytes.byteLength),
+    file_type: mimeType,
+    access_token: accessToken,
+  })
+  const startRes = await fetch(
+    `${META_API_BASE}/${appId}/uploads?${startParams.toString()}`,
+    { method: 'POST' },
+  )
+  if (!startRes.ok) {
+    await throwMetaError(startRes, `Resumable upload start failed: ${startRes.status}`)
+  }
+  const startData = (await startRes.json()) as { id?: string }
+  if (!startData.id) {
+    throw new Error('Resumable upload did not return a session id.')
+  }
+
+  // Step 2 — upload the bytes. Note the `OAuth` auth scheme (not Bearer)
+  // and the file_offset header, both required by this endpoint.
+  const uploadRes = await fetch(`${META_API_BASE}/${startData.id}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `OAuth ${accessToken}`,
+      file_offset: '0',
+    },
+    // Uint8Array is a valid BodyInit at runtime; cast around the
+    // lib.dom ArrayBufferLike-vs-ArrayBuffer generic mismatch.
+    body: bytes as unknown as BodyInit,
+  })
+  if (!uploadRes.ok) {
+    await throwMetaError(uploadRes, `Resumable upload failed: ${uploadRes.status}`)
+  }
+  const uploadData = (await uploadRes.json()) as { h?: string }
+  if (!uploadData.h) {
+    throw new Error('Resumable upload did not return a file handle.')
+  }
+  return { handle: uploadData.h }
+}
+
+// ============================================================
 // Template submission (Business Management API)
 // ============================================================
 
