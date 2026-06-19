@@ -21,6 +21,8 @@ import {
   Clock,
   ArrowLeft,
   RefreshCw,
+  PanelRightOpen,
+  PanelRightClose,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -92,6 +94,15 @@ interface MessageThreadProps {
    * working; the button is only rendered when this is provided.
    */
   onRefresh?: () => void;
+  /**
+   * Desktop-only contact-panel toggle. The page owns the open/closed
+   * state (it's the one that renders the sidebar), so the thread just
+   * reflects it and asks the page to flip it. Both optional so existing
+   * callers keep working; the toggle button only renders when
+   * `onToggleContactPanel` is wired up.
+   */
+  contactPanelOpen?: boolean;
+  onToggleContactPanel?: () => void;
 }
 
 function formatDateSeparator(dateStr: string): string {
@@ -148,6 +159,8 @@ export function MessageThread({
   onBack,
   resyncToken = 0,
   onRefresh,
+  contactPanelOpen,
+  onToggleContactPanel,
 }: MessageThreadProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -839,6 +852,33 @@ export function MessageThread({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Contact-panel toggle — desktop only. The contact sidebar
+              eats a chunk of horizontal width that crowds the thread on
+              smaller laptops; this lets agents reclaim it when they just
+              want to read and reply. Hidden on mobile, where the sidebar
+              never renders as a permanent panel anyway. Issue #258. */}
+          {onToggleContactPanel && (
+            <button
+              type="button"
+              onClick={onToggleContactPanel}
+              aria-label={
+                contactPanelOpen ? "Hide contact panel" : "Show contact panel"
+              }
+              aria-pressed={contactPanelOpen}
+              title={contactPanelOpen ? "Hide contact" : "Show contact"}
+              className={cn(
+                "hidden h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
+                contactPanelOpen ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              {contactPanelOpen ? (
+                <PanelRightClose className="h-4 w-4" />
+              ) : (
+                <PanelRightOpen className="h-4 w-4" />
+              )}
+            </button>
+          )}
+
           {/* Manual refresh — forces a refetch of the messages + the
               conversation list (the parent bumps its resyncToken). Useful
               when realtime missed an event or the agent just wants to be
