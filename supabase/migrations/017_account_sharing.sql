@@ -193,6 +193,7 @@ ALTER TABLE flow_runs                      ADD COLUMN IF NOT EXISTS account_id U
 -- BACKFILL
 --
 -- Order is load-bearing:
+--   0. Heal orphaned auth.users that never got a profile row.
 --   1. Create one account per existing profile (the existing user
 --      is the owner).
 --   2. Stamp profile.account_id / account_role from the row above.
@@ -214,6 +215,26 @@ DECLARE
     'flows', 'flow_runs'
   ];
 BEGIN
+  -- (0) Heal orphaned users. The pre-017 signup trigger (migration
+  -- 001) inserted the profile inside an `EXCEPTION WHEN OTHERS ...
+  -- RAISE WARNING; RETURN NEW` block, so a signup could leave an
+  -- auth.users row with no matching profiles row. Those orphans would
+  -- be skipped by step (1) below, get no account, and — if they own
+  -- any domain rows (pre-017 RLS only required auth.uid() = user_id,
+  -- not a profile) — leave account_id NULL and abort the SET NOT NULL
+  -- step. Backfilling the missing profile first keys the whole backfill
+  -- off auth.users instead of profiles, so every authenticated user is
+  -- migrated and no domain row can be left without an account.
+  -- full_name / email are NOT NULL on profiles, hence the COALESCE.
+  INSERT INTO public.profiles (user_id, full_name, email)
+  SELECT u.id,
+         COALESCE(u.raw_user_meta_data->>'full_name', ''),
+         COALESCE(u.email, '')
+  FROM auth.users u
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.profiles p WHERE p.user_id = u.id
+  );
+
   -- (1) Create one account per existing profile whose user does not
   -- yet own one. Idempotent: skips users that already have an account.
   INSERT INTO accounts (name, owner_user_id)
