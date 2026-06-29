@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * Linear-list flow editor.
@@ -17,7 +17,7 @@
  * are list-only and have no canvas analogue.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CircleAlert,
   Plus,
@@ -25,41 +25,41 @@ import {
   ChevronDown,
   ChevronUp,
   CornerDownRight,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
-import { type ValidationIssue } from "@/lib/flows/validate";
+} from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
+import { type ValidationIssue } from '@/lib/flows/validate';
 import {
   NODE_META,
   NodeIconChip,
+  groupNodeTypesByCategory,
   nodeColors,
   slugify,
   summarizeNode,
   type BuilderNode,
   type NodeType,
-} from "./shared";
-import { NodeConfigForm } from "./forms/node-config-form";
-import { NodeKeySelect } from "./forms/fields";
-import { IssueLine } from "./validation-panel";
-import {
-  useFlowEditor,
-  type BuilderState,
-} from "./flow-editor-state";
+} from './shared';
+import { NodeConfigForm } from './forms/node-config-form';
+import { NodeKeySelect } from './forms/fields';
+import { IssueLine } from './validation-panel';
+import { useFlowEditor, type BuilderState } from './flow-editor-state';
 
 // ============================================================
 // Local state shape — mirrors the DB but the configs are typed
@@ -87,7 +87,7 @@ export function FlowBuilder() {
   // jump-to-node. The flash itself is read from context (flashKey)
   // so canvas + list share the same source of truth.
   const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(state.nodes.map((n) => n.node_key)),
+    () => new Set(state.nodes.map((n) => n.node_key))
   );
   const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -99,7 +99,7 @@ export function FlowBuilder() {
       const key = addNodeCtx(type);
       setExpanded((prev) => new Set([...prev, key]));
     },
-    [addNodeCtx],
+    [addNodeCtx]
   );
 
   const removeNode = useCallback(
@@ -111,7 +111,7 @@ export function FlowBuilder() {
         return next;
       });
     },
-    [removeNodeCtx],
+    [removeNodeCtx]
   );
 
   const toggleExpanded = useCallback((key: string) => {
@@ -128,7 +128,7 @@ export function FlowBuilder() {
       if (el) nodeRefs.current.set(key, el);
       else nodeRefs.current.delete(key);
     },
-    [],
+    []
   );
 
   // React to validator jumps via the shared flashKey. We DERIVE the
@@ -147,7 +147,7 @@ export function FlowBuilder() {
     // committed any expand-induced layout shift.
     requestAnimationFrame(() => {
       const el = nodeRefs.current.get(flashKey);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   }, [flashKey]);
 
@@ -156,24 +156,24 @@ export function FlowBuilder() {
       <TriggerPanel
         state={state}
         setState={setState}
-        triggerIssues={issues.filter((i) => i.scope === "trigger")}
+        triggerIssues={issues.filter((i) => i.scope === 'trigger')}
       />
 
       <EntryPicker state={state} setState={setState} />
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">
+          <h2 className="text-foreground text-sm font-semibold">
             Nodes ({state.nodes.length})
           </h2>
           <AddNodeButton onAdd={addNode} />
         </div>
 
         {state.nodes.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border bg-card/50 p-8 text-center text-sm text-muted-foreground">
-            Add a <strong>Start</strong> node, then a <strong>Send buttons</strong>
-            {" "}node, then a <strong>Handoff</strong> — that&apos;s the welcome-menu
-            shape from the brief.
+          <div className="border-border bg-card/50 text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+            Add a <strong>Start</strong> node, then a{' '}
+            <strong>Send buttons</strong> node, then a <strong>Handoff</strong>{' '}
+            — that&apos;s the welcome-menu shape from the brief.
           </div>
         ) : (
           state.nodes.map((node) => (
@@ -186,7 +186,7 @@ export function FlowBuilder() {
               isFlashed={flashKey === node.node_key}
               cardRef={setNodeRef(node.node_key)}
               issues={issues.filter(
-                (i) => i.scope === "node" && i.node_key === node.node_key,
+                (i) => i.scope === 'node' && i.node_key === node.node_key
               )}
               onToggle={() => toggleExpanded(node.node_key)}
               onUpdate={(patch) => updateNode(node.node_key, patch)}
@@ -202,7 +202,6 @@ export function FlowBuilder() {
     </div>
   );
 }
-
 
 // ============================================================
 // Keyword trigger input
@@ -225,14 +224,14 @@ function KeywordsInput({
   keywords: string[];
   onChange: (keywords: string[]) => void;
 }) {
-  const [draft, setDraft] = useState(keywords.join(", "));
+  const [draft, setDraft] = useState(keywords.join(', '));
 
   function commit() {
     const parsed = draft
-      .split(",")
+      .split(',')
       .map((k) => k.trim())
       .filter(Boolean);
-    setDraft(parsed.join(", "));
+    setDraft(parsed.join(', '));
     onChange(parsed);
   }
 
@@ -242,7 +241,7 @@ function KeywordsInput({
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
+        if (e.key === 'Enter') {
           e.preventDefault();
           commit();
         }
@@ -267,19 +266,21 @@ function TriggerPanel({
   triggerIssues: ValidationIssue[];
 }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
-      <h2 className="mb-3 text-sm font-semibold text-foreground">Trigger</h2>
+    <section className="border-border bg-card rounded-lg border p-4">
+      <h2 className="text-foreground mb-3 text-sm font-semibold">Trigger</h2>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">When…</label>
+          <label className="text-muted-foreground mb-1 block text-xs">
+            When…
+          </label>
           <Select
             value={state.trigger_type}
             onValueChange={(v) =>
               setState((s) => ({
                 ...s,
-                trigger_type: v as BuilderState["trigger_type"],
+                trigger_type: v as BuilderState['trigger_type'],
                 trigger_config:
-                  v === "keyword" ? { keywords: [] } : v === "manual" ? {} : {},
+                  v === 'keyword' ? { keywords: [] } : v === 'manual' ? {} : {},
               }))
             }
           >
@@ -299,9 +300,9 @@ function TriggerPanel({
             </SelectContent>
           </Select>
         </div>
-        {state.trigger_type === "keyword" && (
+        {state.trigger_type === 'keyword' && (
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
+            <label className="text-muted-foreground mb-1 block text-xs">
               Keywords (comma-separated)
             </label>
             <KeywordsInput
@@ -344,17 +345,15 @@ function EntryPicker({
 }) {
   if (state.nodes.length === 0) return null;
   return (
-    <section className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
-      <CornerDownRight className="h-4 w-4 shrink-0 text-primary" />
-      <span className="text-xs text-muted-foreground">Entry node:</span>
+    <section className="border-border bg-card flex items-center gap-3 rounded-lg border p-3">
+      <CornerDownRight className="text-primary h-4 w-4 shrink-0" />
+      <span className="text-muted-foreground text-xs">Entry node:</span>
       <NodeKeySelect
         value={state.entry_node_id}
         nodes={state.nodes}
-        onChange={(key) =>
-          setState((s) => ({ ...s, entry_node_id: key }))
-        }
+        onChange={(key) => setState((s) => ({ ...s, entry_node_id: key }))}
         placeholder="Pick the first node…"
-        className="flex-1 max-w-xs"
+        className="max-w-xs flex-1"
       />
     </section>
   );
@@ -393,20 +392,19 @@ function NodeCard({
 }) {
   const meta = NODE_META[node.node_type];
   const c = nodeColors(node.node_type);
-  const hasError = issues.some((i) => i.severity === "error");
+  const hasError = issues.some((i) => i.severity === 'error');
   const preview = summarizeNode(node);
   return (
     <div
       ref={cardRef}
       className={cn(
-        "relative overflow-hidden rounded-xl border bg-card transition-shadow duration-500",
+        'bg-card relative overflow-hidden rounded-xl border transition-shadow duration-500',
         hasError
-          ? "border-red-500/40"
+          ? 'border-red-500/40'
           : isEntry
-            ? "border-primary/50"
-            : "border-border",
-        isFlashed &&
-          "ring-2 ring-primary ring-offset-2 ring-offset-background",
+            ? 'border-primary/50'
+            : 'border-border',
+        isFlashed && 'ring-primary ring-offset-background ring-2 ring-offset-2'
       )}
     >
       {/* type-colored left rail, ties the list row to the canvas hue */}
@@ -423,25 +421,25 @@ function NodeCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span
-              className="truncate text-[11px] font-semibold uppercase tracking-wider"
+              className="truncate text-[11px] font-semibold tracking-wider uppercase"
               style={{ color: c.text }}
             >
               {meta.label}
             </span>
-            <code className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            <code className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]">
               {node.node_key}
             </code>
             {isEntry && (
               <Badge
                 variant="outline"
-                className="border-primary/40 bg-primary/10 text-[10px] text-primary"
+                className="border-primary/40 bg-primary/10 text-primary text-[10px]"
               >
                 Entry
               </Badge>
             )}
           </div>
           {!expanded && preview && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            <p className="text-muted-foreground mt-0.5 truncate text-xs">
               {preview}
             </p>
           )}
@@ -450,20 +448,20 @@ function NodeCard({
           <CircleAlert className="h-3.5 w-3.5 shrink-0 text-red-400" />
         )}
         {expanded ? (
-          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          <ChevronUp className="text-muted-foreground h-4 w-4" />
         ) : (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          <ChevronDown className="text-muted-foreground h-4 w-4" />
         )}
       </button>
       {expanded && (
-        <div className="border-t border-border px-4 py-4">
+        <div className="border-border border-t px-4 py-4">
           <NodeConfigWithAdvanced
             node={node}
             allNodes={allNodes}
             onUpdate={onUpdate}
             onUpdateConfig={onUpdateConfig}
           />
-          <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+          <div className="border-border mt-4 flex items-center justify-between border-t pt-3">
             <div className="flex items-center gap-2">
               {!isEntry && (
                 <Button variant="ghost" size="sm" onClick={onSetEntry}>
@@ -513,7 +511,7 @@ function NodeConfigWithAdvanced({
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const hasReplyIds =
-    node.node_type === "send_buttons" || node.node_type === "send_list";
+    node.node_type === 'send_buttons' || node.node_type === 'send_list';
   return (
     <div className="flex flex-col gap-3">
       <NodeConfigForm
@@ -522,23 +520,23 @@ function NodeConfigWithAdvanced({
         showAdvanced={showAdvanced}
         onUpdateConfig={onUpdateConfig}
       />
-      <div className="border-t border-border pt-3">
+      <div className="border-border border-t pt-3">
         <button
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
         >
           {showAdvanced ? (
             <ChevronUp className="h-3 w-3" />
           ) : (
             <ChevronDown className="h-3 w-3" />
           )}
-          {showAdvanced ? "Hide" : "Show"} advanced
+          {showAdvanced ? 'Hide' : 'Show'} advanced
         </button>
         {showAdvanced && (
           <div className="mt-3 flex flex-col gap-3">
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">
+              <label className="text-muted-foreground mb-1 block text-xs">
                 Node key (internal identifier — keep stable for analytics)
               </label>
               <Input
@@ -550,10 +548,10 @@ function NodeConfigWithAdvanced({
               />
             </div>
             {hasReplyIds && (
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-muted-foreground text-[10px]">
                 Reply IDs for each option are shown inline above. They&apos;re
-                returned by WhatsApp when a customer taps; you usually don&apos;t
-                need to touch them.
+                returned by WhatsApp when a customer taps; you usually
+                don&apos;t need to touch them.
               </p>
             )}
           </div>
@@ -563,45 +561,51 @@ function NodeConfigWithAdvanced({
   );
 }
 
-
 // ============================================================
 // Add-node menu
 // ============================================================
 
 function AddNodeButton({ onAdd }: { onAdd: (type: NodeType) => void }) {
   const types: NodeType[] = [
-    "start",
-    "send_buttons",
-    "send_list",
-    "send_message",
-    "send_media",
-    "collect_input",
-    "condition",
-    "set_tag",
-    "handoff",
-    "end",
+    'start',
+    'send_buttons',
+    'send_list',
+    'send_message',
+    'send_media',
+    'collect_input',
+    'condition',
+    'set_tag',
+    'handoff',
+    'end',
   ];
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+        className="border-border bg-card text-foreground hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
         aria-label="Add node"
       >
         <Plus className="h-3.5 w-3.5" />
         Add node
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="border-border bg-popover">
-        {types.map((t) => {
-          const meta = NODE_META[t];
-          return (
-            <DropdownMenuItem key={t} onClick={() => onAdd(t)}>
-              <meta.icon className={cn("h-3.5 w-3.5", meta.color)} />
-              {meta.label}
-            </DropdownMenuItem>
-          );
-        })}
+        {groupNodeTypesByCategory(types).map((group, i) => (
+          <div key={group.id}>
+            {i > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuLabel className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+              {group.label}
+            </DropdownMenuLabel>
+            {group.types.map((t) => {
+              const meta = NODE_META[t];
+              return (
+                <DropdownMenuItem key={t} onClick={() => onAdd(t)}>
+                  <meta.icon className={cn('h-3.5 w-3.5', meta.color)} />
+                  {meta.label}
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
-
