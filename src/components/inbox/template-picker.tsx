@@ -104,10 +104,13 @@ export function TemplatePicker({
         return;
       }
 
+      // Scope by RLS (message_templates_select → is_account_member), NOT by
+      // user_id. Templates are account-owned, so filtering on the caller's
+      // user_id hid templates that a teammate created — leaving them unable
+      // to send approved templates in a shared account.
       const { data, error } = await supabase
         .from("message_templates")
         .select("*")
-        .eq("user_id", user.id)
         .eq("status", "APPROVED")
         .order("created_at", { ascending: false });
 
