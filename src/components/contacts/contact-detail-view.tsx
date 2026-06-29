@@ -5,7 +5,11 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal } from '@/types';
+import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal, MessageTemplate } from '@/types';
+import {
+  TemplatePicker,
+  type TemplateSendValues,
+} from '@/components/inbox/template-picker';
 import {
   Sheet,
   SheetContent,
@@ -33,6 +37,7 @@ import {
   Save,
   X,
   DollarSign,
+  LayoutTemplate,
 } from 'lucide-react';
 
 interface ContactDetailViewProps {
@@ -54,6 +59,12 @@ export function ContactDetailView({
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
+
+  // Send template — lets the business initiate (or re-open) a conversation
+  // with this contact by sending an approved template. The send route
+  // find-or-creates the conversation, so no inbound message is required.
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [sendingTemplate, setSendingTemplate] = useState(false);
 
   // Details tab
   const [editName, setEditName] = useState('');
@@ -317,6 +328,48 @@ export function ContactDetailView({
     setSavingCustom(false);
   }
 
+  async function handleSendTemplate(
+    template: MessageTemplate,
+    values: TemplateSendValues,
+  ) {
+    if (!contactId) return;
+    setSendingTemplate(true);
+    try {
+      const res = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // No conversation_id — the route find-or-creates one for this
+          // contact, mirroring the inbox template-send payload otherwise.
+          contact_id: contactId,
+          message_type: 'template',
+          template_name: template.name,
+          template_language: template.language,
+          template_message_params: {
+            body: values.body,
+            headerText: values.headerText,
+            buttonParams: values.buttonParams,
+          },
+          template_params: values.body,
+        }),
+      });
+
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const reason = payload?.error || `HTTP ${res.status}`;
+        toast.error(`Failed to send template: ${reason}`);
+        return;
+      }
+
+      toast.success(`Template "${template.name}" sent`);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'network error';
+      toast.error(`Failed to send template: ${reason}`);
+    } finally {
+      setSendingTemplate(false);
+    }
+  }
+
   function getInitials(name?: string | null) {
     if (!name) return '?';
     return name
@@ -328,6 +381,7 @@ export function ContactDetailView({
   }
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
@@ -381,6 +435,21 @@ export function ContactDetailView({
                     )}
                   </div>
                 </div>
+              </div>
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  onClick={() => setTemplatePickerOpen(true)}
+                  disabled={sendingTemplate}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {sendingTemplate ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <LayoutTemplate className="size-4" />
+                  )}
+                  Send template
+                </Button>
               </div>
             </SheetHeader>
 
@@ -684,5 +753,11 @@ export function ContactDetailView({
         )}
       </SheetContent>
     </Sheet>
+    <TemplatePicker
+      open={templatePickerOpen}
+      onOpenChange={setTemplatePickerOpen}
+      onSelect={handleSendTemplate}
+    />
+    </>
   );
 }
