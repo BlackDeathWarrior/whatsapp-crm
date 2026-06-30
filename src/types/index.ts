@@ -159,7 +159,7 @@ export interface Conversation {
 }
 
 // ============================================================
-// Notifications (migration 023)
+// Notifications (migration 027)
 // ============================================================
 
 export type NotificationType = 'conversation_assigned';

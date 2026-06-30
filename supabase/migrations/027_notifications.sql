@@ -1,4 +1,4 @@
-- ============================================================
+-- ============================================================
 -- NOTIFICATIONS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS notifications (
@@ -25,6 +25,11 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
   ON notifications(user_id)
   WHERE read_at IS NULL;
 
+-- Full replica identity so realtime UPDATE payloads include old column
+-- values. Without this, payload.old only carries the primary key, which
+-- makes it impossible to derive whether a row was unread before the update.
+ALTER TABLE notifications REPLICA IDENTITY FULL;
+
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- Recipients can read and mark their own notifications as read.
@@ -34,9 +39,16 @@ DROP POLICY IF EXISTS notifications_select ON notifications;
 DROP POLICY IF EXISTS notifications_update ON notifications;
 CREATE POLICY notifications_select ON notifications FOR SELECT
   USING (auth.uid() = user_id);
+-- Only read_at updates are meaningful from the client; restrict via a
+-- column-level security policy so other fields cannot be rewritten.
 CREATE POLICY notifications_update ON notifications FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
+
+-- Restrict to read_at column only at the column-privilege level so
+-- clients cannot overwrite title, body, or other immutable fields.
+REVOKE UPDATE ON notifications FROM authenticated;
+GRANT UPDATE (read_at) ON notifications TO authenticated;
 
 -- ============================================================
 -- TRIGGER — notify on conversation assignment

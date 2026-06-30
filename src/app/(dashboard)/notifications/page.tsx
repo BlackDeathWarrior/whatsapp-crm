@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import type { Notification } from "@/types";
 import { Bell, CheckCheck, Loader2, UserPlus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -18,6 +19,7 @@ const TYPE_ICON: Record<Notification["type"], typeof Bell> = {
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const { accountId } = useAuth();
   const [notifications, setNotifications] = useState<Notification[] | null>(
     null,
   );
@@ -25,10 +27,12 @@ export default function NotificationsPage() {
   const [markingAll, setMarkingAll] = useState(false);
 
   const load = useCallback(async () => {
+    if (!accountId) return;
     const supabase = createClient();
     const { data, error: fetchErr } = await supabase
       .from("notifications")
       .select("*")
+      .eq("account_id", accountId)
       .order("created_at", { ascending: false })
       .limit(100);
     if (fetchErr) {
@@ -36,7 +40,7 @@ export default function NotificationsPage() {
       return;
     }
     setNotifications((data ?? []) as Notification[]);
-  }, []);
+  }, [accountId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -81,24 +85,31 @@ export default function NotificationsPage() {
     };
   }, []);
 
-  const markRead = useCallback(async (id: string) => {
-    // Optimistic — the row is already visually "read" by the time the
-    // request lands, so the UI doesn't wait on the round-trip.
-    setNotifications(
-      (prev) =>
-        prev?.map((n) =>
-          n.id === id && !n.read_at
-            ? { ...n, read_at: new Date().toISOString() }
-            : n,
-        ) ?? prev,
-    );
-    const supabase = createClient();
-    await supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("id", id)
-      .is("read_at", null);
-  }, []);
+  const markRead = useCallback(
+    async (id: string) => {
+      // Optimistic — the row is already visually "read" by the time the
+      // request lands, so the UI doesn't wait on the round-trip.
+      setNotifications(
+        (prev) =>
+          prev?.map((n) =>
+            n.id === id && !n.read_at
+              ? { ...n, read_at: new Date().toISOString() }
+              : n,
+          ) ?? prev,
+      );
+      const supabase = createClient();
+      const { error: updateErr } = await supabase
+        .from("notifications")
+        .update({ read_at: new Date().toISOString() })
+        .eq("id", id)
+        .is("read_at", null);
+      if (updateErr) {
+        toast.error("Failed to mark notification as read");
+        load();
+      }
+    },
+    [load],
+  );
 
   const handleClick = useCallback(
     (n: Notification) => {
@@ -134,7 +145,7 @@ export default function NotificationsPage() {
   if (error) {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-2">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-destructive">{error}</p>
         <Button variant="outline" onClick={() => window.location.reload()}>
           Retry
         </Button>
@@ -154,8 +165,8 @@ export default function NotificationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Notifications</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Conversations other teammates assign to you show up here.
           </p>
         </div>
@@ -175,14 +186,14 @@ export default function NotificationsPage() {
       </div>
 
       {notifications.length === 0 ? (
-        <div className="flex h-48 flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-900/40">
+        <div className="flex h-48 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/40">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
             <Bell className="h-6 w-6 text-primary" />
           </div>
-          <p className="mt-3 text-sm font-medium text-white">
+          <p className="mt-3 text-sm font-medium text-foreground">
             No notifications yet
           </p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             You&apos;ll see an alert here when someone assigns you a
             conversation.
           </p>
@@ -201,20 +212,20 @@ export default function NotificationsPage() {
                     "flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors",
                     isUnread
                       ? "border-primary/30 bg-primary/5 hover:border-primary/50"
-                      : "border-slate-800 bg-slate-900 hover:border-slate-700",
+                      : "border-border bg-card hover:border-border/70",
                   )}
                 >
                   <div
                     className={cn(
                       "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg",
-                      isUnread ? "bg-primary/15" : "bg-slate-800",
+                      isUnread ? "bg-primary/15" : "bg-muted",
                     )}
                     aria-hidden
                   >
                     <Icon
                       className={cn(
                         "h-5 w-5",
-                        isUnread ? "text-primary" : "text-slate-400",
+                        isUnread ? "text-primary" : "text-muted-foreground",
                       )}
                     />
                   </div>
@@ -223,7 +234,7 @@ export default function NotificationsPage() {
                       <span
                         className={cn(
                           "truncate text-sm font-semibold",
-                          isUnread ? "text-white" : "text-slate-300",
+                          isUnread ? "text-foreground" : "text-muted-foreground",
                         )}
                       >
                         {n.title}
@@ -236,11 +247,11 @@ export default function NotificationsPage() {
                       )}
                     </div>
                     {n.body && (
-                      <p className="mt-0.5 truncate text-xs text-slate-400">
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {n.body}
                       </p>
                     )}
-                    <p className="mt-1 text-[11px] text-slate-500">
+                    <p className="mt-1 text-[11px] text-muted-foreground/70">
                       {formatDistanceToNow(new Date(n.created_at), {
                         addSuffix: true,
                       })}
