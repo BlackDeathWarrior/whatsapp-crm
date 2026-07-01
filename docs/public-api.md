@@ -4,10 +4,10 @@ The public API lets you drive your wacrm instance from your own
 scripts and automations — send messages, manage contacts, launch
 broadcasts — without going through the dashboard UI.
 
-> **Status:** groundwork release. Authentication, scopes, rate
-> limiting, and the `GET /api/v1/me` probe ship now. The data
-> endpoints (`messages`, `contacts`, …) land one at a time in
-> follow-up releases — see [Roadmap](#roadmap).
+> **Status:** stable. Authentication, scopes, rate limiting, and the
+> messages / contacts / conversations / broadcasts endpoints ship now.
+> The one remaining roadmap item is outbound event webhooks — see
+> [Roadmap](#roadmap).
 
 ## Authentication
 
@@ -115,16 +115,181 @@ curl https://your-crm.example.com/api/v1/me \
 }
 ```
 
+### `POST /api/v1/messages`
+
+Send a WhatsApp message to a phone number. Scope: `messages:send`. You
+pass an **E.164 number**, not an internal id — the endpoint
+finds-or-creates the contact + conversation, then sends.
+
+```bash
+curl -X POST https://your-crm.example.com/api/v1/messages \
+  -H "Authorization: Bearer wacrm_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{ "to": "+14155550123", "type": "text", "text": "Hi 👋" }'
+```
+
+`type` is `text` (default), `template`, or a media kind (`image` /
+`video` / `document` / `audio`). Media needs `media_url` (and optional
+`filename`); `text` doubles as the caption. `template` needs a
+`template` object:
+
+```jsonc
+{
+  "to": "+14155550123",
+  "type": "template",
+  "template": {
+    "name": "order_update",
+    "language": "en_US",
+    "params": ["A123"]        // positional body vars, or a structured object
+  },
+  "reply_to_message_id": "<uuid>"   // optional; must be in the same conversation
+}
+```
+
+Response (201):
+
+```json
+{
+  "data": {
+    "message_id": "…",
+    "whatsapp_message_id": "wamid.…",
+    "conversation_id": "…",
+    "contact_id": "…",
+    "contact_created": true
+  }
+}
+```
+
+Domain error codes beyond the table above: `whatsapp_not_configured`
+(400), `meta_error` (502 — the request reached Meta and it rejected the
+send), `template_malformed` (500).
+
+### `GET /api/v1/contacts`
+
+List contacts, newest first. Scope: `contacts:read`. Paginated (see
+[Pagination](#pagination)). Optional filters: `?search=` (matches name
+or phone) and `?tag=<tagId>`.
+
+```json
+{
+  "data": [
+    {
+      "id": "…", "phone": "+14155550123", "name": "Jane Doe",
+      "email": null, "company": "Acme", "avatar_url": null,
+      "tags": [{ "id": "…", "name": "vip", "color": "#3b82f6" }],
+      "created_at": "…", "updated_at": "…"
+    }
+  ],
+  "meta": { "next_cursor": "…" }
+}
+```
+
+### `POST /api/v1/contacts`
+
+Create a contact. Scope: `contacts:write`. `phone` (E.164) is required;
+`name`, `email`, `company`, and `tags` (an array of tag names, created
+if missing) are optional. **Find-or-create by phone:** an existing
+match returns `200` with the existing contact; a new contact returns
+`201`. The response body is the serialized contact (same shape as the
+list rows above).
+
+### `GET` / `PATCH /api/v1/contacts/{id}`
+
+Read or update one contact. Scopes: `contacts:read` / `contacts:write`.
+`PATCH` updates only the fields you send (`name`, `email`, `company`);
+pass `tags` (an array of tag names) to replace the contact's tags. A
+contact in another account returns `404`.
+
+### `GET /api/v1/conversations`
+
+List conversations, newest first. Scope: `conversations:read`.
+Paginated. Optional filters: `?status=` (`open` / `pending` / `closed`)
+and `?contact_id=`. Each conversation embeds its contact + tags.
+
+### `GET /api/v1/conversations/{id}`
+
+Read one conversation. Scope: `conversations:read`. `404` if it belongs
+to another account.
+
+### `GET /api/v1/conversations/{id}/messages`
+
+List a conversation's messages, newest first. Scope: `messages:read`.
+Paginated. Each message includes its `direction` (`inbound` /
+`outbound`), `status` (delivery state), `whatsapp_message_id`, and
+`content_*`. The conversation is verified to belong to your account
+first (`404` otherwise).
+
+### `POST /api/v1/broadcasts`
+
+Launch a template broadcast to a list of recipients. Scope:
+`broadcasts:send`. The broadcast + its recipient rows are persisted
+immediately and the sends fan out in the background, so the call
+returns fast — poll `GET /api/v1/broadcasts/{id}` for progress.
+
+```bash
+curl -X POST https://your-crm.example.com/api/v1/broadcasts \
+  -H "Authorization: Bearer wacrm_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "July promo",
+        "template_name": "promo_july",
+        "template_language": "en_US",
+        "recipients": [
+          { "to": "+14155550123", "params": ["Jane"] },
+          { "to": "+14155550124" }
+        ]
+      }'
+```
+
+Recipients are capped at **1000 per request** — split larger sends.
+Invalid phone numbers are dropped and counted as `rejected`. Response
+(202):
+
+```json
+{
+  "data": {
+    "broadcast_id": "…",
+    "status": "sending",
+    "total_recipients": 2,
+    "accepted": 2,
+    "rejected": 0
+  }
+}
+```
+
+### `GET /api/v1/broadcasts/{id}`
+
+Broadcast status + counts. Scope: `broadcasts:send`. `status` moves
+`sending` → `sent`; `delivered_count` / `read_count` keep climbing as
+Meta delivery webhooks arrive. `404` for another account's broadcast.
+
+## Pagination
+
+Every list endpoint pages the same way. Request a page size with
+`?limit=` (default 50, max 100) and read the next page with the opaque
+`meta.next_cursor` from the previous response:
+
+```
+GET /api/v1/contacts?limit=50
+→ { "data": [ … ], "meta": { "next_cursor": "eyJ…" } }
+
+GET /api/v1/contacts?limit=50&cursor=eyJ…
+→ { "data": [ … ], "meta": { "next_cursor": null } }   // last page
+```
+
+Cursors are keyset-based (stable under concurrent inserts). Pass the
+cursor back verbatim — don't parse it. `next_cursor: null` means the
+last page.
+
 ## Roadmap
 
-Planned endpoints, shipping one per release (tracked in
-[#245](https://github.com/ArnasDon/wacrm/issues/245)):
+The one remaining item tracked in
+[#245](https://github.com/ArnasDon/wacrm/issues/245):
 
-- `POST /api/v1/messages` — send a message to a phone number
-  (`messages:send`)
-- `GET/POST /api/v1/contacts`, `GET/PATCH /api/v1/contacts/{id}`
-  (`contacts:read` / `contacts:write`)
-- `GET /api/v1/conversations` (`conversations:read`)
-- `POST /api/v1/broadcasts` (`broadcasts:send`)
-- Outbound event webhooks (so automations can react to inbound
-  messages)
+- **Outbound event webhooks** — register a URL to receive signed POSTs
+  when things happen in your account (`message.received`,
+  `message.status_updated`, `conversation.created`) so automations can
+  *react* to inbound activity instead of polling. Planned:
+  a `webhook_endpoints` table (next migration, `028_*`), a
+  `webhooks:manage` scope, `/api/v1/webhooks` management endpoints, and
+  HMAC-`X-Wacrm-Signature`-signed delivery with retry/backoff.

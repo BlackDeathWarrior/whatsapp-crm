@@ -9,7 +9,7 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
-## [Unreleased]
+## [0.3.0] — 2026-07-01
 
 Multi-user accounts ship. Every wacrm install is multi-tenant on the
 database side: a single user's signup creates a fresh "account", and
@@ -32,10 +32,30 @@ always did.
   `Authorization: Bearer <key>`. Keys are account-scoped and stored
   hashed (plaintext shown once). This release ships the auth layer,
   scopes, per-key rate limiting, the management UI, and a
-  `GET /api/v1/me` probe to verify a key; the data endpoints
-  (`messages`, `contacts`, …) follow one at a time. See
+  `GET /api/v1/me` probe to verify a key. See
   `docs/public-api.md`. **Migration required:** apply
   `supabase/migrations/026_api_keys.sql`. ([#245](https://github.com/ArnasDon/wacrm/issues/245))
+- **Public REST API — data endpoints.** Built on the key auth above,
+  so external automations can read and drive the CRM:
+  - `POST /api/v1/messages` — send a text / template / media message to
+    a phone number; finds-or-creates the contact + conversation
+    (`messages:send`).
+  - `GET/POST /api/v1/contacts`, `GET/PATCH /api/v1/contacts/{id}` —
+    list (search + tag filter), create (find-or-create by phone), read,
+    and update contacts, including tags (`contacts:read` /
+    `contacts:write`).
+  - `GET /api/v1/conversations`, `GET /api/v1/conversations/{id}`, and
+    `GET /api/v1/conversations/{id}/messages` — browse conversations and
+    their message history with delivery status (`conversations:read` /
+    `messages:read`).
+  - `POST /api/v1/broadcasts` + `GET /api/v1/broadcasts/{id}` — launch a
+    template broadcast to a recipient list and poll its progress
+    (`broadcasts:send`).
+  All list endpoints share one cursor-pagination contract
+  (`{ data, meta: { next_cursor } }`). No migration required — the
+  scopes already existed and the tables are unchanged. Outbound event
+  webhooks (react to inbound messages) are the remaining roadmap item.
+  See `docs/public-api.md`. ([#245](https://github.com/ArnasDon/wacrm/issues/245))
 
 ### Changed
 
