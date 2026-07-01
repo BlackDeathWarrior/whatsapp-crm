@@ -4,10 +4,9 @@ The public API lets you drive your wacrm instance from your own
 scripts and automations — send messages, manage contacts, launch
 broadcasts — without going through the dashboard UI.
 
-> **Status:** stable. Authentication, scopes, rate limiting, and the
-> messages / contacts / conversations / broadcasts endpoints ship now.
-> The one remaining roadmap item is outbound event webhooks — see
-> [Roadmap](#roadmap).
+> **Status:** stable. Authentication, scopes, rate limiting, the
+> messages / contacts / conversations / broadcasts endpoints, and
+> outbound event [webhooks](#webhooks) all ship now.
 
 ## Authentication
 
@@ -50,6 +49,7 @@ it. Grant the minimum.
 | `contacts:write`     | Create and update contacts               |
 | `conversations:read` | List and read conversations              |
 | `broadcasts:send`    | Launch broadcast campaigns               |
+| `webhooks:manage`    | Register and manage outbound webhooks    |
 
 A key with **no scopes** still authenticates and can call
 `GET /api/v1/me` — useful for verifying a key works.
@@ -281,15 +281,103 @@ Cursors are keyset-based (stable under concurrent inserts). Pass the
 cursor back verbatim — don't parse it. `next_cursor: null` means the
 last page.
 
+## Webhooks
+
+Rather than polling, register an endpoint and wacrm will POST to it when
+things happen in your account. **Migration required:** apply
+`supabase/migrations/028_webhook_endpoints.sql`.
+
+### Events
+
+| Event                    | Fires when                                        |
+| ------------------------ | ------------------------------------------------- |
+| `message.received`       | An inbound message arrives from a contact         |
+| `message.status_updated` | A message you sent changed delivery status        |
+| `conversation.created`   | A new conversation is opened for a contact        |
+
+### Managing endpoints
+
+All under scope `webhooks:manage`.
+
+- `POST /api/v1/webhooks` — register `{ "url": "https://…", "events": ["message.received"] }`. `url` must be `https://`. **The response includes `secret` exactly once** — store it to verify signatures; wacrm keeps only an encrypted copy.
+- `GET /api/v1/webhooks` — list your endpoints (never returns the secret).
+- `GET /api/v1/webhooks/{id}` — read one.
+- `PATCH /api/v1/webhooks/{id}` — update `url`, `events`, or `is_active` (re-enabling clears the failure counter).
+- `DELETE /api/v1/webhooks/{id}` — remove one.
+
+```bash
+curl -X POST https://your-crm.example.com/api/v1/webhooks \
+  -H "Authorization: Bearer wacrm_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{ "url": "https://example.com/hooks/wacrm", "events": ["message.received"] }'
+# → 201 { "data": { "id": "…", "url": "…", "events": [...], "secret": "whsec_…" } }
+```
+
+### Delivery payload
+
+Every delivery is a POST with this envelope; `id` is a unique per-
+delivery uuid you can dedupe on, and `data` varies by `event`:
+
+```json
+{
+  "id": "8f3c…",
+  "event": "message.received",
+  "occurred_at": "2026-07-01T12:00:00.000Z",
+  "account_id": "…",
+  "data": { /* per-event, see below */ }
+}
+```
+
+`data` by event:
+
+```jsonc
+// message.received
+{ "conversation_id": "…", "contact_id": "…", "whatsapp_message_id": "wamid.…", "content_type": "text", "text": "Hi 👋" }
+// conversation.created
+{ "conversation_id": "…", "contact_id": "…" }
+// message.status_updated
+{ "whatsapp_message_id": "wamid.…", "conversation_id": "…", "status": "delivered" }
+```
+
+Headers: `X-Wacrm-Event`, `X-Wacrm-Webhook-Id`, and `X-Wacrm-Signature`.
+
+### Verifying the signature
+
+`X-Wacrm-Signature: t=<unix_seconds>,v1=<hex>` where `v1 =
+HMAC-SHA256(secret, "${t}.${rawBody}")`. Recompute it over the **raw
+request body** and compare in constant time; reject if `t` is more than
+a few minutes old (replay protection).
+
+```js
+const [, t, v1] = header.match(/t=(\d+),v1=([0-9a-f]+)/);
+const expected = crypto.createHmac('sha256', secret)
+  .update(`${t}.${rawBody}`).digest('hex');
+const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v1));
+```
+
+### Delivery semantics
+
+Delivery is **best-effort**: a single attempt per event with a short
+timeout, and **redirects are not followed**. `message.status_updated`
+covers messages wacrm stores (inbox + API sends), not broadcast-only
+sends, and — because providers re-send and re-order status callbacks —
+the same status may arrive more than once or out of order; **dedupe on
+`id` and don't assume ordering**. Each consecutive failure increments
+`failure_count`; after enough consecutive failures the endpoint is
+auto-disabled (`is_active: false`) — re-enable it with `PATCH` (which
+resets the counter). Durable retry-with-backoff (a delivery queue) is a
+future enhancement; today, treat missed deliveries as possible and
+reconcile with the read endpoints when it matters.
+
+**Target restrictions (SSRF).** The `url` must be `https://` and must
+resolve to a public address — requests to `localhost`, private/RFC1918
+ranges, link-local (incl. cloud metadata `169.254.169.254`), and similar
+internal targets are refused at delivery time.
+
 ## Roadmap
 
-The one remaining item tracked in
-[#245](https://github.com/ArnasDon/wacrm/issues/245):
-
-- **Outbound event webhooks** — register a URL to receive signed POSTs
-  when things happen in your account (`message.received`,
-  `message.status_updated`, `conversation.created`) so automations can
-  *react* to inbound activity instead of polling. Planned:
-  a `webhook_endpoints` table (next migration, `028_*`), a
-  `webhooks:manage` scope, `/api/v1/webhooks` management endpoints, and
-  HMAC-`X-Wacrm-Signature`-signed delivery with retry/backoff.
+The public API now covers messaging, contacts, conversations,
+broadcasts, and outbound webhooks — the full scope of
+[#245](https://github.com/ArnasDon/wacrm/issues/245). Future ideas
+(deals/pipelines, templates, flows, a delivery queue for webhooks) are
+not yet scheduled.
