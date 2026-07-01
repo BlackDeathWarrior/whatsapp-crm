@@ -100,6 +100,9 @@ export interface Contact {
   avatar_url?: string;
   created_at: string;
   updated_at: string;
+  /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the
+   *  Inbox conversation list, for tag filtering). Absent otherwise. */
+  tags?: Tag[];
 }
 
 export interface Tag {
