@@ -9,6 +9,28 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.4.0] — 2026-07-01
+
+Completes the public API (#245): **outbound event webhooks** so
+automations can *react* to activity instead of polling.
+
+### Added
+
+- **Outbound event webhooks (`/api/v1/webhooks`).** Register an HTTPS
+  endpoint (scope `webhooks:manage`) to be POSTed to when an event
+  happens in your account — `message.received`, `message.status_updated`,
+  or `conversation.created`. Manage endpoints with
+  `GET/POST /api/v1/webhooks` and `GET/PATCH/DELETE /api/v1/webhooks/{id}`.
+  Each delivery is signed with an `X-Wacrm-Signature`
+  (HMAC-SHA256 over `timestamp.body`) so receivers can verify
+  authenticity and reject replays; the signing secret is returned once
+  at creation and stored encrypted. Delivery is best-effort — an
+  endpoint that fails repeatedly is auto-disabled after a threshold of
+  consecutive failures. See `docs/public-api.md`.
+  **Migration required:** apply
+  `supabase/migrations/028_webhook_endpoints.sql`.
+  ([#245](https://github.com/ArnasDon/wacrm/issues/245))
+
 ## [0.3.0] — 2026-07-01
 
 Multi-user accounts ship. Every wacrm install is multi-tenant on the
