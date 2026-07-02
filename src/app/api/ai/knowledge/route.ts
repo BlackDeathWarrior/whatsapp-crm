@@ -70,12 +70,20 @@ export async function POST(request: Request) {
       )
     }
 
-    const embeddingsApiKey = await loadEmbeddingsKey(supabase, accountId)
+    const { key: embeddingsApiKey, corrupt } = await loadEmbeddingsKey(
+      supabase,
+      accountId,
+    )
     try {
-      await ingestDocument(supabase, accountId, { embeddingsApiKey }, doc.id, content)
+      await ingestDocument(
+        supabase,
+        accountId,
+        { embeddingsApiKey },
+        doc.id,
+        content,
+      )
     } catch (err) {
-      const message =
-        err instanceof AiError ? err.message : 'indexing failed'
+      const message = err instanceof AiError ? err.message : 'indexing failed'
       console.error('[ai/knowledge POST] ingest error:', err)
       return NextResponse.json(
         {
@@ -87,6 +95,14 @@ export async function POST(request: Request) {
       )
     }
 
+    if (corrupt) {
+      return NextResponse.json({
+        success: true,
+        id: doc.id,
+        warning:
+          'Saved with keyword search only — your embeddings key could not be decrypted (check ENCRYPTION_KEY, then re-enter the key).',
+      })
+    }
     return NextResponse.json({ success: true, id: doc.id })
   } catch (err) {
     return toErrorResponse(err)

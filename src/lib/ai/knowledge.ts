@@ -33,11 +33,6 @@ export async function ingestDocument(
 ): Promise<void> {
   const chunks = chunkText(content)
 
-  let embeddings: number[][] | null = null
-  if (chunks.length > 0 && config.embeddingsApiKey) {
-    embeddings = await embedTexts(config.embeddingsApiKey, chunks)
-  }
-
   // Replace, don't append — re-ingest must be idempotent.
   const { error: delErr } = await db
     .from('ai_knowledge_chunks')
@@ -46,6 +41,22 @@ export async function ingestDocument(
   if (delErr) throw delErr
 
   if (chunks.length === 0) return
+
+  // Embed if a key is set, but DON'T let an embedding failure stop the
+  // chunks from being stored: a failed embed must still leave the
+  // document searchable lexically. We record the error and rethrow it
+  // AFTER inserting (embedding-less) rows, so the route can warn
+  // "semantic indexing failed" — which is now truthful, because lexical
+  // search really does still work.
+  let embeddings: number[][] | null = null
+  let embedError: unknown = null
+  if (config.embeddingsApiKey) {
+    try {
+      embeddings = await embedTexts(config.embeddingsApiKey, chunks)
+    } catch (err) {
+      embedError = err
+    }
+  }
 
   const rows = chunks.map((content, i) => ({
     document_id: documentId,
@@ -57,6 +68,8 @@ export async function ingestDocument(
 
   const { error: insErr } = await db.from('ai_knowledge_chunks').insert(rows)
   if (insErr) throw insErr
+
+  if (embedError) throw embedError
 }
 
 /**
@@ -77,6 +90,20 @@ export async function retrieveKnowledge(
 ): Promise<string[]> {
   const query = queryText.trim()
   if (!query || k <= 0) return []
+
+  // Skip everything when the account has no knowledge base — otherwise
+  // every draft / auto-reply would pay for a query embedding + two RPCs
+  // just to get []. One cheap indexed COUNT (head, no rows) instead of a
+  // paid embeddings call on the hot path.
+  try {
+    const { count, error } = await db
+      .from('ai_knowledge_chunks')
+      .select('id', { count: 'exact', head: true })
+      .eq('account_id', accountId)
+    if (error || !count) return []
+  } catch {
+    return []
+  }
 
   const picked = new Map<string, string>() // id → content, preserves order
 

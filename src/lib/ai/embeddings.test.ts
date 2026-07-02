@@ -85,6 +85,18 @@ describe('embedTexts', () => {
     })
   })
 
+  it('throws when the provider omits result indices', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ embedding: [0.1] }, { embedding: [0.2] }] }),
+      } as unknown as Response),
+    )
+    await expect(embedTexts('sk-x', ['a', 'b'])).rejects.toBeInstanceOf(AiError)
+  })
+
   it('throws on a malformed response (count mismatch)', async () => {
     vi.stubGlobal(
       'fetch',

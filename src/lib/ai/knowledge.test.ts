@@ -12,6 +12,7 @@ import { retrieveKnowledge, ingestDocument } from './knowledge'
 interface FakeState {
   semantic: { id: string; content: string }[]
   fts: { id: string; content: string }[]
+  chunkCount: number
   rpcCalls: string[]
   inserted: Record<string, unknown>[] | null
   deletedFor: string | null
@@ -21,6 +22,7 @@ function makeDb() {
   const state: FakeState = {
     semantic: [],
     fts: [],
+    chunkCount: 5, // account has a non-empty KB by default
     rpcCalls: [],
     inserted: null,
     deletedFor: null,
@@ -35,6 +37,10 @@ function makeDb() {
       return Promise.resolve({ data: null, error: null })
     },
     from: () => ({
+      // retrieveKnowledge's empty-KB count guard.
+      select: () => ({
+        eq: () => Promise.resolve({ count: state.chunkCount, error: null }),
+      }),
       delete: () => ({
         eq: (_col: string, val: string) => {
           state.deletedFor = val
@@ -61,6 +67,15 @@ describe('retrieveKnowledge', () => {
   it('returns [] for an empty query without touching the DB', async () => {
     const { db, state } = makeDb()
     expect(await retrieveKnowledge(db, 'acct', { embeddingsApiKey: null }, '  ')).toEqual([])
+    expect(state.rpcCalls).toEqual([])
+  })
+
+  it('short-circuits (no embed, no RPC) when the KB is empty', async () => {
+    const { db, state } = makeDb()
+    state.chunkCount = 0
+    const out = await retrieveKnowledge(db, 'acct', { embeddingsApiKey: 'sk-x' }, 'q')
+    expect(out).toEqual([])
+    expect(h.embedTexts).not.toHaveBeenCalled()
     expect(state.rpcCalls).toEqual([])
   })
 
@@ -130,5 +145,16 @@ describe('ingestDocument', () => {
     expect(state.deletedFor).toBe('doc-1')
     expect(state.inserted).toBeNull()
     expect(h.embedTexts).not.toHaveBeenCalled()
+  })
+
+  it('still stores lexical chunks when embedding fails, then rethrows', async () => {
+    const { db, state } = makeDb()
+    h.embedTexts.mockRejectedValueOnce(new Error('rate limited'))
+    await expect(
+      ingestDocument(db, 'acct', { embeddingsApiKey: 'sk-x' }, 'doc-1', 'hello world'),
+    ).rejects.toThrow('rate limited')
+    // Chunks were inserted (lexical search works) despite the embed failure…
+    expect(state.inserted).toHaveLength(1)
+    expect(state.inserted![0].embedding).toBeNull()
   })
 })

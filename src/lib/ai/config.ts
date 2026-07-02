@@ -55,6 +55,11 @@ export async function loadAiConfig(
     try {
       embeddingsApiKey = decrypt(row.embeddings_api_key)
     } catch {
+      // Not silent — a rotated/mismatched ENCRYPTION_KEY here means
+      // semantic search quietly stops working, so leave a breadcrumb.
+      console.error(
+        `[ai config] embeddings key for account ${accountId} could not be decrypted — check ENCRYPTION_KEY; semantic search is disabled until it is re-entered.`,
+      )
       embeddingsApiKey = null
     }
   }
@@ -75,22 +80,29 @@ export async function loadAiConfig(
  * Load + decrypt just the embeddings key, independent of `is_active`.
  * Used by the knowledge-base ingest routes so the KB gets embedded (and
  * semantic search works) whenever an embeddings key is present, even if
- * the assistant's master switch is currently off. Returns null when
- * there's no key or it can't be decrypted.
+ * the assistant's master switch is currently off.
+ *
+ * Returns `{ key, corrupt }`: `key` is null when there's no key OR it
+ * can't be decrypted; `corrupt` distinguishes those cases so callers can
+ * warn ("a key is set but unusable") rather than silently indexing
+ * lexical-only and reporting success.
  */
 export async function loadEmbeddingsKey(
   db: SupabaseClient,
   accountId: string,
-): Promise<string | null> {
+): Promise<{ key: string | null; corrupt: boolean }> {
   const { data, error } = await db
     .from('ai_configs')
     .select('embeddings_api_key')
     .eq('account_id', accountId)
     .maybeSingle()
-  if (error || !data?.embeddings_api_key) return null
+  if (error || !data?.embeddings_api_key) return { key: null, corrupt: false }
   try {
-    return decrypt(data.embeddings_api_key)
+    return { key: decrypt(data.embeddings_api_key), corrupt: false }
   } catch {
-    return null
+    console.error(
+      `[ai config] embeddings key for account ${accountId} could not be decrypted — check ENCRYPTION_KEY.`,
+    )
+    return { key: null, corrupt: true }
   }
 }

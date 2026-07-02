@@ -77,7 +77,10 @@ export async function PATCH(request: Request, { params }: Params) {
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     if (content !== undefined) {
-      const embeddingsApiKey = await loadEmbeddingsKey(supabase, accountId)
+      const { key: embeddingsApiKey, corrupt } = await loadEmbeddingsKey(
+        supabase,
+        accountId,
+      )
       try {
         await ingestDocument(supabase, accountId, { embeddingsApiKey }, id, content)
       } catch (err) {
@@ -90,6 +93,13 @@ export async function PATCH(request: Request, { params }: Params) {
           },
           { status: 200 },
         )
+      }
+      if (corrupt) {
+        return NextResponse.json({
+          success: true,
+          warning:
+            'Updated with keyword search only — your embeddings key could not be decrypted (check ENCRYPTION_KEY, then re-enter the key).',
+        })
       }
     }
 

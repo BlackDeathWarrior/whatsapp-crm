@@ -77,8 +77,15 @@ export async function embedTexts(
     }
 
     // Sort by index so order matches the input batch regardless of how
-    // the provider returns them.
-    const ordered = [...rows].sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    // the provider returns them. Require a real numeric index — defaulting
+    // a missing one to 0 would silently misalign chunks with their
+    // vectors (chunk N gets chunk M's embedding), so fail loud instead.
+    if (rows.some((r) => typeof r.index !== 'number')) {
+      throw new AiError('Embeddings response was missing result indices.', {
+        code: 'embeddings_malformed',
+      })
+    }
+    const ordered = [...rows].sort((a, b) => a.index! - b.index!)
     for (const r of ordered) {
       if (!Array.isArray(r.embedding)) {
         throw new AiError('Embeddings response missing a vector.', {
