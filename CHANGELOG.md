@@ -9,6 +9,42 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.5.0] — 2026-07-02
+
+Adds the **AI reply assistant** — bring-your-own-key. Each account
+pastes its own OpenAI or Anthropic key under **Settings → AI
+Assistant**; wacrm calls the provider directly with that key, so
+there's no per-seat AI fee and your conversation data never leaves
+your own infrastructure for a wacrm-run service. The key is stored
+AES-256-GCM-encrypted at rest (same as WhatsApp tokens) and never
+returned to the client after saving.
+
+### Added
+
+- **AI-drafted replies in the inbox.** A ✨ button in the composer
+  (agent+) reads the recent conversation and drops a suggested reply
+  into the box for the agent to edit and send. Read-only server-side —
+  `POST /api/ai/draft` never sends or stores anything. Respects your
+  business context / persona from the settings prompt.
+- **AI auto-reply bot.** When enabled, inbound messages that no
+  deterministic Flow consumed and that have no agent assigned get an
+  automatic LLM reply. Bounded by a per-conversation cap
+  (`auto_reply_max_per_conversation`, default 3) and a clean human
+  handoff: when the model can't confidently help — or the customer
+  asks for a person — it stays silent and leaves the message for a
+  human, and won't auto-reply on that thread again until re-enabled.
+  Flows always win over the bot.
+- **Settings → AI Assistant** (admin+ to edit): pick provider + model,
+  paste your key, add business context/tone, toggle the assistant and
+  auto-reply, set the per-conversation cap, and **Test key** against
+  the provider before saving.
+- Providers: OpenAI (Chat Completions) and Anthropic (Messages) behind
+  one interface; model is a free-text field with sensible defaults, so
+  you can point it at any current model your key can access.
+  **Migration required:** apply
+  `supabase/migrations/029_ai_reply.sql` (adds `ai_configs` +
+  per-conversation auto-reply columns on `conversations`).
+
 ## [0.4.0] — 2026-07-01
 
 Completes the public API (#245): **outbound event webhooks** so
