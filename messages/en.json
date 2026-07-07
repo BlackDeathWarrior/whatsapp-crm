@@ -124,5 +124,130 @@
     "emptyState": {
       "title": "Not enough data yet"
     }
+  },
+  "Inbox": {
+    "page": {
+      "whatsappNotConnected": "WhatsApp® is not connected. Go to Settings to connect your account."
+    },
+    "conversationList": {
+      "searchPlaceholder": "Search conversations...",
+      "filterAll": "All",
+      "filterUnread": "Unread",
+      "filterOpen": "Open",
+      "filterPending": "Pending",
+      "filterClosed": "Closed",
+      "tags": "Tags",
+      "company": "Company",
+      "allCompanies": "All companies",
+      "clearAll": "Clear all",
+      "noConversations": "No conversations found",
+      "noMessagesYet": "No messages yet",
+      "unknown": "Unknown"
+    },
+    "messageThread": {
+      "backToConversations": "Back to conversations",
+      "hideContactPanel": "Hide contact panel",
+      "showContactPanel": "Show contact panel",
+      "hideContact": "Hide contact",
+      "showContact": "Show contact",
+      "refresh": "Refresh",
+      "refreshConversation": "Refresh conversation",
+      "status": "Status",
+      "statusOpen": "Open",
+      "statusPending": "Pending",
+      "statusClosed": "Closed",
+      "assign": "Assign",
+      "assigned": "Assigned",
+      "unassign": "Unassign",
+      "noTeammates": "No teammates available",
+      "me": " (me)",
+      "noMessagesYet": "No messages yet",
+      "sendTemplateHint": "Send a template to start the conversation",
+      "selectConversation": "Select a conversation",
+      "selectConversationHint": "Choose a conversation from the left to start messaging",
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
+    "sessionTimer": {
+      "expired": "Expired",
+      "xhRemaining": "{hours}h remaining",
+      "xmRemaining": "{minutes}m remaining",
+      "noCustomerMessages": "No customer messages"
+    },
+    "composer": {
+      "draftHint": "Tap the ✨ to draft a reply with AI — you can edit it before sending",
+      "sessionExpiredHint": "24-hour session expired. Use a template to re-engage.",
+      "templates": "Templates",
+      "readOnlyPlaceholder": "Read-only — viewers can browse but not reply",
+      "sessionExpiredPlaceholder": "Session expired - use a template",
+      "typeMessagePlaceholder": "Type a message... (Shift+Enter for new line)",
+      "readOnlyTitle": "Read-only — your role can't send messages",
+      "recording": "Recording… {current} / {max}",
+      "cancel": "Cancel",
+      "stopAndAttach": "Stop and attach",
+      "attachMedia": "Attach media",
+      "photo": "Photo",
+      "video": "Video",
+      "document": "Document",
+      "voiceNote": "Voice note",
+      "sendTemplate": "Send template",
+      "draftWithAI": "Draft a reply with AI",
+      "addCaption": "Add a caption…",
+      "removeAttachment": "Remove attachment"
+    },
+    "bubble": {
+      "photo": "Photo",
+      "video": "Video",
+      "audio": "Audio",
+      "unavailable": "{label} unavailable",
+      "document": "Document",
+      "locationShared": "Location shared",
+      "template": "Template",
+      "buttonReply": "Button reply",
+      "interactiveReply": "[Interactive reply]",
+      "unsupported": "[Unsupported message type]"
+    },
+    "actions": {
+      "reply": "Reply",
+      "copyText": "Copy text",
+      "delete": "Delete",
+      "react": "React",
+      "reactWith": "React with {emoji}",
+      "nothingToCopy": "Nothing to copy",
+      "copied": "Copied",
+      "copyFailed": "Copy failed"
+    },
+    "replyQuote": {
+      "photo": "[Photo]",
+      "video": "[Video]",
+      "document": "[Document]",
+      "audio": "[Audio]",
+      "voiceMessage": "[Voice message]",
+      "location": "[Location]",
+      "template": "[Template]",
+      "message": "[Message]",
+      "cancelReply": "Cancel reply"
+    },
+    "templatePicker": {
+      "sendTemplate": "Send template",
+      "fillPlaceholders": "Fill in the placeholders to render this template. Meta requires every variable to be set.",
+      "pickTemplate": "Pick an approved WhatsApp template to send to this contact.",
+      "noApprovedTemplates": "No approved templates",
+      "noApprovedTemplatesHint": "Approve a template in Meta WhatsApp Manager, then sync it from Settings → Templates.",
+      "preview": "Preview",
+      "headerValuePlaceholder": "Value for the header variable",
+      "bodyValuePlaceholder": "Value for {val}",
+      "urlSuffixValuePlaceholder": "URL suffix value",
+      "finalUrl": "Final URL: {url}",
+      "back": "Back",
+      "cancel": "Cancel",
+      "send": "Send template"
+    },
+    "sidebar": {
+      "contactInfo": "Contact info",
+      "tags": "Tags",
+      "notes": "Notes",
+      "deals": "Deals"
+    }
   }
 }
