@@ -13,5 +13,51 @@
     "signIn": "Sign in",
     "noAccount": "Don't have an account?",
     "createAccount": "Create account"
+  },
+  "Sidebar": {
+    "title": "CRM Template for WhatsApp",
+    "dashboard": "Dashboard",
+    "inbox": "Inbox",
+    "notifications": "Notifications",
+    "contacts": "Contacts",
+    "pipelines": "Pipelines",
+    "broadcasts": "Broadcasts",
+    "automations": "Automations",
+    "flows": "Flows",
+    "aiAgents": "AI Agents",
+    "settings": "Settings",
+    "beta": "Beta",
+    "unreadConversations": "{count} unread {count, plural, =1 {conversation} other {conversations}}",
+    "unreadNotifications": "{count} unread {count, plural, =1 {notification} other {notifications}}",
+    "roleOwner": "Owner",
+    "roleAdmin": "Admin",
+    "roleAgent": "Agent",
+    "roleViewer": "Viewer",
+    "closeMenu": "Close menu",
+    "defaultUser": "User",
+    "defaultAvatar": "Avatar",
+    "menuProfile": "Profile",
+    "menuSettings": "Settings",
+    "menuSignOut": "Sign out"
+  },
+  "Header": {
+    "dashboard": "Dashboard",
+    "inbox": "Inbox",
+    "notifications": "Notifications",
+    "contacts": "Contacts",
+    "pipelines": "Pipelines",
+    "broadcasts": "Broadcasts",
+    "automations": "Automations",
+    "settings": "Settings",
+    "openMenu": "Open menu",
+    "openAccountMenu": "Open account menu",
+    "defaultUser": "User",
+    "defaultAvatar": "Avatar",
+    "menuProfile": "Profile",
+    "menuSettings": "Settings",
+    "menuSignOut": "Sign out"
+  },
+  "ModeToggle": {
+    "switchMode": "Switch to {mode} mode"
   }
 }
