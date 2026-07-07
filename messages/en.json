@@ -808,13 +808,34 @@
         "close_conversation": "Close Conversation"
       },
       "triggers": {
-        "new_message_received": { "label": "New Message Received", "hint": "Any incoming message" },
-        "first_inbound_message": { "label": "First Message from Contact", "hint": "First time this contact ever messages you (works for manually-added contacts too)" },
-        "keyword_match": { "label": "Keyword Match", "hint": "Message contains specific keyword(s)" },
-        "new_contact_created": { "label": "New Contact Created", "hint": "When a contact is auto-created from an incoming message" },
-        "conversation_assigned": { "label": "Conversation Assigned", "hint": "When assigned to an agent" },
-        "tag_added": { "label": "Tag Added", "hint": "When a tag is added to a contact" },
-        "time_based": { "label": "Time-Based", "hint": "On a recurring schedule" }
+        "new_message_received": {
+          "label": "New Message Received",
+          "hint": "Any incoming message"
+        },
+        "first_inbound_message": {
+          "label": "First Message from Contact",
+          "hint": "First time this contact ever messages you (works for manually-added contacts too)"
+        },
+        "keyword_match": {
+          "label": "Keyword Match",
+          "hint": "Message contains specific keyword(s)"
+        },
+        "new_contact_created": {
+          "label": "New Contact Created",
+          "hint": "When a contact is auto-created from an incoming message"
+        },
+        "conversation_assigned": {
+          "label": "Conversation Assigned",
+          "hint": "When assigned to an agent"
+        },
+        "tag_added": {
+          "label": "Tag Added",
+          "hint": "When a tag is added to a contact"
+        },
+        "time_based": {
+          "label": "Time-Based",
+          "hint": "On a recurring schedule"
+        }
       },
       "trigger": "Trigger",
       "triggerType": "Trigger type",
@@ -1065,17 +1086,148 @@
         "flow": "Flow control"
       },
       "nodes": {
-        "start": { "label": "Start", "blurb": "Entry point of the flow" },
-        "send_message": { "label": "Send message", "blurb": "Sends a WhatsApp text message" },
-        "send_buttons": { "label": "Send buttons", "blurb": "Sends quick-reply buttons" },
-        "send_list": { "label": "Send list", "blurb": "Sends a tappable list of options" },
-        "send_media": { "label": "Send media", "blurb": "Sends an image, video, or document" },
-        "collect_input": { "label": "Collect input", "blurb": "Asks a question, saves the reply" },
-        "condition": { "label": "If / else", "blurb": "Branches on a rule" },
-        "set_tag": { "label": "Tag contact", "blurb": "Adds or removes a contact tag" },
-        "handoff": { "label": "Handoff to agent", "blurb": "Hands the conversation to a human" },
-        "end": { "label": "End", "blurb": "Ends the flow" }
+        "start": {
+          "label": "Start",
+          "blurb": "Entry point of the flow"
+        },
+        "send_message": {
+          "label": "Send message",
+          "blurb": "Sends a WhatsApp text message"
+        },
+        "send_buttons": {
+          "label": "Send buttons",
+          "blurb": "Sends quick-reply buttons"
+        },
+        "send_list": {
+          "label": "Send list",
+          "blurb": "Sends a tappable list of options"
+        },
+        "send_media": {
+          "label": "Send media",
+          "blurb": "Sends an image, video, or document"
+        },
+        "collect_input": {
+          "label": "Collect input",
+          "blurb": "Asks a question, saves the reply"
+        },
+        "condition": {
+          "label": "If / else",
+          "blurb": "Branches on a rule"
+        },
+        "set_tag": {
+          "label": "Tag contact",
+          "blurb": "Adds or removes a contact tag"
+        },
+        "handoff": {
+          "label": "Handoff to agent",
+          "blurb": "Hands the conversation to a human"
+        },
+        "end": {
+          "label": "End",
+          "blurb": "Ends the flow"
+        }
       }
+    }
+  },
+  "Settings": {
+    "overview": {
+      "notSetup": "Not set up yet",
+      "connected": "Connected",
+      "needsReconnecting": "Needs reconnecting",
+      "viewTeamMembers": "View team members",
+      "membersCount": "{count} {count, plural, =1 {member} other {members}}",
+      "pendingInvites": "{count} pending {count, plural, =1 {invite} other {invites}}",
+      "manageTemplates": "Manage message templates",
+      "templatesCount": "{count} {count, plural, =1 {template} other {templates}}",
+      "pendingReview": "{count} pending review",
+      "tagsAndFields": "Tags and custom fields",
+      "tagsCount": "{count} {count, plural, =1 {tag} other {tags}}",
+      "fieldsCount": "{count} custom {count, plural, =1 {field} other {fields}}",
+      "appearance": "{mode} mode · {theme} accent",
+      "yourAccount": "Your account",
+      "loading": "Loading…"
+    },
+    "whatsapp": {
+      "title": "WhatsApp connection",
+      "description": "Connect your Meta WhatsApp Business API. Credentials, webhook, and setup steps all live here.",
+      "tokenCorrupted": "Stored token can't be decrypted",
+      "resetting": "Resetting...",
+      "resetConfig": "Reset Configuration",
+      "credentialsValid": "Credentials valid",
+      "notConnected": "Not Connected",
+      "connectedDesc": "Your access token authenticates with Meta. See Registration status below for whether webhooks are actually wired.",
+      "notConnectedDesc": "Configure your Meta API credentials below to connect your WhatsApp Business account.",
+      "registered": "Registered — Meta will deliver events to wacrm",
+      "notRegistered": "Not registered — Meta will not deliver events",
+      "verifyWithMeta": "Verify with Meta",
+      "subscribedSince": "Subscribed since {date}. Click Verify with Meta if events stop arriving.",
+      "unknownDate": "unknown",
+      "lastAttemptFailed": "Last attempt failed with: ",
+      "retryHint": "Enter (or correct) the 2-step PIN below and click Save Configuration to retry.",
+      "noRegistrationHint": "This number was saved before registration tracking existed, or registration was skipped. Enter the 2-step PIN below and click Save Configuration to subscribe it.",
+      "diagnosticLastRun": "Diagnostic — last run: ",
+      "live": "live",
+      "notLive": "not live",
+      "apiCredentialsTitle": "API Credentials",
+      "apiCredentialsDesc": "Enter your Meta WhatsApp Business API credentials.",
+      "phoneNumberId": "Phone Number ID",
+      "wabaId": "WhatsApp Business Account ID",
+      "accessToken": "Permanent Access Token",
+      "accessTokenPlaceholder": "Enter your access token",
+      "tokenHidden": "Token is hidden for security. Re-enter it to update configuration.",
+      "webhookVerifyToken": "Webhook Verify Token",
+      "webhookVerifyTokenPlaceholder": "Create a custom verify token",
+      "webhookVerifyTokenHint": "A custom string you create. Must match the token you set in Meta webhook settings.",
+      "twoStepPin": "Two-step verification PIN",
+      "optional": "(optional)",
+      "pinPlaceholder": "6-digit PIN from Meta WhatsApp Manager",
+      "pinHint": "Needed only to wire inbound messages for a production number. Set it in Meta Business Manager → WhatsApp Accounts → Phone Numbers → Two-step verification, then paste it here so wacrm can subscribe the number — otherwise Meta routes inbound events to whichever app last claimed it (the symptom that hits second numbers under a shared WABA). Meta test numbers have no PIN and are pre-registered — leave this blank for them. Leaving it blank also keeps an existing registration untouched.",
+      "webhookTitle": "Webhook Configuration",
+      "webhookDesc": "Use this URL as your webhook callback in the Meta App Dashboard.",
+      "webhookUrl": "Webhook Callback URL",
+      "saving": "Saving...",
+      "saveConfig": "Save Configuration",
+      "testing": "Testing...",
+      "testConnection": "Test API Connection",
+      "setupInstructions": "Setup Instructions",
+      "setupInstructionsDesc": "Follow these steps to connect your WhatsApp Business API.",
+      "step1": "Create a Meta App",
+      "step1_1": "Go to developers.facebook.com",
+      "step1_2": "Click \"My Apps\" and then \"Create App\"",
+      "step1_3": "Select \"Business\" as the app type",
+      "step1_4": "Fill in app details and create",
+      "step2": "Add WhatsApp Product",
+      "step2_1": "In your app dashboard, click \"Add Product\"",
+      "step2_2": "Find \"WhatsApp\" and click \"Set Up\"",
+      "step2_3": "Follow the setup wizard to link your business",
+      "step3": "Get API Credentials",
+      "step3_1": "Go to WhatsApp > API Setup",
+      "step3_2": "Copy your <strong class=\"text-foreground\">Phone Number ID</strong>",
+      "step3_3": "Copy your <strong class=\"text-foreground\">WhatsApp Business Account ID</strong>",
+      "step3_4": "Generate a <strong class=\"text-foreground\">Permanent Access Token</strong> from Business Settings > System Users",
+      "step4": "Configure Webhooks",
+      "step4_1": "Go to WhatsApp > Configuration",
+      "step4_2": "Click \"Edit\" on the Webhook section",
+      "step4_3": "Paste the <strong class=\"text-foreground\">Webhook Callback URL</strong> from above",
+      "step4_4": "Enter the same <strong class=\"text-foreground\">Verify Token</strong> you set here",
+      "step4_5": "Subscribe to \"messages\" webhook field",
+      "metaDocs": "Meta WhatsApp API Documentation"
+    },
+    "sections": {
+      "overview": "Overview",
+      "profile": "Your profile",
+      "security": "Login & security",
+      "appearance": "Appearance",
+      "whatsapp": "WhatsApp",
+      "templates": "Templates",
+      "fields": "Fields & tags",
+      "deals": "Deals & currency",
+      "members": "Team members",
+      "api": "API keys"
+    },
+    "groups": {
+      "account": "Account",
+      "workspace": "Workspace"
     }
   }
 }
