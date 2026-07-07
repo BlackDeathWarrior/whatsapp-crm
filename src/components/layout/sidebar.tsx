@@ -236,7 +236,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{t(item.labelKey as any)}</span>
+                    <span className="flex-1">{t(item.labelKey as string)}</span>
                     {item.beta && (
                       <span
                         aria-label={t("beta")}
@@ -285,7 +285,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    {t(item.labelKey as any)}
+                    {t(item.labelKey as string)}
                   </Link>
                 </li>
               );
@@ -323,7 +323,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${meta.className}`}
                     >
                       <Icon className="size-3" />
-                      {t(meta.labelKey as any)}
+                      {t(meta.labelKey as string)}
                     </span>
                   );
                 })()
