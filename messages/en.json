@@ -1130,6 +1130,8 @@
     }
   },
   "Settings": {
+    "pageTitle": "Settings",
+    "pageDesc": "Everything in one place — your account and your workspace. Pick a section to manage it.",
     "overview": {
       "notSetup": "Not set up yet",
       "connected": "Connected",
