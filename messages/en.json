@@ -59,5 +59,70 @@
   },
   "ModeToggle": {
     "switchMode": "Switch to {mode} mode"
+  },
+  "Dashboard": {
+    "page": {
+      "title": "Dashboard",
+      "description": "Live analytics across conversations, contacts, deals, broadcasts, and automations.",
+      "activeConversations": "Active Conversations",
+      "newContactsToday": "New Contacts Today",
+      "openDealsValue": "Open Deals Value",
+      "messagesSentToday": "Messages Sent Today",
+      "newTodayVsYesterday": "new today vs yesterday",
+      "vsYesterday": "vs yesterday",
+      "openDeals": "{count} open {count, plural, =1 {deal} other {deals}}",
+      "noChange": "No change {suffix}"
+    },
+    "quickActions": {
+      "newContact": "New Contact",
+      "newDeal": "New Deal",
+      "newBroadcast": "New Broadcast",
+      "newAutomation": "New Automation"
+    },
+    "activityFeed": {
+      "title": "Recent Activity",
+      "viewAll": "View all →",
+      "noActivity": "No activity yet",
+      "noActivityHint": "Activity from messages, deals, broadcasts, and automations will appear here.",
+      "showingOf": "Showing {visible} of {totalLoaded}{plus}",
+      "show": "Show",
+      "timeS": "{sec}s ago",
+      "timeM": "{min}m ago",
+      "timeH": "{hr}h ago",
+      "timeD": "{day}d ago"
+    },
+    "conversationsChart": {
+      "title": "Conversations Over Time",
+      "description": "Daily message volume by direction",
+      "days": "{count} days",
+      "noActivity": "No message activity in this range",
+      "noActivityHint": "Send or receive messages to start populating this chart.",
+      "incoming": "Incoming",
+      "outgoing": "Outgoing",
+      "tooltipIncoming": "{count} incoming",
+      "tooltipOutgoing": "{count} outgoing",
+      "ariaLabel": "Conversations per day"
+    },
+    "pipelineDonut": {
+      "title": "Pipeline Value",
+      "description": "Open deals by stage",
+      "noOpenDeals": "No open deals yet",
+      "noOpenDealsHint": "Create deals in Pipelines to see stage breakdowns here.",
+      "dealCount": "{count} {count, plural, =1 {deal} other {deals}}",
+      "total": "Total",
+      "ariaLabel": "Pipeline value by stage"
+    },
+    "responseTimeChart": {
+      "title": "Average First Response Time",
+      "description": "Minutes to reply to a customer's first unreplied message, by weekday",
+      "target": "target {minutes}m",
+      "thisWeek": "This week:",
+      "lastWeek": "Last week:",
+      "noReplies": "No replies recorded yet",
+      "noRepliesHint": "This chart fills in as you reply to customer messages."
+    },
+    "emptyState": {
+      "title": "Not enough data yet"
+    }
   }
 }
