@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Sparkles, Hand, Undo2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks/use-auth";
 
 // ------------------------------------------------------------
@@ -77,6 +78,7 @@ export function AiThreadBanner({
   currentUserId,
   onChange,
 }: AiThreadBannerProps) {
+  const t = useTranslations("Inbox.aiBanner");
   const { accountId } = useAuth();
   const [autoReplyOn, setAutoReplyOn] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -107,7 +109,7 @@ export function AiThreadBanner({
         });
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
-          toast.error(j?.error ?? "Couldn't update the AI assistant.");
+          toast.error(j?.error ?? t("updateError"));
           return;
         }
         setPaused(paused);
@@ -122,14 +124,14 @@ export function AiThreadBanner({
               : {}
             : { assigned_agent_id: null }),
         });
-        toast.success(paused ? "You've taken over this chat." : "AI resumed.");
+        toast.success(paused ? t("tookOver") : t("resumed"));
       } catch {
-        toast.error("Couldn't reach the server.");
+        toast.error(t("networkError"));
       } finally {
         setBusy(false);
       }
     },
-    [conversationId, currentUserId, onChange],
+    [conversationId, currentUserId, onChange, t],
   );
 
   // Account has no auto-reply → nothing to show. (Still loading → nothing.)
@@ -140,7 +142,7 @@ export function AiThreadBanner({
     return (
       <Banner tone="muted">
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-foreground">AI assistant is paused here</p>
+          <p className="font-medium text-foreground">{t("pausedTitle")}</p>
           {handoffSummary && (
             <p className="truncate text-muted-foreground" title={handoffSummary}>
               {handoffSummary}
@@ -148,7 +150,7 @@ export function AiThreadBanner({
           )}
         </div>
         <BannerButton onClick={() => toggle(false)} busy={busy} icon={Undo2}>
-          Resume AI
+          {t("resume")}
         </BannerButton>
       </Banner>
     );
@@ -163,11 +165,11 @@ export function AiThreadBanner({
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <Sparkles className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
         <span className="truncate font-medium text-foreground">
-          AI assistant is replying automatically
+          {t("activeText")}
         </span>
       </div>
       <BannerButton onClick={() => toggle(true)} busy={busy} icon={Hand}>
-        Take over
+        {t("takeOver")}
       </BannerButton>
     </Banner>
   );

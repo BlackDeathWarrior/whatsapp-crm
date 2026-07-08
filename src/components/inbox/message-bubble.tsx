@@ -18,6 +18,7 @@ import {
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
 import { MessageReactions } from "./message-reactions";
+import { useTranslations } from "next-intl";
 
 interface MessageBubbleProps {
   message: Message;
@@ -45,11 +46,11 @@ function StatusIcon({ status }: { status: Message["status"] }) {
   }
 }
 
-function MediaUnavailable({ label }: { label: string }) {
+function MediaUnavailable({ label, t }: { label: string, t: ReturnType<typeof useTranslations> }) {
   return (
     <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
       <ImageOff className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <span>{label} unavailable</span>
+      <span>{t("unavailable", { label })}</span>
     </div>
   );
 }
@@ -117,7 +118,7 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
   );
 }
 
-function MessageContent({ message }: { message: Message }) {
+function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof useTranslations> }) {
   switch (message.content_type) {
     case "text":
       return (
@@ -132,7 +133,7 @@ function MessageContent({ message }: { message: Message }) {
           {message.media_url ? (
             <MediaImage url={message.media_url} alt="Shared image" />
           ) : (
-            <MediaUnavailable label="Image" />
+            <MediaUnavailable label={t("photo")} t={t} />
           )}
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
@@ -152,7 +153,7 @@ function MessageContent({ message }: { message: Message }) {
               className="max-h-64 max-w-60 rounded-lg"
             />
           ) : (
-            <MediaUnavailable label="Video" />
+            <MediaUnavailable label={t("video")} t={t} />
           )}
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
@@ -168,14 +169,14 @@ function MessageContent({ message }: { message: Message }) {
           {message.media_url ? (
             <audio src={message.media_url} controls className="max-w-60" />
           ) : (
-            <MediaUnavailable label="Audio" />
+            <MediaUnavailable label={t("audio")} t={t} />
           )}
         </div>
       );
 
     case "document":
       if (!message.media_url) {
-        return <MediaUnavailable label={message.content_text || "Document"} />;
+        return <MediaUnavailable label={message.content_text || t("document")} t={t} />;
       }
       return (
         <a
@@ -186,7 +187,7 @@ function MessageContent({ message }: { message: Message }) {
         >
           <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
           <span className="truncate">
-            {message.content_text || "Document"}
+            {message.content_text || t("document")}
           </span>
         </a>
       );
@@ -196,7 +197,7 @@ function MessageContent({ message }: { message: Message }) {
         <div>
           <span className="mb-1 inline-flex items-center gap-1 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-medium text-primary">
             <LayoutTemplate className="h-3 w-3" />
-            Template
+            {t("template")}
           </span>
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
@@ -210,7 +211,7 @@ function MessageContent({ message }: { message: Message }) {
       return (
         <div className="flex items-center gap-2 text-sm">
           <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span>{message.content_text || "Location shared"}</span>
+          <span>{message.content_text || t("locationShared")}</span>
         </div>
       );
 
@@ -224,10 +225,10 @@ function MessageContent({ message }: { message: Message }) {
         <div className="flex flex-col gap-0.5">
           <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             <CornerDownLeft className="h-3 w-3" />
-            Button reply
+            {t("buttonReply")}
           </span>
           <p className="whitespace-pre-wrap break-words text-sm">
-            {message.content_text || "[Interactive reply]"}
+            {message.content_text || t("interactiveReply")}
           </p>
         </div>
       );
@@ -236,7 +237,7 @@ function MessageContent({ message }: { message: Message }) {
     default:
       return (
         <p className="whitespace-pre-wrap break-words text-sm">
-          {message.content_text || "[Unsupported message type]"}
+          {message.content_text || t("unsupported")}
         </p>
       );
   }
@@ -249,6 +250,8 @@ export function MessageBubble({
   currentUserId,
   onToggleReaction,
 }: MessageBubbleProps) {
+  const t = useTranslations("Inbox.bubble");
+
   const isAgent = message.sender_type === "agent" || message.sender_type === "bot";
   const time = format(new Date(message.created_at), "HH:mm");
 
@@ -276,7 +279,7 @@ export function MessageBubble({
             onPrimary={isAgent}
           />
         )}
-        <MessageContent message={message} />
+        <MessageContent message={message} t={t} />
         <div
           className={cn(
             "mt-1 flex items-center gap-1",
@@ -290,10 +293,10 @@ export function MessageBubble({
           {message.ai_generated && (
             <span
               className="inline-flex items-center gap-0.5 rounded-full bg-primary-foreground/20 px-1.5 py-px text-[9px] font-semibold uppercase leading-none tracking-wide text-primary-foreground"
-              title="Sent automatically by the AI assistant"
+              title={t("aiBadgeTitle")}
             >
               <Sparkles className="h-2.5 w-2.5" />
-              AI
+              {t("aiBadge")}
             </span>
           )}
           <span
