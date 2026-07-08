@@ -35,9 +35,12 @@ logged**.
   short **internal note** summarizing the exchange for whoever picks it
   up. Assigning fires the existing assignment notification. Pick the
   target under **AI Agents → Setup → Hand off to**.
-- **Token-usage logging.** Every draft and auto-reply records its
-  provider token counts to the new `ai_usage_log` table (admin-readable),
-  for cost visibility on your BYO key.
+- **Token-usage logging + dashboard.** Every draft and auto-reply records
+  its provider token counts to the new `ai_usage_log` table
+  (admin-readable). A new **AI Agents → Usage** tab (admin-only) charts
+  daily token spend on your BYO key with per-mode and per-model
+  breakdowns, backed by `GET /api/ai/usage`. Counts only — no message
+  content is stored or shown.
 
 ### Changed
 
