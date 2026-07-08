@@ -49,6 +49,7 @@ import {
   validateFlowForActivation,
   type ValidationIssue,
 } from "@/lib/flows/validate";
+import { useTranslations } from "next-intl";
 import { unlinkNodeReferences } from "@/lib/flows/edges";
 import type { FlowNodeRow, FlowRow } from "@/lib/flows/types";
 import { NODE_META, slugify, type BuilderNode, type NodeType } from "./shared";
@@ -237,6 +238,7 @@ export function FlowEditorProvider({
   children,
 }: ProviderProps) {
   const router = useRouter();
+  const t = useTranslations("Flows.editorState");
 
   const [state, setStateRaw] = useState<BuilderState>(() => ({
     name: initialFlow.name,
@@ -347,7 +349,7 @@ export function FlowEditorProvider({
         throw new Error(json.error ?? `Save failed: ${res.status}`);
       }
       setDirty(false);
-      toast.success("Saved.");
+      toast.success(t("saved"));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
       toast.error(msg);
@@ -360,7 +362,7 @@ export function FlowEditorProvider({
   const setStatus = useCallback(
     async (next: BuilderState["status"]) => {
       if (next === "active" && !canActivate) {
-        toast.error("Fix the issues below before activating.");
+        toast.error(t("fixIssues"));
         return;
       }
       setActivating(true);
@@ -381,13 +383,7 @@ export function FlowEditorProvider({
           throw new Error(json.error ?? `Status update failed: ${res.status}`);
         }
         setStateRaw((s) => ({ ...s, status: next }));
-        toast.success(
-          next === "active"
-            ? "Flow activated."
-            : next === "archived"
-              ? "Archived."
-              : "Saved as draft.",
-        );
+        toast.success(t("statusChanged", { status: next }));
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Status update failed";
         toast.error(msg);

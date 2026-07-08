@@ -1021,6 +1021,8 @@
       "deleteNode": "Delete node",
       "canvasView": "Canvas",
       "listView": "List",
+      "noNodeSelected": "No node selected",
+      "noNodeDesc": "Select a node on the canvas to edit its configuration.",
       "form": {
         "advancesTo": "Advances to",
         "textToCustomer": "Text sent to the customer",
@@ -1127,6 +1129,34 @@
           "blurb": "Ends the flow"
         }
       }
+    },
+    "validation": {
+      "noIssues": "No issues. Ready to activate.",
+      "summary": "{errorCount} {errorCount, plural, =1 {error} other {errors}}, {warningCount} {warningCount, plural, =1 {warning} other {warnings}}",
+      "jumpToNode": "Jump to node {key}"
+    },
+    "editorState": {
+      "saved": "Saved.",
+      "fixIssues": "Fix the issues below before activating.",
+      "statusChanged": "Flow is now {status}."
+    },
+    "summary": {
+      "options": "{count} {count, plural, =1 {option} other {options}}",
+      "optionsAcrossSections": "{rowCount} {rowCount, plural, =1 {option} other {options}} across {sectionCount} {sectionCount, plural, =1 {section} other {sections}}",
+      "noFile": "{label} (no file uploaded)",
+      "media": "Media",
+      "image": "Image",
+      "video": "Video",
+      "document": "Document",
+      "audio": "Audio",
+      "hasTag": "has tag {tag}",
+      "opContains": "contains",
+      "opExists": "exists",
+      "opMissing": "missing",
+      "modeAdd": "Add",
+      "modeRemove": "Remove",
+      "tagPicked": "{mode} tag {tag}…",
+      "tagNone": "{mode} tag (none picked)"
     }
   },
   "Settings": {

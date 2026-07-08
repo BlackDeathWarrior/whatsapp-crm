@@ -403,7 +403,8 @@ function NodeCard({
   const meta = NODE_META[node.node_type];
   const c = nodeColors(node.node_type);
   const hasError = issues.some((i) => i.severity === 'error');
-  const preview = summarizeNode(node);
+  const tSummary = useTranslations('Flows.summary');
+  const preview = summarizeNode(node, tSummary);
   return (
     <div
       ref={cardRef}

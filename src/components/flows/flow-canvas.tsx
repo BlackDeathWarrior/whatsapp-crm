@@ -138,7 +138,8 @@ function FlowNodeCard({ data, selected }: NodeProps) {
   const { node, isEntry, isFlashed } = data as NodeData;
   const meta = NODE_META[node.node_type];
   const c = nodeColors(node.node_type);
-  const summary = summarizeNode(node);
+  const tSummary = useTranslations('Flows.summary');
+  const summary = summarizeNode(node, tSummary);
   const slots = outgoingSlots(node);
   // Start nodes are entry-only; nothing ever targets them, so they
   // don't need an incoming Handle. Every other node type accepts
