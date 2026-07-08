@@ -7,6 +7,8 @@ import { retrieveKnowledge } from '@/lib/ai/knowledge'
 import { generateReply } from '@/lib/ai/generate'
 import { buildSystemPrompt } from '@/lib/ai/defaults'
 import { latestUserMessage } from '@/lib/ai/query'
+import { logAiUsage } from '@/lib/ai/usage'
+import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { AiError } from '@/lib/ai/types'
 
 /**
@@ -102,7 +104,20 @@ export async function POST(request: Request) {
       knowledge,
     })
 
-    const { text } = await generateReply({ config, systemPrompt, messages })
+    const { text, usage } = await generateReply({ config, systemPrompt, messages })
+
+    // Record spend on the account's BYO key. Best-effort + via the
+    // service role (the log has no `authenticated` INSERT policy); a
+    // failure here must not fail the draft the agent is waiting on.
+    await logAiUsage(supabaseAdmin(), {
+      accountId,
+      conversationId,
+      mode: 'draft',
+      provider: config.provider,
+      model: config.model,
+      usage,
+    })
+
     return NextResponse.json({ draft: text })
   } catch (err) {
     if (err instanceof AiError) {

@@ -13,6 +13,7 @@ import {
   LayoutTemplate,
   ImageOff,
   CornerDownLeft,
+  Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
@@ -282,6 +283,19 @@ export function MessageBubble({
             isAgent ? "justify-end" : "justify-start",
           )}
         >
+          {/* AI badge — only on replies the auto-reply bot generated
+              (always outbound, so it sits on the primary fill). Lets
+              agents tell an AI reply from their own / a Flow's at a
+              glance. */}
+          {message.ai_generated && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full bg-primary-foreground/20 px-1.5 py-px text-[9px] font-semibold uppercase leading-none tracking-wide text-primary-foreground"
+              title="Sent automatically by the AI assistant"
+            >
+              <Sparkles className="h-2.5 w-2.5" />
+              AI
+            </span>
+          )}
           <span
             className={cn(
               "text-[10px]",

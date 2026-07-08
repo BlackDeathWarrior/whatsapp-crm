@@ -28,8 +28,13 @@ import { SettingsPanelHead } from './settings-panel-head';
 import { AiKnowledgeCard } from './ai-knowledge';
 import { AI_PROVIDER_DEFAULT_MODEL } from '@/lib/ai/defaults';
 import type { AiProvider } from '@/lib/ai/types';
+import type { AccountMember } from '@/types';
 
 const MASKED_KEY = '••••••••••••••••';
+
+// Radix Select can't use an empty-string item value, so the "leave
+// unassigned" choice gets a sentinel that maps to null in the payload.
+const HANDOFF_QUEUE = '__queue__';
 
 const PROVIDER_LABEL: Record<AiProvider, string> = {
   openai: 'OpenAI',
@@ -64,6 +69,9 @@ export function AiConfig() {
   const [isActive, setIsActive] = useState(false);
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
   const [maxPerConversation, setMaxPerConversation] = useState(3);
+  // Empty string = leave unassigned (shared queue).
+  const [handoffAgentId, setHandoffAgentId] = useState('');
+  const [members, setMembers] = useState<AccountMember[]>([]);
 
   // Guard keyed on the account (not a bare boolean) so an in-place
   // account switch — ownership transfer, multi-account membership —
@@ -88,6 +96,7 @@ export function AiConfig() {
         setIsActive(data.is_active);
         setAutoReplyEnabled(data.auto_reply_enabled);
         setMaxPerConversation(data.auto_reply_max_per_conversation ?? 3);
+        setHandoffAgentId(data.handoff_agent_id ?? '');
         setHasStoredKey(Boolean(data.has_key));
         setApiKey(data.has_key ? MASKED_KEY : '');
         setKeyEdited(false);
@@ -106,6 +115,19 @@ export function AiConfig() {
     if (!accountId || loadedAccountIdRef.current === accountId) return;
     loadedAccountIdRef.current = accountId;
     void fetchConfig();
+    // Members populate the handoff-target picker. Best-effort — on an
+    // older deployment without the endpoint the picker just shows the
+    // queue option.
+    void (async () => {
+      try {
+        const res = await fetch('/api/account/members', { cache: 'no-store' });
+        if (!res.ok) return;
+        const json = (await res.json()) as { members?: AccountMember[] };
+        setMembers(json.members ?? []);
+      } catch {
+        // ignore — picker falls back to "unassigned queue" only.
+      }
+    })();
   }, [accountId, fetchConfig]);
 
   // Swap the model default when the provider changes, unless the user
@@ -134,6 +156,7 @@ export function AiConfig() {
     is_active: isActive,
     auto_reply_enabled: autoReplyEnabled,
     auto_reply_max_per_conversation: maxPerConversation,
+    handoff_agent_id: handoffAgentId || null,
   });
 
   const handleTest = async () => {
@@ -201,6 +224,7 @@ export function AiConfig() {
         setIsActive(false);
         setAutoReplyEnabled(false);
         setSystemPrompt('');
+        setHandoffAgentId('');
       } else {
         const data = await res.json();
         toast.error(data.error ?? 'Failed to remove.');
@@ -443,6 +467,35 @@ export function AiConfig() {
                 disabled={disabled || !autoReplyEnabled}
                 className="w-20"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ai-handoff">Hand off to</Label>
+              <p className="text-xs text-muted-foreground">
+                When the bot can’t help — or hits the reply cap — it pauses and
+                routes the chat here, with a short note on what happened.
+              </p>
+              <Select
+                value={handoffAgentId || HANDOFF_QUEUE}
+                onValueChange={(v) =>
+                  setHandoffAgentId(!v || v === HANDOFF_QUEUE ? '' : v)
+                }
+                disabled={disabled || !autoReplyEnabled}
+              >
+                <SelectTrigger id="ai-handoff">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={HANDOFF_QUEUE}>
+                    Unassigned queue (any agent can pick it up)
+                  </SelectItem>
+                  {members.map((m) => (
+                    <SelectItem key={m.user_id} value={m.user_id}>
+                      {m.full_name || m.email || m.user_id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
