@@ -205,7 +205,9 @@
       "template": "Template",
       "buttonReply": "Button reply",
       "interactiveReply": "[Interactive reply]",
-      "unsupported": "[Unsupported message type]"
+      "unsupported": "[Unsupported message type]",
+      "aiBadge": "AI",
+      "aiBadgeTitle": "Sent automatically by the AI assistant"
     },
     "actions": {
       "reply": "Reply",
@@ -251,6 +253,16 @@
       "noTags": "No tags",
       "noDeals": "No deals",
       "addNotePlaceholder": "Add a note..."
+    },
+    "aiBanner": {
+      "pausedTitle": "AI assistant is paused here",
+      "activeText": "AI assistant is replying automatically",
+      "takeOver": "Take over",
+      "resume": "Resume AI",
+      "tookOver": "You’ve taken over this chat.",
+      "resumed": "AI resumed.",
+      "updateError": "Couldn’t update the AI assistant.",
+      "networkError": "Couldn’t reach the server."
     }
   },
   "Contacts": {
@@ -1623,6 +1635,9 @@
       "autoReplyDesc": "The bot answers new inbound messages automatically (only when no flow handles them and no agent is assigned). Hands off to a human when it can’t help.",
       "maxAutoReplies": "Max auto-replies per conversation",
       "maxAutoRepliesDesc": "After this many bot replies in one thread, the bot goes quiet.",
+      "handoffTo": "Hand off to",
+      "handoffToDesc": "When the bot can’t help — or hits the reply cap — it pauses and routes the chat here, with a short note on what happened.",
+      "handoffQueue": "Unassigned queue (any agent can pick it up)",
       "remove": "Remove",
       "save": "Save",
       "missingModel": "Enter a model name.",

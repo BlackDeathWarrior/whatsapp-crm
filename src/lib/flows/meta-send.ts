@@ -43,6 +43,10 @@ interface SendTextEngineArgs {
   conversationId: string
   contactId: string
   text: string
+  /** Marks the persisted message row `ai_generated = true` so the inbox
+   *  badges it as an AI reply. Only the auto-reply bot sets this;
+   *  deterministic Flow/automation sends leave it false. */
+  aiGenerated?: boolean
 }
 
 /**
@@ -127,6 +131,7 @@ export async function engineSendText(
     content_text: args.text,
     message_id: waMessageId,
     status: 'sent',
+    ai_generated: args.aiGenerated ?? false,
   })
   if (msgErr) {
     throw new Error(`sent to Meta but DB insert failed: ${msgErr.message}`)
