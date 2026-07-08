@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
+import { daysAgoStart, lastNDayKeys, localDayKey } from '@/lib/dashboard/date-utils'
 
 // Rows are aggregated in-process over a bounded window. An active
 // account writes a handful of rows per conversation, so 30 days sits
@@ -19,11 +20,6 @@ interface UsageRow {
   total_tokens: number
 }
 
-/** UTC yyyy-mm-dd — stable regardless of server timezone. */
-function dayKey(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
-
 /**
  * GET /api/ai/usage?days=30  (admin+)
  *
@@ -38,11 +34,22 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url)
     const rawDays = Number(url.searchParams.get('days'))
-    const days = Number.isFinite(rawDays)
-      ? Math.min(90, Math.max(1, Math.floor(rawDays)))
-      : DEFAULT_WINDOW_DAYS
+    // Guard `>= 1`, not just `isFinite`: a missing/blank param is
+    // Number(null)/Number('') === 0, which is finite — without the lower
+    // bound the default would never apply and the window would collapse
+    // to a single day.
+    const days =
+      Number.isFinite(rawDays) && rawDays >= 1
+        ? Math.min(90, Math.floor(rawDays))
+        : DEFAULT_WINDOW_DAYS
 
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    // Align the query cutoff to the START of the oldest local day we'll
+    // chart (not a rolling `now - N*24h` instant). Otherwise rows in the
+    // oldest partial day would be counted in the totals but fall outside
+    // every daily bucket, so the chart's bars wouldn't sum to the
+    // headline total. Local-day boundaries match every other dashboard
+    // chart (see lib/dashboard/date-utils).
+    const since = daysAgoStart(days - 1)
 
     const { data, error } = await supabase
       .from('ai_usage_log')
@@ -82,10 +89,10 @@ export async function GET(request: Request) {
     >()
 
     // Zero-filled daily buckets so the chart shows quiet days as gaps,
-    // not missing points. Keyed by UTC date, oldest → newest.
+    // not missing points. Local-day keys, oldest → newest — the same
+    // helper every other dashboard chart uses, so day boundaries agree.
     const daily = new Map<string, { date: string; tokens: number; calls: number }>()
-    for (let i = days - 1; i >= 0; i--) {
-      const key = dayKey(new Date(Date.now() - i * 24 * 60 * 60 * 1000))
+    for (const key of lastNDayKeys(days)) {
       daily.set(key, { date: key, tokens: 0, calls: 0 })
     }
 
@@ -94,9 +101,9 @@ export async function GET(request: Request) {
       completionTokens += r.completion_tokens
       totalTokens += r.total_tokens
 
-      const mode = r.mode === 'draft' ? 'draft' : 'auto_reply'
-      byMode[mode].calls += 1
-      byMode[mode].tokens += r.total_tokens
+      // `mode` is DB-CHECK-constrained to these two values.
+      byMode[r.mode].calls += 1
+      byMode[r.mode].tokens += r.total_tokens
 
       const mk = `${r.provider}:${r.model}`
       const m =
@@ -106,7 +113,7 @@ export async function GET(request: Request) {
       m.tokens += r.total_tokens
       modelMap.set(mk, m)
 
-      const bucket = daily.get(dayKey(new Date(r.created_at)))
+      const bucket = daily.get(localDayKey(r.created_at))
       if (bucket) {
         bucket.tokens += r.total_tokens
         bucket.calls += 1

@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/dashboard/skeleton';
 import { BarChart } from '@/components/tremor/bar-chart';
+import { formatCompactNumber } from '@/lib/currency';
+import { format, parseISO } from 'date-fns';
 
 interface UsageResponse {
   window_days: number;
@@ -45,23 +47,6 @@ interface UsageResponse {
 }
 
 const WINDOWS = [7, 30, 90] as const;
-
-/** Compact token count — 1234 → "1.2k", 1_200_000 → "1.2M". */
-function fmt(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
-
-/** "2026-07-08" → "Jul 8" for the chart axis. */
-function shortDay(iso: string): string {
-  const [, m, d] = iso.split('-');
-  const month = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ][Number(m) - 1];
-  return `${month} ${Number(d)}`;
-}
 
 /**
  * Token-spend dashboard for the account's BYO key. Admin-only (spend is
@@ -110,7 +95,8 @@ export function AiUsageCard() {
   if (profileLoading || !canView) return null;
 
   const chartData =
-    data?.daily.map((d) => ({ day: shortDay(d.date), Tokens: d.tokens })) ?? [];
+    data?.daily.map((d) => ({ day: format(parseISO(d.date), 'MMM d'), Tokens: d.tokens })) ??
+    [];
   const hasSpend = (data?.totals.total_tokens ?? 0) > 0;
 
   return (
@@ -157,16 +143,16 @@ export function AiUsageCard() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label="Total tokens" value={fmt(data.totals.total_tokens)} />
+              <Stat label="Total tokens" value={formatCompactNumber(data.totals.total_tokens)} />
               <Stat label="LLM calls" value={String(data.totals.calls)} />
               <Stat
                 label="Auto-reply"
-                value={fmt(data.by_mode.auto_reply.tokens)}
+                value={formatCompactNumber(data.by_mode.auto_reply.tokens)}
                 icon={Bot}
               />
               <Stat
                 label="Drafts"
-                value={fmt(data.by_mode.draft.tokens)}
+                value={formatCompactNumber(data.by_mode.draft.tokens)}
                 icon={PencilLine}
               />
             </div>
@@ -180,7 +166,7 @@ export function AiUsageCard() {
                 index="day"
                 categories={['Tokens']}
                 colors={['violet']}
-                valueFormatter={(v) => fmt(v)}
+                valueFormatter={(v) => formatCompactNumber(v)}
                 showLegend={false}
                 yAxisWidth={48}
                 className="h-[200px]"
@@ -205,7 +191,7 @@ export function AiUsageCard() {
                         </span>
                       </span>
                       <span className="flex-shrink-0 tabular-nums text-muted-foreground">
-                        {fmt(m.tokens)} tok · {m.calls}{' '}
+                        {formatCompactNumber(m.tokens)} tok · {m.calls}{' '}
                         {m.calls === 1 ? 'call' : 'calls'}
                       </span>
                     </li>

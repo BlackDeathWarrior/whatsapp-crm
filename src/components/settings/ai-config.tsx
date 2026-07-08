@@ -29,6 +29,7 @@ import { AiKnowledgeCard } from './ai-knowledge';
 import { AI_PROVIDER_DEFAULT_MODEL } from '@/lib/ai/defaults';
 import type { AiProvider } from '@/lib/ai/types';
 import type { AccountMember } from '@/types';
+import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
 
 const MASKED_KEY = '••••••••••••••••';
 
@@ -118,16 +119,7 @@ export function AiConfig() {
     // Members populate the handoff-target picker. Best-effort — on an
     // older deployment without the endpoint the picker just shows the
     // queue option.
-    void (async () => {
-      try {
-        const res = await fetch('/api/account/members', { cache: 'no-store' });
-        if (!res.ok) return;
-        const json = (await res.json()) as { members?: AccountMember[] };
-        setMembers(json.members ?? []);
-      } catch {
-        // ignore — picker falls back to "unassigned queue" only.
-      }
-    })();
+    void fetchAccountMembers().then(setMembers);
   }, [accountId, fetchConfig]);
 
   // Swap the model default when the provider changes, unless the user
@@ -491,7 +483,7 @@ export function AiConfig() {
                   </SelectItem>
                   {members.map((m) => (
                     <SelectItem key={m.user_id} value={m.user_id}>
-                      {m.full_name || m.email || m.user_id}
+                      {memberLabel(m)}
                     </SelectItem>
                   ))}
                 </SelectContent>

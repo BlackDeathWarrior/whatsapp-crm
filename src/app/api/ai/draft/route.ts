@@ -107,16 +107,24 @@ export async function POST(request: Request) {
     const { text, usage } = await generateReply({ config, systemPrompt, messages })
 
     // Record spend on the account's BYO key. Best-effort + via the
-    // service role (the log has no `authenticated` INSERT policy); a
-    // failure here must not fail the draft the agent is waiting on.
-    await logAiUsage(supabaseAdmin(), {
-      accountId,
-      conversationId,
-      mode: 'draft',
-      provider: config.provider,
-      model: config.model,
-      usage,
-    })
+    // service role (the log has no `authenticated` INSERT policy). This
+    // must not fail or delay the draft the agent is waiting on, so:
+    //  - the whole thing is wrapped (constructing the admin client throws
+    //    if the service-role key is unset — that must not 500 the draft);
+    //  - it's fire-and-forget (`void`), not awaited, so the response
+    //    isn't held for a DB round-trip.
+    try {
+      void logAiUsage(supabaseAdmin(), {
+        accountId,
+        conversationId,
+        mode: 'draft',
+        provider: config.provider,
+        model: config.model,
+        usage,
+      })
+    } catch (logErr) {
+      console.error('[ai/draft] usage log skipped:', logErr)
+    }
 
     return NextResponse.json({ draft: text })
   } catch (err) {
