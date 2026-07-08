@@ -174,7 +174,9 @@ export function FlowBuilder() {
         </div>
 
         {state.nodes.length === 0 ? (
-          <div className="border-border bg-card/50 text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm" dangerouslySetInnerHTML={{ __html: t.raw('nodesEmpty') }} />
+          <div className="border-border bg-card/50 text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+            {t.rich('nodesEmpty', { strong: (chunks) => <strong>{chunks}</strong> })}
+          </div>
         ) : (
           state.nodes.map((node) => (
             <NodeCard

@@ -503,7 +503,9 @@ export function MembersTab() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   {t('noPendingTitle')}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground" dangerouslySetInnerHTML={{ __html: t.raw('noPendingDesc') }} />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t.rich('noPendingDesc', { bold: (chunks) => <strong>{chunks}</strong> })}
+                </p>
               </CardContent>
             </Card>
           ) : (

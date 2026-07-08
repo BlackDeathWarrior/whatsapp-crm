@@ -168,7 +168,6 @@ export function MessageThread({
 }: MessageThreadProps) {
   const t = useTranslations("Inbox.messageThread");
   const tTimer = useTranslations("Inbox.sessionTimer");
-  const tComposer = useTranslations("Inbox.composer");
   const tQuote = useTranslations("Inbox.replyQuote");
 
   const { user } = useAuth();

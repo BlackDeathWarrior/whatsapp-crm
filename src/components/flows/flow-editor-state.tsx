@@ -383,7 +383,13 @@ export function FlowEditorProvider({
           throw new Error(json.error ?? `Status update failed: ${res.status}`);
         }
         setStateRaw((s) => ({ ...s, status: next }));
-        toast.success(t("statusChanged", { status: next }));
+        toast.success(
+          next === "active"
+            ? t("statusActivated")
+            : next === "archived"
+              ? t("statusArchived")
+              : t("statusDraft")
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Status update failed";
         toast.error(msg);

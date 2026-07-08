@@ -1144,7 +1144,9 @@
     "editorState": {
       "saved": "Saved.",
       "fixIssues": "Fix the issues below before activating.",
-      "statusChanged": "Flow is now {status}."
+      "statusActivated": "Flow activated.",
+      "statusArchived": "Archived.",
+      "statusDraft": "Saved as draft."
     },
     "summary": {
       "options": "{count} {count, plural, =1 {option} other {options}}",

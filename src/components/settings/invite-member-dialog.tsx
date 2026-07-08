@@ -55,12 +55,6 @@ const EXPIRY_OPTIONS = [
   { value: '30', labelKey: 'days30' },
 ];
 
-const ROLE_DESCRIPTIONS = [
-  'adminHint',
-  'agentHint',
-  'viewerHint',
-];
-
 // Server caps label at 80 chars (see src/app/api/account/invitations/route.ts).
 // Mirror it on the client so we short-circuit before the round-trip
 // rather than letting the user submit and bounce off a 400.
