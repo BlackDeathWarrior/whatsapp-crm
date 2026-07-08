@@ -188,7 +188,7 @@ export function TagManager() {
                     <button
                       type="button"
                       onClick={() => confirmDelete(tag)}
-                      aria-label={t('deleteAria', { name: tag.name })}
+                      aria-label={t('deleteAria', { name: tag.name, bold: (chunks: React.ReactNode) => <strong>{chunks}</strong> })}
                       className="ml-0.5 rounded-full p-0.5 opacity-60 transition-opacity hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
                     >
                       <X className="size-3" />
@@ -221,7 +221,7 @@ export function TagManager() {
                     key={color.value}
                     type="button"
                     onClick={() => setSelectedColor(color.value)}
-                    aria-label={t('useColor', { color: t(`colors.${color.name}` as any) })}
+                    aria-label={t('useColor', { color: t(`colors.${color.name}` as Parameters<typeof t>[0]) })}
                     aria-pressed={selectedColor === color.value}
                     className={cn(
                       'size-6 rounded-md transition-transform hover:scale-110',
@@ -229,7 +229,7 @@ export function TagManager() {
                         'outline outline-2 outline-offset-2 outline-primary',
                     )}
                     style={{ backgroundColor: color.value }}
-                    title={t(`colors.${color.name}` as any)}
+                    title={t(`colors.${color.name}` as Parameters<typeof t>[0])}
                   />
                 ))}
               </div>

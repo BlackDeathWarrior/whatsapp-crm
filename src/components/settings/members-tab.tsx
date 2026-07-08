@@ -115,7 +115,7 @@ function fmtDate(iso: string): string {
   });
 }
 
-function fmtExpiresIn(iso: string, t: any): string {
+function fmtExpiresIn(iso: string, t: (key: string, values?: Record<string, unknown>) => string): string {
   const ms = new Date(iso).getTime() - Date.now();
   if (ms <= 0) return t('expired');
   const days = Math.floor(ms / (24 * 60 * 60 * 1000));
@@ -579,7 +579,7 @@ export function MembersTab() {
             <DialogDescription className="text-muted-foreground">
               {t.rich('removeDialogDesc', { 
                 name: removingMember?.full_name || t('unnamed'),
-                bold: (chunks: any) => <strong>{chunks}</strong>
+                bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>
               })}
             </DialogDescription>
           </DialogHeader>

@@ -198,7 +198,7 @@ export function InviteMemberDialog({
                 {t.rich('inviteCreatedDesc', {
                   role: tRoles(result.role),
                   days: result.expiresInDays,
-                  bold: (chunks: any) => <strong>{chunks}</strong>
+                  bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>
                 })}
               </DialogDescription>
             </DialogHeader>
@@ -305,7 +305,7 @@ export function InviteMemberDialog({
                   <SelectContent>
                     {EXPIRY_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
-                        {t(opt.labelKey as any)}
+                        {t(opt.labelKey as Parameters<typeof t>[0])}
                       </SelectItem>
                     ))}
                   </SelectContent>

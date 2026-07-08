@@ -297,7 +297,7 @@ export function ProfileForm() {
                   {t.rich('emailChangeHint', { 
                     oldEmail: profile?.email || '', 
                     newEmail: email,
-                    bold: (chunks: any) => <strong>{chunks}</strong>
+                    bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>
                   })}
                 </span>
               </p>
