@@ -1,6 +1,13 @@
 -- ============================================================
--- 031_fix_profiles_update_rls.sql — lock down privilege columns
+-- 034_fix_profiles_update_rls.sql — lock down privilege columns
 --                                    on profiles (GHSA-fg5p-2qc3-jmxr, C1)
+--
+-- NOTE: renamed from 031 → 034 to resolve a duplicate migration version.
+-- The 031 slot was already taken by 031_ai_reply_slot_grant.sql (#345),
+-- so shipping this as 031 too made a clean `supabase db` apply fail with
+-- a duplicate schema_migrations key (SQLSTATE 23505). This migration is
+-- idempotent (DROP POLICY IF EXISTS / CREATE OR REPLACE) and independent
+-- of the AI tables, so re-sequencing it after 033 is safe.
 --
 -- The problem
 --
