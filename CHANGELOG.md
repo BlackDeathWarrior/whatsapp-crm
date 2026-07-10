@@ -9,6 +9,28 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.1] — 2026-07-10
+
+Fixes inbound chats fragmenting into multiple threads for the same
+number.
+
+> **Migration required:** apply `supabase/migrations/036_conversation_contact_dedup.sql`
+> (merges any existing duplicate conversations into the oldest thread —
+> no messages are lost — then adds a `UNIQUE (account_id, contact_id)`
+> index so one contact can only ever have one conversation).
+
+### Fixed
+
+- **Duplicate chats for a single contact.** An inbound message could
+  create a second conversation for a contact under a race (Meta retries a
+  delivery, or a batch fans out to concurrent runs). Once two existed,
+  the `.single()` lookup errored on every later message and the webhook
+  created yet another conversation each time, snowballing into a wall of
+  duplicate chats. The find-or-create now resolves to the oldest existing
+  thread and a DB unique index makes the one-conversation-per-contact
+  rule authoritative. The same hardening was applied to the public-API
+  conversation resolver. (Issue #363)
+
 ## [0.8.0] — 2026-07-08
 
 Polishes the AI auto-reply bot: it's now **visible and controllable from
