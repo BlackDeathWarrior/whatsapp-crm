@@ -23,7 +23,13 @@ is included.
    ```
 
 3. The app is served on [http://localhost:3000](http://localhost:3000)
-   (override the host port with `PORT=8080` in `.env.local`).
+   (publish it elsewhere with `HOST_PORT=8080` in `.env.local`).
+
+> Use `HOST_PORT`, not `PORT`, to move the published port. `PORT` is
+> what the server listens on _inside_ the container, and `env_file`
+> would inject it there — leaving the app on a port the mapping and
+> the healthcheck don't target. Compose pins it to 3000 for that
+> reason.
 
 ## Build-time vs runtime variables
 
@@ -44,7 +50,7 @@ docker build \
   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key \
   -t wacrm .
 
-docker run -d --env-file .env.local -p 3000:3000 wacrm
+docker run -d --env-file .env.local -e PORT=3000 -p 3000:3000 wacrm
 ```
 
 ## Notes
