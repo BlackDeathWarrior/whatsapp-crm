@@ -395,11 +395,33 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       }
 
       // ── Step 3: Insert recipient rows ─────────────────────────────
+      // Custom values are fetched BEFORE the insert so each row can
+      // carry its resolved template params. Those params are what makes
+      // the campaign resumable server-side (issue #472): the send loop
+      // below runs in this browser tab, and if the tab goes away the
+      // only record of what {{1}} should be for each contact is this
+      // column. Resolving once here also means the resume sends exactly
+      // what this pass would have.
       setProgress(20);
+      const customValueIndex = await fetchCustomValueIndex(
+        supabase,
+        contacts.map((c) => c.id),
+      );
+      const paramsByContact = new Map(
+        contacts.map((contact) => [
+          contact.id,
+          resolveVariables(
+            payload.variables,
+            contact,
+            customValueIndex.get(contact.id),
+          ),
+        ]),
+      );
       const recipientRows = contacts.map((contact) => ({
         broadcast_id: broadcast.id,
         contact_id: contact.id,
         status: 'pending' as const,
+        template_params: paramsByContact.get(contact.id) ?? [],
       }));
 
       for (let i = 0; i < recipientRows.length; i += INSERT_BATCH_SIZE) {
@@ -426,7 +448,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         }
       }
 
-      // ── Step 4: Fetch recipients (joined contact) + preload custom values
+      // ── Step 4: Fetch recipients back (joined contact) ────────────
       setProgress(30);
       const { data: recipients, error: recipientsFetchError } = await supabase
         .from('broadcast_recipients')
@@ -436,16 +458,6 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       if (recipientsFetchError || !recipients) {
         throw new Error('Failed to fetch broadcast recipients');
       }
-
-      // One bulk fetch of custom values for every contact in this
-      // broadcast, avoiding N+1 during the send loop.
-      const contactIds = recipients
-        .map((r) => r.contact?.id)
-        .filter((id): id is string => Boolean(id));
-      const customValueIndex = await fetchCustomValueIndex(
-        supabase,
-        contactIds,
-      );
 
       let failedCount = 0;
       const totalRecipients = recipients.length;
@@ -470,13 +482,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           .filter((r) => r.contact?.phone)
           .map((r) => ({
             phone: r.contact!.phone as string,
-            params: r.contact
-              ? resolveVariables(
-                  payload.variables,
-                  r.contact,
-                  customValueIndex.get(r.contact.id),
-                )
-              : [],
+            // Read back off the row rather than re-resolved, so this
+            // pass and any later resume send identical params.
+            params: Array.isArray(r.template_params) ? r.template_params : [],
             ...(messageParams ? { messageParams } : {}),
           }));
 
