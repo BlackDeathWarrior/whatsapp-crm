@@ -681,7 +681,16 @@
         "failed": "Failed"
       },
       "toastFailedDelete": "Failed to delete: {error}",
-      "toastDeleted": "Broadcast deleted"
+      "toastDeleted": "Broadcast deleted",
+      "resumeTitle": "Some recipients need another attempt",
+      "resumeStalledTitle": "This campaign stopped part-way",
+      "resumeHint": "{count} recipients failed. Retrying sends them again from the server.",
+      "resumeStalledHint": "{count} recipients were never sent — the browser tab running this campaign was closed before it finished. Resuming completes it from the server.",
+      "resumePending": "Resume sending ({count})",
+      "retryFailed": "Retry failed ({count})",
+      "toastResumeStarted": "Sending {count} recipients in the background.",
+      "toastResumeStartedCapped": "Sending {count} recipients in the background. {remaining} more will need another run.",
+      "toastResumeFailed": "Could not resume: {error}"
     },
     "new": {
       "title": "New Broadcast",

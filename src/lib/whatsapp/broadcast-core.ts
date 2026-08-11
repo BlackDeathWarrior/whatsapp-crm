@@ -208,6 +208,9 @@ export async function createBroadcast(
       p_template_language: resolvedTemplate.language,
       p_total_recipients: deduped.length,
       p_contact_ids: deduped.map((r) => r.contactId),
+      // Frozen per-recipient params (migration 038) — without them a
+      // resume of this broadcast has no way to reconstruct {{1}}.
+      p_template_params: deduped.map((r) => r.params),
     }
   );
   if (createErr || !createdRows || createdRows.length === 0) {
