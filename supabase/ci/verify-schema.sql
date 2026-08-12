@@ -43,11 +43,11 @@ BEGIN
   END IF;
 
   RAISE NOTICE 'schema verification passed';
-
-  -- TEMPORARY: deliberate failure to prove this file can turn the job
-  -- red. Removed in the next commit.
-  IF to_regclass('public.this_table_does_not_exist') IS NULL THEN
-    RAISE EXCEPTION 'NEGATIVE CONTROL — if you see this, the check works';
-  END IF;
 END
 $$;
+
+-- Verified on 2026-08-12: a deliberately false assertion added here
+-- (commit 42c7db0, run 31579334056) surfaced as
+-- `failed to execute query: error: ...` and exited 1, failing the job.
+-- So a RAISE in this file does reach the check — this is not a
+-- decorative green tick.
