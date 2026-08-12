@@ -53,10 +53,13 @@ jobs:
       - name: Start Postgres
         run: supabase db start
 
-      # `db start` boots the database; `db reset` is what replays
-      # supabase/migrations/ into it, in filename order, failing on the
+      # `db start` already applies the migrations on a cold volume, but
+      # only on a cold volume — it is a no-op against a database that
+      # already exists. `db reset` drops and rebuilds unconditionally,
+      # so this step, not the one above, is the guarantee that every
+      # migration ran in filename order against nothing. It fails on the
       # first statement Postgres rejects. --no-seed because there is no
-      # seed script and we are testing schema, not data.
+      # seed script and this is about schema, not data.
       - name: Replay every migration from scratch
         run: supabase db reset --local --no-seed
 

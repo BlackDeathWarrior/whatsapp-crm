@@ -43,5 +43,11 @@ BEGIN
   END IF;
 
   RAISE NOTICE 'schema verification passed';
+
+  -- TEMPORARY: deliberate failure to prove this file can turn the job
+  -- red. Removed in the next commit.
+  IF to_regclass('public.this_table_does_not_exist') IS NULL THEN
+    RAISE EXCEPTION 'NEGATIVE CONTROL — if you see this, the check works';
+  END IF;
 END
 $$;
