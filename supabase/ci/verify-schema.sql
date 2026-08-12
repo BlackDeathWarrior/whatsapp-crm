@@ -42,35 +42,6 @@ BEGIN
     RAISE EXCEPTION 'public.accounts is missing — migration 017 did not apply';
   END IF;
 
-  -- TEMPORARY (stripped next commit): migration 039 is not on main yet
-  -- — it belongs to PR #496 — but nothing has ever executed it, so
-  -- borrow this run to prove it does what it claims.
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'messages'
-      AND column_name = 'media_type'
-  ) THEN
-    RAISE EXCEPTION '039 did not add messages.media_type';
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'whatsapp_config'
-      AND column_name = 'mirror_inbound_media'
-      AND column_default ILIKE '%true%'
-      AND is_nullable = 'NO'
-  ) THEN
-    RAISE EXCEPTION
-      '039 did not add whatsapp_config.mirror_inbound_media as NOT NULL DEFAULT TRUE';
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM storage.buckets
-    WHERE id = 'chat-media' AND 'image/gif' = ANY(allowed_mime_types)
-  ) THEN
-    RAISE EXCEPTION '039 did not widen the chat-media MIME allow-list';
-  END IF;
-
   RAISE NOTICE 'schema verification passed';
 END
 $$;
@@ -81,9 +52,9 @@ $$;
 -- 1. It must contain EXACTLY ONE statement. `supabase db query --file`
 --    sends the whole file as a prepared statement, and a second
 --    top-level statement fails with the distinctly unhelpful "cannot
---    insert multiple commands into a prepared statement" (run
---    31579617... on commit f91a6c8). Add assertions INSIDE the DO
---    block above; do not append a second one.
+--    insert multiple commands into a prepared statement" (commit
+--    f91a6c8). Add assertions INSIDE the DO block above; do not append
+--    a second one.
 --
 -- 2. A RAISE in here really does fail the job. A deliberately false
 --    assertion (commit 42c7db0, run 31579334056) surfaced as
