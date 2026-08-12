@@ -51,3 +51,29 @@ $$;
 -- `failed to execute query: error: ...` and exited 1, failing the job.
 -- So a RAISE in this file does reach the check — this is not a
 -- decorative green tick.
+
+-- TEMPORARY (removed next commit): prove migration 039 from PR #496
+-- applies to a clean database, since nothing has ever executed it.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='messages' AND column_name='media_type'
+  ) THEN
+    RAISE EXCEPTION '039 did not add messages.media_type';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='whatsapp_config'
+      AND column_name='mirror_inbound_media' AND column_default ILIKE '%true%'
+  ) THEN
+    RAISE EXCEPTION '039 did not add whatsapp_config.mirror_inbound_media defaulting true';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM storage.buckets
+    WHERE id='chat-media' AND 'image/gif' = ANY(allowed_mime_types)
+  ) THEN
+    RAISE EXCEPTION '039 did not widen the chat-media MIME allow-list';
+  END IF;
+END
+$$;
