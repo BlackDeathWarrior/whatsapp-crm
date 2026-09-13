@@ -154,6 +154,9 @@ Key pages:
 - [Deploy on Hostinger](https://wacrm.tech/docs/deployment-hostinger)
 - [Architecture](https://wacrm.tech/docs/architecture)
 - [Troubleshooting](https://wacrm.tech/docs/troubleshooting)
+- [WhatsApp connection troubleshooting](./docs/whatsapp-connection-troubleshooting.md)
+  — what each "Save Configuration" error means, and the Meta code /
+  trace id to quote to Meta support
 
 ## Stack
 
