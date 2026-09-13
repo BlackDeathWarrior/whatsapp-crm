@@ -1,5 +1,5 @@
 -- ============================================================
--- 040_fix_broadcast_contact_id_ambiguity.sql — make
+-- 041_fix_broadcast_contact_id_ambiguity.sql — make
 --     create_broadcast_with_recipients executable
 --
 -- The problem
