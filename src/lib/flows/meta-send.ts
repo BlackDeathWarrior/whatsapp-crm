@@ -31,6 +31,30 @@ import { supabaseAdmin } from './admin-client'
 // keeps the foundation PR self-contained and unit-testable.
 // ------------------------------------------------------------
 
+/**
+ * Resolve the account's Meta sending credentials: the phone number id
+ * plus the DECRYPTED access token from `whatsapp_config`. The single
+ * home for that decrypt step — callers outside this file (the AI
+ * auto-reply's typing indicator) reuse it rather than growing a copy.
+ */
+export async function loadAccountMetaCredentials(
+  db: ReturnType<typeof supabaseAdmin>,
+  accountId: string,
+): Promise<{ phoneNumberId: string; accessToken: string }> {
+  const { data: config, error: configErr } = await db
+    .from('whatsapp_config')
+    .select('phone_number_id, access_token')
+    .eq('account_id', accountId)
+    .single()
+  if (configErr || !config) {
+    throw new Error('WhatsApp not configured for this account')
+  }
+  return {
+    phoneNumberId: config.phone_number_id,
+    accessToken: decrypt(config.access_token),
+  }
+}
+
 interface SendTextEngineArgs {
   /** Account-level tenancy key. Drives contact + whatsapp_config
    *  lookups so a flow authored by user A still sends through the
@@ -86,20 +110,14 @@ export async function engineSendText(
   }
   const sanitized = sendTarget.target
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', args.accountId)
-    .single()
-  if (configErr || !config) {
-    throw new Error('WhatsApp not configured for this account')
-  }
-
-  const accessToken = decrypt(config.access_token)
+  const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
+    db,
+    args.accountId,
+  )
 
   const attempt = async (phone: string): Promise<string> => {
     const r = await sendTextMessage({
-      phoneNumberId: config.phone_number_id,
+      phoneNumberId,
       accessToken,
       to: phone,
       text: args.text,
@@ -201,20 +219,14 @@ export async function engineSendMedia(
   }
   const sanitized = sendTarget.target
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', args.accountId)
-    .single()
-  if (configErr || !config) {
-    throw new Error('WhatsApp not configured for this account')
-  }
-
-  const accessToken = decrypt(config.access_token)
+  const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
+    db,
+    args.accountId,
+  )
 
   const attempt = async (phone: string): Promise<string> => {
     const r = await sendMediaMessage({
-      phoneNumberId: config.phone_number_id,
+      phoneNumberId,
       accessToken,
       to: phone,
       kind: args.kind,
@@ -358,21 +370,15 @@ async function sendInteractiveViaMeta(
   }
   const sanitized = sendTarget.target
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', input.accountId)
-    .single()
-  if (configErr || !config) {
-    throw new Error('WhatsApp not configured for this account')
-  }
-
-  const accessToken = decrypt(config.access_token)
+  const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
+    db,
+    input.accountId,
+  )
 
   const attempt = async (phone: string): Promise<string> => {
     if (input.kind === 'buttons') {
       const r = await sendInteractiveButtons({
-        phoneNumberId: config.phone_number_id,
+        phoneNumberId,
         accessToken,
         to: phone,
         bodyText: input.bodyText,
@@ -383,7 +389,7 @@ async function sendInteractiveViaMeta(
       return r.messageId
     }
     const r = await sendInteractiveList({
-      phoneNumberId: config.phone_number_id,
+      phoneNumberId,
       accessToken,
       to: phone,
       bodyText: input.bodyText,
