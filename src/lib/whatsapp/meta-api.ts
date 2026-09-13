@@ -26,18 +26,84 @@ export interface MetaPhoneInfo {
 }
 
 interface MetaErrorResponse {
-  error?: { message?: string; code?: number; type?: string }
+  error?: {
+    message?: string
+    code?: number
+    error_subcode?: number
+    type?: string
+    fbtrace_id?: string
+    /** WhatsApp-specific envelope — `details` is the human-readable part. */
+    error_data?: { messaging_product?: string; details?: string }
+  }
 }
 
-async function throwMetaError(response: Response, fallback: string): Promise<never> {
+/**
+ * A Graph API failure with Meta's structured envelope preserved.
+ *
+ * `message` stays what it always was (Meta's `error.message`, or the
+ * caller's fallback when the body wasn't JSON) so every existing
+ * `err.message` consumer keeps working. The extra fields are what
+ * `meta-error-explain.ts` needs to say *why* a call failed and which
+ * setting to check — and what a user has to quote to Meta support
+ * (`fbtrace_id`). Issue #505.
+ */
+export class MetaApiError extends Error {
+  readonly code: number | null
+  readonly subcode: number | null
+  readonly type: string | null
+  readonly fbtraceId: string | null
+  readonly httpStatus: number
+  /** `error.error_data.details` — WhatsApp endpoints put the useful text here. */
+  readonly details: string | null
+
+  constructor(
+    message: string,
+    fields: {
+      code?: number | null
+      subcode?: number | null
+      type?: string | null
+      fbtraceId?: string | null
+      httpStatus: number
+      details?: string | null
+    },
+  ) {
+    super(message)
+    this.name = 'MetaApiError'
+    this.code = fields.code ?? null
+    this.subcode = fields.subcode ?? null
+    this.type = fields.type ?? null
+    this.fbtraceId = fields.fbtraceId ?? null
+    this.httpStatus = fields.httpStatus
+    this.details = fields.details ?? null
+  }
+}
+
+/**
+ * Read a failed Graph response into a MetaApiError without throwing.
+ * Consumes the body — call at most once per response.
+ */
+async function readMetaError(response: Response, fallback: string): Promise<MetaApiError> {
   let message = fallback
+  let envelope: MetaErrorResponse['error'] | undefined
   try {
     const data = (await response.json()) as MetaErrorResponse
-    if (data.error?.message) message = data.error.message
+    envelope = data.error
+    if (envelope?.message) message = envelope.message
   } catch {
     // response body wasn't JSON — keep the fallback
   }
-  throw new Error(message)
+  return new MetaApiError(message, {
+    code: typeof envelope?.code === 'number' ? envelope.code : null,
+    subcode: typeof envelope?.error_subcode === 'number' ? envelope.error_subcode : null,
+    type: envelope?.type ?? null,
+    fbtraceId: envelope?.fbtrace_id ?? null,
+    httpStatus: response.status,
+    details: envelope?.error_data?.details ?? null,
+  })
+}
+
+async function throwMetaError(response: Response, fallback: string): Promise<never> {
+  throw await readMetaError(response, fallback)
 }
 
 // ============================================================
@@ -144,17 +210,11 @@ export async function registerPhoneNumber(
   // text "already registered" appears when the number is already
   // subscribed to this app — that's success from the caller's
   // perspective, surface it as such.
-  let data: { error?: { message?: string; code?: number; error_subcode?: number } } = {}
-  try {
-    data = await response.json()
-  } catch {
-    /* keep empty */
-  }
-  const message = data.error?.message ?? `Meta API error: ${response.status}`
-  if (/already.*registered/i.test(message)) {
+  const error = await readMetaError(response, `Meta API error: ${response.status}`)
+  if (/already.*registered/i.test(error.message)) {
     return { success: true, alreadyRegistered: true }
   }
-  throw new Error(message)
+  throw error
 }
 
 export interface SubscribeWabaToAppArgs {
@@ -178,6 +238,51 @@ export async function subscribeWabaToApp(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
+}
+
+export interface ListWabaPhoneNumbersArgs {
+  wabaId: string
+  accessToken: string
+}
+
+export interface WabaPhoneNumber {
+  id: string
+  display_phone_number?: string
+  verified_name?: string
+}
+
+/**
+ * List the phone numbers that live under a WABA.
+ *
+ * Used by POST /api/whatsapp/config to prove the Phone Number ID the
+ * user typed actually belongs to the WABA ID they typed. A mismatch
+ * used to save fine and surface days later as "the webhook never
+ * fires" — the WABA that got subscribed wasn't the one owning the
+ * number (issue #505). Follows `paging.next` a few pages in case a
+ * WABA holds more numbers than one page returns.
+ */
+export async function listWabaPhoneNumbers(
+  args: ListWabaPhoneNumbersArgs
+): Promise<WabaPhoneNumber[]> {
+  const { wabaId, accessToken } = args
+  const out: WabaPhoneNumber[] = []
+  let url: string | undefined =
+    `${META_API_BASE}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name&limit=100`
+  for (let page = 0; url && page < 5; page++) {
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!response.ok) {
+      await throwMetaError(response, `Meta API error: ${response.status}`)
+    }
+    const data = (await response.json()) as {
+      data?: WabaPhoneNumber[]
+      paging?: { next?: string }
+    }
+    out.push(...(data.data ?? []))
+    url = data.paging?.next
+  }
+  return out
 }
 
 export interface GetSubscribedAppsArgs {
