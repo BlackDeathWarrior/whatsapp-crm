@@ -908,6 +908,9 @@ async function processMessage(
       conversationId: conversation.id,
       contactId: contactRecord.id,
       configOwnerUserId,
+      // Lets the bot show "typing…" (and mark the message read) while
+      // the reply is generated.
+      inboundMessageId: message.id,
     })
   }
 

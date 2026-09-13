@@ -720,6 +720,55 @@ export async function sendReactionMessage(
 }
 
 // ============================================================
+// Typing indicator (rides on the read receipt)
+// ============================================================
+
+export interface SendTypingIndicatorArgs {
+  phoneNumberId: string
+  accessToken: string
+  /** Meta's wamid of the INBOUND message we're about to answer — must
+   *  come from a received-message webhook, not one of our own sends. */
+  messageId: string
+}
+
+/**
+ * Mark an inbound message as read AND show "typing…" to the customer.
+ *
+ * One request does both: Meta's typing indicator is a field on the
+ * read-status update. The indicator clears after 25 seconds or as soon
+ * as the business sends a message, whichever comes first, so there is
+ * nothing to cancel. Meta asks that it only be shown when a reply is
+ * actually coming.
+ *   https://developers.facebook.com/docs/whatsapp/cloud-api/typing-indicators
+ *
+ * Returns nothing — the endpoint answers `{ success: true }` and mints
+ * no message id. Callers should treat it as best-effort: a failure here
+ * must never block the reply that follows.
+ */
+export async function sendTypingIndicator(
+  args: SendTypingIndicatorArgs
+): Promise<void> {
+  const { phoneNumberId, accessToken, messageId } = args
+  const url = `${META_API_BASE}/${phoneNumberId}/messages`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      status: 'read',
+      message_id: messageId,
+      typing_indicator: { type: 'text' },
+    }),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+}
+
+// ============================================================
 // Interactive (button replies + list messages)
 // ============================================================
 //
