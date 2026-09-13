@@ -281,7 +281,7 @@ export function TemplateManager() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(
-          data?.error || `${isEdit ? 'Edit' : 'Submit'} failed (HTTP ${res.status})`,
+          data?.error || t(isEdit ? 'editFailedHttp' : 'submitFailedHttp', { status: res.status }),
         );
       }
       // Refresh first, then close — re-opening the dialog
@@ -583,7 +583,7 @@ export function TemplateManager() {
                                 ? 'text-yellow-400'
                                 : 'text-red-400'
                           }`}
-                          title="Meta quality score"
+                          title={t('qualityScoreTitle')}
                         >
                           {template.quality_score}
                         </span>
@@ -811,7 +811,7 @@ export function TemplateManager() {
                 <div className="space-y-2 mt-2">
                   <Input
                     id="template-header-text"
-                    aria-label="Header text"
+                    aria-label={t('headerTextLabel')}
                     placeholder={t.raw('headerTextPlaceholder')}
                     value={form.header_content}
                     onChange={(e) =>

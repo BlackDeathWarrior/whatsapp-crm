@@ -185,7 +185,7 @@ export function ProfileForm() {
           : t('profileSaved'),
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const msg = err instanceof Error ? err.message : t('unknownError');
       toast.error(msg);
     } finally {
       setSaving(false);
