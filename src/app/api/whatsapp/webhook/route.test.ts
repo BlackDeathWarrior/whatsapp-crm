@@ -234,7 +234,8 @@ vi.mock('@/lib/whatsapp/webhook-signature', () => ({
   verifyMetaWebhookSignature: () => true,
 }))
 vi.mock('@/lib/whatsapp/template-webhook', () => ({
-  isTemplateWebhookField: () => false,
+  isTemplateWebhookField: (field: string) =>
+    field.startsWith('message_template_'),
   handleTemplateWebhookChange: vi.fn(),
 }))
 vi.mock('@/lib/automations/engine', () => ({
@@ -253,6 +254,7 @@ vi.mock('@/lib/webhooks/deliver', () => ({
 import { POST } from './route'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { findExistingContact } from '@/lib/contacts/dedupe'
+import { handleTemplateWebhookChange } from '@/lib/whatsapp/template-webhook'
 
 const mockGetMediaUrl = vi.mocked(getMediaUrl)
 const mockDownloadMedia = vi.mocked(downloadMedia)
@@ -814,5 +816,41 @@ describe('inbound webhook: contact name backfill (#519 regression guard)', () =>
     ])
 
     expect(h.state.contactUpdates[0]).toMatchObject({ name: 'ada' })
+  })
+})
+
+describe('template-lifecycle webhooks: WABA id is threaded to the handler (#534)', () => {
+  it('passes entry.id as wabaId so an unknown template can be stubbed for the right account', async () => {
+    const value = {
+      event: 'APPROVED',
+      message_template_id: '4242',
+      message_template_name: 'created_in_meta',
+      message_template_language: 'en_US',
+    }
+    const body = {
+      entry: [
+        {
+          id: 'WABA-1',
+          changes: [{ field: 'message_template_status_update', value }],
+        },
+      ],
+    }
+    const req = {
+      text: async () => JSON.stringify(body),
+      headers: { get: () => 'sha256=stub' },
+    } as unknown as Request
+
+    await POST(req)
+    for (const cb of h.state.afterCallbacks) await cb()
+
+    const mockHandle = vi.mocked(handleTemplateWebhookChange)
+    expect(mockHandle).toHaveBeenCalledTimes(1)
+    expect(mockHandle.mock.calls[0][0]).toEqual({
+      field: 'message_template_status_update',
+      value,
+      wabaId: 'WABA-1',
+    })
+    // A template event must not fall through to the messaging branch.
+    expect(h.state.upsertCalls).toHaveLength(0)
   })
 })

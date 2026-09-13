@@ -257,9 +257,16 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       // have a different value shape — route them through the
       // dedicated handler. Skip the messaging branches below so we
       // don't try to read message-shaped fields off a template event.
+      // `entry.id` is the WABA id for template events — the handler
+      // needs it to resolve the owning account when the template has
+      // no local row yet (#534).
       if (isTemplateWebhookField(change.field)) {
         await handleTemplateWebhookChange(
-          { field: change.field, value: change.value as unknown },
+          {
+            field: change.field,
+            value: change.value as unknown,
+            wabaId: entry.id,
+          },
           supabaseAdmin(),
         )
         continue
