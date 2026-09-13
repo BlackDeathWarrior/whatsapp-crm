@@ -50,6 +50,18 @@ BEGIN
       'idx_contacts_account_wa_user_id is missing — migration 040 did not apply';
   END IF;
 
+  -- 041 repairs create_broadcast_with_recipients, which 037/038 shipped
+  -- with an ambiguous bare `RETURNING id, contact_id` (SQLSTATE 42702 on
+  -- first call — plpgsql resolves names at execution, not CREATE, so a
+  -- plain replay can't catch it). Assert the qualified form is what's
+  -- actually installed.
+  IF pg_get_functiondef(
+       'public.create_broadcast_with_recipients(uuid,uuid,text,text,text,integer,uuid[],jsonb[])'::regprocedure
+     ) NOT LIKE '%RETURNING id, broadcast_recipients.contact_id%' THEN
+    RAISE EXCEPTION
+      'create_broadcast_with_recipients still has the ambiguous RETURNING — migration 041 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;
