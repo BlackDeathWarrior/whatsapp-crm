@@ -90,6 +90,15 @@ interface WhatsAppMessage {
   context?: { id: string }
 }
 
+/** One entry of a failed status's `errors` array, as Meta sends it. */
+interface MetaStatusError {
+  code: number
+  title: string
+  message?: string
+  error_data?: { details?: string }
+  href?: string
+}
+
 interface WhatsAppWebhookEntry {
   id: string
   changes: Array<{
@@ -112,6 +121,13 @@ interface WhatsAppWebhookEntry {
         status: string
         timestamp: string
         recipient_id: string
+        /**
+         * Only present when `status === 'failed'`. Meta's reason for the
+         * failure — `code` is a stable numeric error code (e.g. 131049),
+         * `title` a short label, `error_data.details` the human-readable
+         * explanation. See #535.
+         */
+        errors?: MetaStatusError[]
       }>
     }
     field: string
@@ -397,15 +413,41 @@ async function handleStatusUpdate(status: {
   status: string
   timestamp: string
   recipient_id: string
+  errors?: MetaStatusError[]
 }) {
+  // Meta's reason for a failed send (#535). Only read on `failed`; a
+  // later non-failed status for the same wamid leaves the error
+  // columns alone rather than clearing them, so the reason survives.
+  const failure =
+    status.status === 'failed' && status.errors?.[0]
+      ? {
+          code: status.errors[0].code,
+          title: status.errors[0].title,
+          details: status.errors[0].error_data?.details ?? null,
+        }
+      : null
+
+  if (failure) {
+    console.warn(
+      `WhatsApp message ${status.id} failed: [${failure.code}] ${failure.title}` +
+        (failure.details ? ` — ${failure.details}` : '')
+    )
+  }
+
   // 1) Mirror onto messages (legacy behavior) — Meta's status values
   //    already match the CHECK constraint on messages.status. No
   //    `.select()`: message_id is NOT unique (migration 009 — Meta ids
   //    repeat across numbers), so this updates 0..N rows and must not
   //    assume a single row.
+  const messageUpdate: Record<string, unknown> = { status: status.status }
+  if (failure) {
+    messageUpdate.error_code = failure.code
+    messageUpdate.error_title = failure.title
+    messageUpdate.error_details = failure.details
+  }
   const { error: msgErr } = await supabaseAdmin()
     .from('messages')
-    .update({ status: status.status })
+    .update(messageUpdate)
     .eq('message_id', status.id)
 
   if (msgErr) {
@@ -440,6 +482,14 @@ async function handleStatusUpdate(status: {
     if (status.status === 'sent' && !('sent_at' in update)) update.sent_at = tsIso
     if (status.status === 'delivered') update.delivered_at = tsIso
     if (status.status === 'read') update.read_at = tsIso
+    // broadcast_recipients already has a free-text error_message column
+    // (migration 001), so the reason is folded into it rather than
+    // adding three more columns there.
+    if (failure) {
+      update.error_message =
+        `[${failure.code}] ${failure.title}` +
+        (failure.details ? `: ${failure.details}` : '')
+    }
 
     const { error: recUpdateErr } = await supabaseAdmin()
       .from('broadcast_recipients')

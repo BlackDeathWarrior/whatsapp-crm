@@ -35,6 +35,12 @@ const h = vi.hoisted(() => ({
     contactInserts: [] as Record<string, unknown>[],
     /** Patches applied to an existing `contacts` row. */
     contactUpdates: [] as Record<string, unknown>[],
+    /** Patches applied to `messages` by a status webhook (#535). */
+    messageUpdates: [] as Record<string, unknown>[],
+    /** Row the status webhook's broadcast_recipients lookup resolves. */
+    broadcastRecipient: null as { id: string; status: string } | null,
+    /** Patches applied to that broadcast_recipients row. */
+    recipientUpdates: [] as Record<string, unknown>[],
   },
 }))
 
@@ -86,7 +92,10 @@ vi.mock('@supabase/supabase-js', () => ({
             }),
           }
         case 'broadcast_recipients':
-          // flagBroadcastReplyIfAny: select().eq().eq().in().order().limit()
+          // Two chains land here:
+          //   flagBroadcastReplyIfAny: select().eq().eq().in().order().limit()
+          //   handleStatusUpdate:      select().eq().maybeSingle(), then
+          //                            update().eq()
           return {
             select: () => ({
               eq: () => ({
@@ -98,8 +107,17 @@ vi.mock('@supabase/supabase-js', () => ({
                     }),
                   }),
                 }),
+                maybeSingle: () =>
+                  Promise.resolve({
+                    data: h.state.broadcastRecipient,
+                    error: null,
+                  }),
               }),
             }),
+            update: (patch: Record<string, unknown>) => {
+              h.state.recipientUpdates.push(patch)
+              return { eq: () => Promise.resolve({ error: null }) }
+            },
           }
         case 'contacts':
           // Three chains land here, all from findOrCreateContact:
@@ -160,6 +178,7 @@ vi.mock('@supabase/supabase-js', () => ({
                     }),
                   }
                 : // lookupInternalIdByMetaId: select('id').eq().eq().maybeSingle()
+                  // handleStatusUpdate fan-out: select().eq().limit().maybeSingle()
                   {
                     eq: () => ({
                       eq: () => ({
@@ -169,8 +188,17 @@ vi.mock('@supabase/supabase-js', () => ({
                             error: null,
                           }),
                       }),
+                      limit: () => ({
+                        maybeSingle: () =>
+                          Promise.resolve({ data: null, error: null }),
+                      }),
                     }),
                   },
+            // Status webhook mirror (#535): update(...).eq('message_id', ...)
+            update: (patch: Record<string, unknown>) => {
+              h.state.messageUpdates.push(patch)
+              return { eq: () => Promise.resolve({ error: null }) }
+            },
             // Idempotent insert: upsert(...).select('id')
             upsert: (row: Record<string, unknown>, options: unknown) => {
               h.state.upsertCalls.push({ row, options })
@@ -306,6 +334,31 @@ async function runWebhook(
   return res
 }
 
+/** A message-status webhook (sent / delivered / read / failed). */
+async function runStatusWebhook(status: Record<string, unknown>) {
+  const body = {
+    entry: [
+      {
+        changes: [
+          {
+            field: 'messages',
+            value: {
+              metadata: { phone_number_id: 'pn-1' },
+              statuses: [status],
+            },
+          },
+        ],
+      },
+    ],
+  }
+  const res = await POST({
+    text: async () => JSON.stringify(body),
+    headers: { get: () => 'sha256=stub' },
+  } as unknown as Request)
+  for (const cb of h.state.afterCallbacks) await cb()
+  return res
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   h.state.messageUpsertResult = [{ id: 'msg-1' }]
@@ -323,6 +376,9 @@ beforeEach(() => {
   h.state.contactByWaUserId = null
   h.state.contactInserts = []
   h.state.contactUpdates = []
+  h.state.messageUpdates = []
+  h.state.broadcastRecipient = null
+  h.state.recipientUpdates = []
   mockFindExistingContact.mockResolvedValue({
     id: 'contact-1',
     name: 'Ada',
@@ -852,5 +908,107 @@ describe('template-lifecycle webhooks: WABA id is threaded to the handler (#534)
     })
     // A template event must not fall through to the messaging branch.
     expect(h.state.upsertCalls).toHaveLength(0)
+  })
+})
+
+describe('status webhook: failed statuses keep Meta\'s reason (#535)', () => {
+  const FAILED_STATUS = {
+    id: 'wamid.OUT1',
+    status: 'failed',
+    timestamp: '1700000100',
+    recipient_id: '15551230000',
+    errors: [
+      {
+        code: 131049,
+        title: 'This message was not delivered to maintain healthy ecosystem engagement.',
+        message: 'This message was not delivered to maintain healthy ecosystem engagement.',
+        error_data: {
+          details:
+            'In order to maintain a healthy ecosystem engagement, the message failed to be delivered.',
+        },
+        href: 'https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/',
+      },
+    ],
+  }
+
+  it('persists code, title and details on the messages row in the same update as status', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await runStatusWebhook(FAILED_STATUS)
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(h.state.messageUpdates).toHaveLength(1)
+    expect(h.state.messageUpdates[0]).toEqual({
+      status: 'failed',
+      error_code: 131049,
+      error_title: FAILED_STATUS.errors[0].title,
+      error_details: FAILED_STATUS.errors[0].error_data.details,
+    })
+  })
+
+  it('logs one warning line carrying the wamid, code and title', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await runStatusWebhook(FAILED_STATUS)
+      expect(warn).toHaveBeenCalledTimes(1)
+      const line = String(warn.mock.calls[0][0])
+      expect(line).toContain('wamid.OUT1')
+      expect(line).toContain('131049')
+      expect(line).toContain(FAILED_STATUS.errors[0].title)
+      expect(line).toContain(FAILED_STATUS.errors[0].error_data.details)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('folds the reason into broadcast_recipients.error_message', async () => {
+    h.state.broadcastRecipient = { id: 'rec-1', status: 'sent' }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await runStatusWebhook(FAILED_STATUS)
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(h.state.recipientUpdates).toHaveLength(1)
+    expect(h.state.recipientUpdates[0].status).toBe('failed')
+    const reason = String(h.state.recipientUpdates[0].error_message)
+    expect(reason).toContain('131049')
+    expect(reason).toContain(FAILED_STATUS.errors[0].title)
+    expect(reason).toContain(FAILED_STATUS.errors[0].error_data.details)
+  })
+
+  it('a failed status with no errors array still flips status and stores no reason', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await runStatusWebhook({ ...FAILED_STATUS, errors: undefined })
+    } finally {
+      warn.mockRestore()
+    }
+    expect(warn).not.toHaveBeenCalled()
+    expect(h.state.messageUpdates).toEqual([{ status: 'failed' }])
+  })
+
+  it('a plain delivered status updates only status — error columns untouched', async () => {
+    h.state.broadcastRecipient = { id: 'rec-1', status: 'sent' }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await runStatusWebhook({
+        id: 'wamid.OUT1',
+        status: 'delivered',
+        timestamp: '1700000100',
+        recipient_id: '15551230000',
+      })
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(warn).not.toHaveBeenCalled()
+    expect(h.state.messageUpdates).toEqual([{ status: 'delivered' }])
+    expect(h.state.recipientUpdates).toHaveLength(1)
+    expect(h.state.recipientUpdates[0]).not.toHaveProperty('error_message')
+    expect(h.state.recipientUpdates[0]).not.toHaveProperty('error_code')
   })
 })
