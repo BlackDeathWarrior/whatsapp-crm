@@ -62,6 +62,19 @@ BEGIN
       'create_broadcast_with_recipients still has the ambiguous RETURNING — migration 041 did not apply';
   END IF;
 
+  -- The failure-reason columns (042) are only ever written by the
+  -- status webhook, which uses an untyped update — a missing column
+  -- there is a runtime PostgREST error on every failed send, not a
+  -- compile error.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'messages'
+      AND column_name IN ('error_code', 'error_title', 'error_details')
+  ) <> 3 THEN
+    RAISE EXCEPTION
+      'messages.error_code/error_title/error_details are missing — migration 042 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

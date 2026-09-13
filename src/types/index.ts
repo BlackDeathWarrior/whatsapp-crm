@@ -269,6 +269,14 @@ export interface Message {
    * badge in the inbox. Migration 033.
    */
   ai_generated?: boolean;
+  /**
+   * Meta's reason for a failed send, from the `failed` status webhook's
+   * `errors[0]` (code / title / error_data.details). Only set when
+   * `status === 'failed'`; never cleared by a later status. Migration 042.
+   */
+  error_code?: number | null;
+  error_title?: string | null;
+  error_details?: string | null;
 }
 
 export type ReactionActor = 'customer' | 'agent';
