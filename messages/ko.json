@@ -1396,12 +1396,16 @@
       "headerSamplePlaceholder": "{{1}}의 샘플 값 (Meta 검토에 필요)",
 
       "uploadImage": "이미지 업로드",
+      "uploadVideo": "동영상 업로드",
+      "uploadDocument": "문서 업로드",
       "uploadHint": "JPEG 또는 PNG, 5MB 이하",
+      "uploadHintVideo": "MP4 또는 3GPP, 16MB 이하",
+      "uploadHintDocument": "PDF, Word, PowerPoint, Excel 또는 텍스트, 16MB 이하",
       "mediaUrlPlaceholder": "https://… (또는 공개 {format} 링크 붙여넣기)",
       "imageHint": "JPEG/PNG(5MB 이하, 800×418px 이상 권장)를 업로드하거나 공개 HTTPS 링크를 붙여넣으세요 — 검토를 위해 자동으로 Meta에 업로드됩니다.",
-      "mediaHint": "공개적으로 접근 가능한 HTTPS 링크여야 합니다. Meta가 검토 중 한 번 가져오므로 약 24시간 동안 살아있어야 합니다.",
-      "videoHint": " 권장: MP4 / 3GPP, 16MB 이하, 60초 이하.",
-      "documentHint": " 권장: PDF, 100MB 이하.",
+      "mediaHint": "파일을 업로드하거나 공개 HTTPS 링크를 붙여넣으세요 — 검토를 위해 자동으로 Meta에 업로드됩니다.",
+      "videoHint": " MP4 또는 3GPP, 16MB 이하, 60초 이하 권장.",
+      "documentHint": " PDF, Word, PowerPoint, Excel 또는 텍스트, 링크는 100MB 이하(여기서 업로드 시 16MB 이하).",
 
       "bodyText": "본문 텍스트",
       "bodyPlaceholder": "안녕하세요 {{1}}님, 주문 {{2}}이(가) 확정되었습니다.",
@@ -1452,8 +1456,10 @@
       "toastDeleteSuccess": "템플릿이 삭제되었습니다",
       "toastDeleteError": "템플릿을 삭제하지 못했습니다",
       "toastInvalidImage": "헤더 이미지는 JPEG 또는 PNG여야 합니다.",
-      "toastImageTooLarge": "이미지 크기가 {size}MB입니다 — Meta 제한은 5MB입니다.",
-      "toastUploadSuccess": "이미지가 업로드되었습니다.",
+      "toastInvalidVideo": "헤더 동영상은 MP4 또는 3GPP 파일이어야 합니다.",
+      "toastInvalidDocument": "헤더 문서는 PDF, Word, PowerPoint, Excel 또는 텍스트 파일이어야 합니다.",
+      "toastMediaTooLarge": "파일 크기가 {size}MB입니다 — 업로드 제한은 {max}MB입니다.",
+      "toastUploadSuccess": "파일이 업로드되었습니다.",
       "toastUploadFailed": "업로드에 실패했습니다."
     },
     "roles": {
