@@ -1627,6 +1627,30 @@
       "title": "로그인 & 보안",
       "description": "비밀번호를 변경하고 기기에서 로그아웃하세요. 계정을 안전하게 유지하는 데 도움이 됩니다."
     },
+    "browserNotifications": {
+      "title": "브라우저 알림",
+      "description": "다른 페이지를 보고 있어도 새 고객 메시지마다 데스크톱 알림을 받습니다. 이 기기에 저장됩니다.",
+      "toggleLabel": "새 고객 메시지 알림 받기",
+      "toggleDesc": "브라우저 탭에 앱이 열려 있는 동안에만 작동합니다.",
+      "statusGranted": "브라우저에서 허용됨.",
+      "statusDefault": "켜면 브라우저가 알림 권한을 요청합니다.",
+      "statusDenied": "브라우저 설정에서 차단됨",
+      "deniedHint": "브라우저의 사이트 설정(보통 주소창 옆 잠금 아이콘)에서 이 사이트의 알림을 허용한 뒤 페이지를 새로 고치세요.",
+      "unsupported": "이 브라우저는 데스크톱 알림을 지원하지 않습니다.",
+      "sendTest": "테스트 알림 보내기",
+      "testTitle": "테스트 알림",
+      "testBody": "알림이 정상 작동합니다. 새 고객 메시지가 이렇게 표시됩니다.",
+      "permissionDeniedToast": "브라우저가 알림을 차단했습니다",
+      "labels": {
+        "fallbackTitle": "새 메시지",
+        "image": "📷 사진",
+        "audio": "🎤 음성 메시지",
+        "video": "🎬 동영상",
+        "document": "📄 문서",
+        "location": "📍 위치",
+        "template": "📋 템플릿"
+      }
+    },
     "apiKeys": {
       "title": "API 키",
       "description": "키는 공개 REST API(<apiCode>/api/v1</apiCode>)를 인증해 직접 자동화를 구축할 수 있게 해줍니다. <headerCode>Authorization: Bearer &lt;key&gt;</headerCode> 형식으로 전송하세요.",
