@@ -3,10 +3,12 @@
 //
 // One small provider-agnostic surface so the inbox draft route and the
 // inbound auto-reply bot both talk to `generateReply` without caring
-// whether the account is on OpenAI or Anthropic.
+// which provider the account is on (see `providers/catalog.ts`).
 // ============================================================
 
-export type AiProvider = 'openai' | 'anthropic'
+import type { AiProvider } from './providers/catalog'
+
+export type { AiProvider }
 
 /**
  * Account AI setup, decrypted and ready to use. Produced by
@@ -16,7 +18,11 @@ export type AiProvider = 'openai' | 'anthropic'
 export interface AiConfig {
   provider: AiProvider
   model: string
+  /** Plaintext key; empty string for a keyless self-hosted server. */
   apiKey: string
+  /** Admin-supplied OpenAI-compatible base URL (`local` provider only);
+   *  null means the provider's built-in endpoint. */
+  baseUrl: string | null
   systemPrompt: string | null
   isActive: boolean
   autoReplyEnabled: boolean
@@ -46,6 +52,27 @@ export interface AiUsage {
   promptTokens: number
   completionTokens: number
   totalTokens: number
+}
+
+/**
+ * A tool the model may call — in practice, one tool exposed by one of
+ * the account's custom MCP servers. `inputSchema` is JSON Schema (MCP
+ * and both provider APIs share that format).
+ */
+export interface AgentTool {
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+}
+
+/**
+ * Tools offered to the model for one generation. `call` never throws —
+ * a failing tool returns an error string so the model can recover or
+ * hand off, instead of the whole reply failing.
+ */
+export interface AgentToolset {
+  tools: AgentTool[]
+  call(name: string, args: Record<string, unknown>): Promise<string>
 }
 
 /** Raw text + usage a provider adapter returns before handoff parsing. */

@@ -56,3 +56,37 @@ scopes. Give an assistant a read-only key and read-only config and it
 physically cannot send anything. See the
 [server README](../mcp-server/README.md) for the full tool list and
 safety model.
+
+## Config generator
+
+**Settings → MCP servers → Connect AI clients to this CRM** builds the
+JSON above for you: it fills in this instance's URL, lets you paste an
+API key (used only in your browser, never stored), and toggles
+writes/broadcasts. It can also include your custom servers (below).
+
+## Custom MCP servers for the AI agent
+
+The other direction: give wacrm's own AI agent (inbox drafts,
+auto-reply, Playground) tools from **your** MCP servers — an inventory
+lookup, order status, a booking system.
+
+1. **Settings → MCP servers → Add server.** Enter a name, the server's
+   URL, and any auth headers (e.g. `Authorization: Bearer ...`).
+   Headers are stored AES-256-GCM-encrypted and never shown again.
+2. **Test connection** lists the tools the server exposes.
+3. Leave **Available to AI agent** on. Every enabled server's tools are
+   offered to the model on each draft/auto-reply, prefixed with the
+   server name (`inventory__get_stock`).
+
+Notes:
+
+- Remote servers over **Streamable HTTP** only. Command-based (stdio)
+  servers can't be spawned by a web deployment.
+- The model gets up to 4 tool round-trips per reply, then must answer.
+  A server that's down is skipped; the reply still goes out.
+- Tool calling needs a model that supports it. If the provider rejects
+  tool definitions, wacrm retries without tools.
+- Auto-reply runs with no human in the loop: only connect tools you are
+  comfortable letting the bot call on its own.
+- URLs on `localhost` / private networks are refused unless the server
+  sets `AI_ALLOW_PRIVATE_URLS=true` (see `.env.local.example`).

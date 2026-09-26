@@ -1,17 +1,19 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
-import { decrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
-import { AiError, type AiProvider } from '@/lib/ai/types'
+import { resolveCredentials } from '@/lib/ai/credentials'
+import { loadProviderKey } from '@/lib/ai/provider-keys'
+import { isAiProvider } from '@/lib/ai/providers/catalog'
+import { AiError } from '@/lib/ai/types'
 
 /**
  * POST /api/ai/test  (admin+)
  *
  * "Test key" button: validate a candidate provider/model/key against
  * the provider WITHOUT saving. When `api_key` is omitted the stored
- * key is used, so an admin can re-test an existing config (e.g. after
- * changing the model). Returns `{ ok: true }` on success, 400 with the
+ * key is used (same provider + endpoint only), so an admin can re-test
+ * an existing config (e.g. after changing the model). Returns `{ ok: true }` on success, 400 with the
  * provider's message on failure.
  */
 export async function POST(request: Request) {
@@ -26,47 +28,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
 
-    const provider = body.provider as AiProvider
-    if (provider !== 'openai' && provider !== 'anthropic') {
-      return NextResponse.json(
-        { error: 'provider must be "openai" or "anthropic"' },
-        { status: 400 },
-      )
-    }
-    const model = typeof body.model === 'string' ? body.model.trim() : ''
-    if (!model) {
-      return NextResponse.json({ error: 'model is required' }, { status: 400 })
-    }
+    const { data: existing } = await supabase
+      .from('ai_configs')
+      .select('provider, api_key, base_url')
+      .eq('account_id', accountId)
+      .maybeSingle()
 
-    const rawKey = typeof body.api_key === 'string' ? body.api_key.trim() : ''
-    let apiKeyPlain = rawKey
-    if (!apiKeyPlain) {
-      const { data: existing } = await supabase
-        .from('ai_configs')
-        .select('api_key')
-        .eq('account_id', accountId)
-        .maybeSingle()
-      if (!existing?.api_key) {
-        return NextResponse.json(
-          { error: 'Enter an API key to test.' },
-          { status: 400 },
-        )
-      }
-      try {
-        apiKeyPlain = decrypt(existing.api_key)
-      } catch {
-        return NextResponse.json(
-          { error: 'Stored API key could not be decrypted — re-enter your key.' },
-          { status: 400 },
-        )
-      }
+    const saved = isAiProvider(body.provider)
+      ? await loadProviderKey(supabase, accountId, body.provider)
+      : null
+
+    const creds = await resolveCredentials(body, existing, saved)
+    if (!creds.ok) {
+      return NextResponse.json({ error: creds.error }, { status: 400 })
     }
 
     try {
       await validateAiCredentials({
-        provider,
-        model,
-        apiKey: apiKeyPlain,
+        provider: creds.provider,
+        model: creds.model,
+        apiKey: creds.apiKey,
+        baseUrl: creds.baseUrl,
         systemPrompt: null,
         isActive: true,
         autoReplyEnabled: false,

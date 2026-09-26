@@ -10,6 +10,7 @@ import { latestUserMessage } from '@/lib/ai/query'
 import { logAiUsage } from '@/lib/ai/usage'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { AiError } from '@/lib/ai/types'
+import { loadAgentToolset } from '@/lib/mcp/servers'
 
 /**
  * POST /api/ai/draft  (agent+)
@@ -98,13 +99,29 @@ export async function POST(request: Request) {
       latestUserMessage(messages),
     )
 
+    // Tools from the account's custom MCP servers (best-effort — null
+    // when none are enabled or reachable).
+    const tooling = await loadAgentToolset(supabase, accountId)
+
     const systemPrompt = buildSystemPrompt({
       userPrompt: config.systemPrompt,
       mode: 'draft',
       knowledge,
+      hasTools: !!tooling,
     })
 
-    const { text, usage } = await generateReply({ config, systemPrompt, messages })
+    let generated
+    try {
+      generated = await generateReply({
+        config,
+        systemPrompt,
+        messages,
+        toolset: tooling?.toolset,
+      })
+    } finally {
+      void tooling?.close()
+    }
+    const { text, usage } = generated
 
     // Record spend on the account's BYO key. Best-effort + via the
     // service role (the log has no `authenticated` INSERT policy). This

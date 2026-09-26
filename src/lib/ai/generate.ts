@@ -1,13 +1,15 @@
 import {
   AiError,
+  type AgentToolset,
   type AiConfig,
   type AiUsage,
   type ChatMessage,
   type GenerateResult,
 } from './types'
 import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults'
-import { generateOpenAi } from './providers/openai'
+import { generateOpenAiCompatible } from './providers/openai-compatible'
 import { generateAnthropic } from './providers/anthropic'
+import { isAiProvider } from './providers/catalog'
 
 export interface GenerateArgs {
   config: AiConfig
@@ -15,6 +17,8 @@ export interface GenerateArgs {
   systemPrompt: string
   /** Recent conversation turns, oldest first. */
   messages: ChatMessage[]
+  /** Tools from the account's custom MCP servers, if any. */
+  toolset?: AgentToolset | null
 }
 
 /**
@@ -23,7 +27,7 @@ export interface GenerateArgs {
  * of the raw text. Throws `AiError` on any provider/network failure.
  */
 export async function generateReply(args: GenerateArgs): Promise<GenerateResult> {
-  const { config, systemPrompt, messages } = args
+  const { config, systemPrompt, messages, toolset } = args
   const timeoutMs = aiRequestTimeoutMs()
   const providerArgs = {
     apiKey: config.apiKey,
@@ -31,21 +35,26 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
     systemPrompt,
     messages,
     timeoutMs,
+    toolset,
+  }
+
+  if (!isAiProvider(config.provider)) {
+    throw new AiError(`Unsupported AI provider: ${config.provider}`, {
+      code: 'unsupported_provider',
+      status: 400,
+    })
   }
 
   let result: { text: string; usage: AiUsage | null }
-  switch (config.provider) {
-    case 'openai':
-      result = await generateOpenAi(providerArgs)
-      break
-    case 'anthropic':
-      result = await generateAnthropic(providerArgs)
-      break
-    default:
-      throw new AiError(`Unsupported AI provider: ${config.provider}`, {
-        code: 'unsupported_provider',
-        status: 400,
-      })
+  if (config.provider === 'anthropic') {
+    result = await generateAnthropic(providerArgs)
+  } else {
+    // Everything else speaks the OpenAI Chat Completions dialect.
+    result = await generateOpenAiCompatible({
+      ...providerArgs,
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+    })
   }
 
   return parseGeneration(result.text, result.usage)
