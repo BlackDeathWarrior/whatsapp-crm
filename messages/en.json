@@ -402,9 +402,9 @@
         "custom": "Custom Fields",
         "deals": "Deals",
         "tags": "Tags",
-      "noTags": "No tags",
-      "noDeals": "No deals",
-      "addNotePlaceholder": "Add a note..."
+        "noTags": "No tags",
+        "noDeals": "No deals",
+        "addNotePlaceholder": "Add a note..."
       },
       "actions": {
         "edit": "Edit",
@@ -1460,13 +1460,11 @@
       "deleteLocallyAria": "Delete template locally",
       "deleteMetaLocallyTitle": "Delete from Meta and locally",
       "deleteLocallyTitle": "Delete locally",
-      
       "dialogEditTitle": "Edit Message Template",
       "dialogNewTitle": "New Message Template",
       "dialogEditDesc": "Save your changes to re-submit to Meta. Status will flip back to PENDING during review.",
       "dialogNewDesc": "Build a template and submit it to Meta for approval. Once approved, you can use it in broadcasts and the inbox.",
       "authWarning": "AUTHENTICATION templates have a fixed body + OTP button shape that needs a different builder. Create them in Meta WhatsApp Manager for now and use <bold>Sync from Meta</bold> to bring them in.",
-      
       "templateName": "Template Name",
       "namePlaceholder": "e.g. order_confirmation",
       "nameFixed": "Name is fixed once a template exists on Meta — create a new template to change it.",
@@ -1475,7 +1473,6 @@
       "language": "Language",
       "langFixed": "Language is fixed once a template exists on Meta.",
       "langHint": "Must match the exact code on Meta — <code>en_US</code> and <code>en</code> are distinct.",
-      
       "header": "Header",
       "headerNone": "None",
       "headerText": "Text",
@@ -1485,7 +1482,6 @@
       "headerTextPlaceholder": "Header text (max 60 chars, optional {{1}})",
       "headerSampleAria": "Sample value for header variable",
       "headerSamplePlaceholder": "Sample value for {{1}} (required for Meta review)",
-      
       "uploadImage": "Upload image",
       "uploadVideo": "Upload video",
       "uploadDocument": "Upload document",
@@ -1497,17 +1493,14 @@
       "mediaHint": "Upload a file or paste a public HTTPS link — we upload it to Meta for review automatically.",
       "videoHint": " MP4 or 3GPP, ≤16 MB, ≤60 seconds recommended.",
       "documentHint": " PDF, Word, PowerPoint, Excel or text, ≤100 MB via link (≤16 MB when uploaded here).",
-      
       "bodyText": "Body Text",
       "bodyPlaceholder": "Hello {{1}}, your order {{2}} is confirmed.",
       "bodyHint": "Use {{1}}, {{2}} for variables (must be contiguous starting at {{1}}).",
       "sampleValues": "Sample values (Meta uses these to review your template)",
       "sampleAria": "Sample value for body variable {var}",
       "samplePlaceholder": "Sample for {var}",
-      
       "footer": "Footer (optional)",
       "footerPlaceholder": "Optional footer text (max 60 chars)",
-      
       "buttons": "Buttons (optional)",
       "addButton": "Add Button",
       "buttonsLimit": "Up to {max} buttons. QUICK_REPLY buttons must come before URL / phone / copy-code buttons.",
@@ -1520,19 +1513,16 @@
       "urlSamplePlaceholder": "Example value for {{1}} (required when URL has a variable)",
       "phonePlaceholder": "+15551234567",
       "codePlaceholder": "Example code (e.g. SUMMER20)",
-      
       "cancel": "Cancel",
       "saving": "Saving…",
       "submitting": "Submitting…",
       "saveResubmit": "Save & Resubmit",
       "submitApproval": "Submit for Approval",
-      
       "deleteDialogTitle": "Delete template?",
       "deleteMetaDesc": "\"{name}\" will be deleted from Meta and from wacrm. Active broadcasts using this template will start failing on their next send. This can't be undone.",
       "deleteLocalDesc": "\"{name}\" will be deleted from wacrm. It was never submitted to Meta, so no remote cleanup is needed.",
       "deleting": "Deleting…",
       "delete": "Delete",
-      
       "toastLoadFailed": "Failed to load templates",
       "toastSubmitFailed": "Failed to submit",
       "toastSubmitEditSuccess": "Edit submitted — Meta typically reviews within 24 hours.",
@@ -1678,7 +1668,8 @@
       "fields": "Fields & tags",
       "deals": "Deals & currency",
       "members": "Team members",
-      "api": "API keys"
+      "api": "API keys",
+      "mcp": "MCP servers"
     },
     "groups": {
       "account": "Account",
@@ -1713,7 +1704,6 @@
       "profileSaved": "Profile saved",
       "emailChangeFailed": "Email change failed: {message}",
       "profileSavedEmailCheck": "Profile saved — check your email to confirm the address change",
-      
       "passwordTitle": "Password",
       "passwordDesc": "Use at least {min} characters. You will stay signed in on this device after changing it.",
       "currentPassword": "Current password",
@@ -1727,7 +1717,6 @@
       "currentPasswordIncorrect": "Current password is incorrect",
       "passwordUpdateFailed": "Password update failed: {message}",
       "passwordUpdated": "Password updated",
-      
       "sessionsTitle": "Active sessions",
       "sessionsDesc": "Sign out of every device where you're logged in — including this one. Useful if you lost a laptop or shared your password.",
       "signOutAll": "Sign out of all devices",
@@ -1828,7 +1817,7 @@
     },
     "aiConfig": {
       "title": "Agent setup",
-      "description": "Bring your own OpenAI or Anthropic key. wacrm calls the provider directly with your key — no per-seat AI fees, and your data stays yours. This powers AI-drafted replies in the inbox, the auto-reply bot, and the Playground.",
+      "description": "Bring your own key from OpenAI, Anthropic, Google Gemini, OpenRouter, Mistral, xAI Grok or NVIDIA NIM — or point it at a local model server. wacrm calls the provider directly with your key — no per-seat AI fees, and your data stays yours. This powers AI-drafted replies in the inbox, the auto-reply bot, and the Playground.",
       "adminOnlyConfig": "Only admins and owners can change the AI configuration.",
       "loadFailed": "Failed to load AI configuration",
       "providerAndKey": "Provider & key",
@@ -1864,7 +1853,13 @@
       "saveSuccess": "AI assistant saved.",
       "saveFailed": "Failed to save.",
       "removeSuccess": "AI configuration removed.",
-      "removeFailed": "Failed to remove."
+      "removeFailed": "Failed to remove.",
+      "baseUrl": "Base URL",
+      "baseUrlHint": "Any OpenAI-compatible server: Ollama (http://localhost:11434/v1), LM Studio (http://localhost:1234/v1), vLLM, LocalAI or llama.cpp. Local and private addresses also need AI_ALLOW_PRIVATE_URLS=true in the server environment.",
+      "optional": "(optional)",
+      "getKey": "Get a {provider} key",
+      "missingBaseUrl": "Enter the base URL of your model server.",
+      "usingSavedKey": "Using the {provider} key saved under API keys."
     },
     "aiKnowledge": {
       "loadFailed": "Failed to load knowledge base",
@@ -1894,6 +1889,58 @@
       "editDoc": "Edit",
       "deleteDoc": "Delete",
       "loading": "Loading…"
+    },
+    "mcp": {
+      "title": "MCP servers",
+      "description": "Give your AI agent extra tools from Model Context Protocol servers, and get the config to plug this CRM into Claude Desktop, Cursor and other MCP clients.",
+      "addServer": "Add server",
+      "customTitle": "Custom MCP servers",
+      "customDesc": "Remote MCP servers (Streamable HTTP) whose tools the AI agent can call when drafting replies, auto-replying and in the Playground. Headers are encrypted at rest and never shown again.",
+      "noServers": "No custom MCP servers yet.",
+      "adminOnly": "Only admins and owners can manage MCP servers.",
+      "agentToggle": "Available to AI agent",
+      "test": "Test",
+      "testConnection": "Test connection",
+      "testSuccess": "Connected — {count, plural, one {# tool} other {# tools}} available.",
+      "testFailed": "Could not connect to the MCP server.",
+      "noTools": "The server has no tools.",
+      "toolsFound": "Tools",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteSuccess": "MCP server removed.",
+      "deleteFailed": "Failed to remove the MCP server.",
+      "saveSuccess": "MCP server saved.",
+      "saveFailed": "Failed to save the MCP server.",
+      "updateFailed": "Failed to update the MCP server.",
+      "loadFailed": "Failed to load MCP servers.",
+      "dialogAddTitle": "Add MCP server",
+      "dialogEditTitle": "Edit MCP server",
+      "dialogDesc": "The server must be reachable over HTTP(S) from this CRM's server. Local and private addresses need AI_ALLOW_PRIVATE_URLS=true.",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. inventory",
+      "nameHint": "Prefixes the tool names the agent sees.",
+      "urlLabel": "Server URL",
+      "headersLabel": "Headers",
+      "headersHint": "e.g. Authorization: Bearer YOUR_TOKEN",
+      "savedHeaders": "Saved headers: {names}. Leave empty to keep them, or add headers to replace them.",
+      "clearHeaders": "Remove saved headers",
+      "headerName": "Header name",
+      "headerValue": "Value",
+      "addHeader": "Add header",
+      "removeHeader": "Remove header",
+      "reenterHeaders": "Re-enter the headers when changing the server URL.",
+      "missingFields": "Enter a name and a URL.",
+      "save": "Save",
+      "clientTitle": "Connect AI clients to this CRM",
+      "clientDesc": "Let Claude Desktop, Claude Code, Cursor and other MCP clients read and act on this CRM through the wacrm MCP server. Paste this into your client's MCP config.",
+      "apiKeyLabel": "API key",
+      "apiKeyHint": "Create one under Settings → API keys. Only used to fill in the config below — never stored.",
+      "allowWrites": "Allow writes (send messages, edit contacts)",
+      "allowBroadcasts": "Allow broadcasts",
+      "includeCustom": "Include custom servers",
+      "copyConfig": "Copy",
+      "copied": "Config copied.",
+      "copyFailed": "Could not copy."
     }
   },
   "SignupPage": {
@@ -2010,6 +2057,34 @@
       "byModel": "By model",
       "modelCalls": "{tokens} tok · {count, plural, =1 {# call} other {# calls}}",
       "partialWindow": "Showing a partial window — usage is high enough that only the most recent records are summarized here."
+    },
+    "tabKeys": "API keys",
+    "tabMcp": "MCP servers",
+    "keys": {
+      "title": "Provider API keys",
+      "description": "Save a key for every provider you use, then pick the active one in Setup. Keys are encrypted at rest (AES-256-GCM) and never shown again.",
+      "adminOnly": "Only admins and owners can manage provider API keys.",
+      "loadFailed": "Failed to load API keys.",
+      "statusSaved": "Saved",
+      "statusNoKey": "Saved (no key)",
+      "statusNotSet": "Not set",
+      "statusActive": "Active",
+      "getKey": "Get a key",
+      "baseUrl": "Base URL",
+      "keyLabel": "{provider} API key",
+      "replacePlaceholder": "•••••••• saved — type to replace",
+      "optionalPlaceholder": "API key (optional)",
+      "enterKey": "Enter your {provider} API key.",
+      "save": "Save",
+      "saved": "{provider} key saved.",
+      "saveFailed": "Failed to save the key.",
+      "test": "Test",
+      "testSuccess": "{provider} key works.",
+      "testFailed": "The provider rejected the request.",
+      "remove": "Remove",
+      "removed": "Key removed.",
+      "removeFailed": "Failed to remove the key.",
+      "footer": "Tests use each provider’s default model (or your Setup model for the active provider). Local servers at localhost or private addresses need AI_ALLOW_PRIVATE_URLS=true on the server."
     }
   },
   "Interactive": {

@@ -1,7 +1,13 @@
-import { AiError, type AiUsage, type ChatMessage } from '../types'
+import {
+  AiError,
+  type AgentToolset,
+  type AiUsage,
+  type ChatMessage,
+} from '../types'
+import { MAX_TOOL_RESULT_CHARS } from '../defaults'
 
 // ============================================================
-// Bits shared by the OpenAI + Anthropic adapters.
+// Bits shared by the OpenAI-compatible + Anthropic adapters.
 // ============================================================
 
 export interface ProviderArgs {
@@ -10,6 +16,40 @@ export interface ProviderArgs {
   systemPrompt: string
   messages: ChatMessage[]
   timeoutMs: number
+  /** Tools the model may call (custom MCP servers); omitted/empty = plain
+   *  single-shot generation. */
+  toolset?: AgentToolset | null
+}
+
+/** Sum two usage records; null-tolerant so a round that reported
+ *  nothing doesn't erase the others. */
+export function addUsage(a: AiUsage | null, b: AiUsage | null): AiUsage | null {
+  if (!a) return b
+  if (!b) return a
+  return {
+    promptTokens: a.promptTokens + b.promptTokens,
+    completionTokens: a.completionTokens + b.completionTokens,
+    totalTokens: a.totalTokens + b.totalTokens,
+  }
+}
+
+/** Run one tool call through the toolset, bounding the result size. The
+ *  toolset contract is "never throws", but belt-and-braces: a throw here
+ *  would abort the whole reply. */
+export async function runTool(
+  toolset: AgentToolset,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  let out: string
+  try {
+    out = await toolset.call(name, args)
+  } catch (err) {
+    out = `Tool error: ${err instanceof Error ? err.message : String(err)}`
+  }
+  return out.length > MAX_TOOL_RESULT_CHARS
+    ? `${out.slice(0, MAX_TOOL_RESULT_CHARS)}\n…(truncated)`
+    : out
 }
 
 /**

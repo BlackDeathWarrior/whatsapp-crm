@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Bot, Sparkles, Settings2, BarChart3 } from 'lucide-react';
+import { Bot, Sparkles, Settings2, BarChart3, KeyRound, Blocks } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AiPlayground } from '@/components/agents/ai-playground';
 import { AiUsageCard } from '@/components/agents/ai-usage';
 import { AiConfig } from '@/components/settings/ai-config';
+import { AiProviderKeys } from '@/components/agents/ai-provider-keys';
+import { McpSettings } from '@/components/settings/mcp-settings';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 
-type Tab = 'playground' | 'setup' | 'usage';
+type Tab = 'playground' | 'setup' | 'keys' | 'mcp' | 'usage';
 
 export default function AgentsPage() {
   const t = useTranslations('Agents');
@@ -56,12 +58,20 @@ export default function AgentsPage() {
           onValueChange={(v) => setTab(v as Tab)}
           className="mt-6"
         >
-          <TabsList>
+          <TabsList className="h-auto flex-wrap">
             <TabsTrigger value="playground">
               <Sparkles className="mr-1.5 h-4 w-4" /> {t('tabPlayground')}
             </TabsTrigger>
             <TabsTrigger value="setup">
               <Settings2 className="mr-1.5 h-4 w-4" /> {t('tabSetup')}
+            </TabsTrigger>
+            {canViewUsage && (
+              <TabsTrigger value="keys">
+                <KeyRound className="mr-1.5 h-4 w-4" /> {t('tabKeys')}
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="mcp">
+              <Blocks className="mr-1.5 h-4 w-4" /> {t('tabMcp')}
             </TabsTrigger>
             {canViewUsage && (
               <TabsTrigger value="usage">
@@ -76,6 +86,16 @@ export default function AgentsPage() {
 
           <TabsContent value="setup" className="mt-4">
             <AiConfig />
+          </TabsContent>
+
+          {canViewUsage && (
+            <TabsContent value="keys" className="mt-4">
+              <AiProviderKeys />
+            </TabsContent>
+          )}
+
+          <TabsContent value="mcp" className="mt-4">
+            <McpSettings />
           </TabsContent>
 
           {canViewUsage && (

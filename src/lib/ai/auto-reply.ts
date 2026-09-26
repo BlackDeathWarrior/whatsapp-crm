@@ -3,6 +3,7 @@ import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
 import { retrieveKnowledge } from './knowledge'
 import { generateReply } from './generate'
+import { loadAgentToolset } from '@/lib/mcp/servers'
 import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
@@ -130,17 +131,28 @@ export async function dispatchInboundToAiReply(
       latestUserMessage(messages),
     )
 
+    // Tools from the account's custom MCP servers (best-effort).
+    const tooling = await loadAgentToolset(db, accountId)
+
     const systemPrompt = buildSystemPrompt({
       userPrompt: config.systemPrompt,
       mode: 'auto_reply',
       knowledge,
+      hasTools: !!tooling,
     })
 
-    const { text, handoff, usage } = await generateReply({
-      config,
-      systemPrompt,
-      messages,
-    })
+    let generated
+    try {
+      generated = await generateReply({
+        config,
+        systemPrompt,
+        messages,
+        toolset: tooling?.toolset,
+      })
+    } finally {
+      void tooling?.close()
+    }
+    const { text, handoff, usage } = generated
 
     // Record token spend on the account's BYO key. Fire-and-forget so it
     // never adds latency to the customer-facing send: `logAiUsage`

@@ -4,6 +4,7 @@ import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit
 import { loadAiConfig } from '@/lib/ai/config'
 import { retrieveKnowledge } from '@/lib/ai/knowledge'
 import { generateReply } from '@/lib/ai/generate'
+import { loadAgentToolset } from '@/lib/mcp/servers'
 import { buildSystemPrompt } from '@/lib/ai/defaults'
 import { latestUserMessage } from '@/lib/ai/query'
 import { AiError, type ChatMessage } from '@/lib/ai/types'
@@ -78,13 +79,26 @@ export async function POST(request: Request) {
       config,
       latestUserMessage(messages),
     )
+    const tooling = await loadAgentToolset(supabase, accountId)
     const systemPrompt = buildSystemPrompt({
       userPrompt: config.systemPrompt,
       mode: 'auto_reply',
       knowledge,
+      hasTools: !!tooling,
     })
 
-    const { text, handoff } = await generateReply({ config, systemPrompt, messages })
+    let generated
+    try {
+      generated = await generateReply({
+        config,
+        systemPrompt,
+        messages,
+        toolset: tooling?.toolset,
+      })
+    } finally {
+      void tooling?.close()
+    }
+    const { text, handoff } = generated
     return NextResponse.json({ reply: text, handoff })
   } catch (err) {
     if (err instanceof AiError) {

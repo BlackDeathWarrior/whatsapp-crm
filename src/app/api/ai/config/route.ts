@@ -5,10 +5,17 @@ import {
   toErrorResponse,
 } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
-import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
+import { encrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
 import { embedTexts } from '@/lib/ai/embeddings'
-import { AiError, type AiProvider } from '@/lib/ai/types'
+import { resolveCredentials } from '@/lib/ai/credentials'
+import {
+  loadProviderKey,
+  loadProviderKeys,
+  saveProviderKey,
+} from '@/lib/ai/provider-keys'
+import { isAiProvider } from '@/lib/ai/providers/catalog'
+import { AiError } from '@/lib/ai/types'
 
 function bad(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
@@ -30,7 +37,7 @@ export async function GET() {
       // `api_key` is selected only to derive `has_key` — it is stripped
       // out below and never returned to the client.
       .select(
-        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key',
+        'provider, model, base_url, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key',
       )
       .eq('account_id', accountId)
       .maybeSingle()
@@ -43,7 +50,15 @@ export async function GET() {
       )
     }
 
-    if (!data) return NextResponse.json({ configured: false })
+    // Which providers have a key saved under AI Agents → API keys (names
+    // and local base URLs only). Admin-only via RLS — empty for others.
+    const saved_keys = (await loadProviderKeys(supabase, accountId)).map((k) => ({
+      provider: k.provider,
+      base_url: k.base_url,
+      has_key: !!k.api_key,
+    }))
+
+    if (!data) return NextResponse.json({ configured: false, saved_keys })
     // The keys are selected only to derive the has_* flags; neither is
     // returned to the client.
     const { api_key, embeddings_api_key, ...safe } = data
@@ -51,6 +66,7 @@ export async function GET() {
       configured: true,
       has_key: !!api_key,
       has_embeddings_key: !!embeddings_api_key,
+      saved_keys,
       ...safe,
     })
   } catch (err) {
@@ -64,8 +80,8 @@ export async function GET() {
  * Upsert the account's AI config. Validates the key with the provider
  * before persisting (mirrors the WhatsApp config verifying with Meta
  * first), then stores the key AES-256-GCM-encrypted. When `api_key` is
- * omitted the existing stored key is reused (the form sends it only
- * when the user re-enters it).
+ * omitted the existing stored key is reused — but only for the same
+ * provider + base URL (see `resolveCredentials`).
  */
 export async function POST(request: Request) {
   try {
@@ -76,13 +92,6 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null)
     if (!body || typeof body !== 'object') return bad('Invalid request body')
-
-    const provider = body.provider as AiProvider
-    if (provider !== 'openai' && provider !== 'anthropic') {
-      return bad('provider must be "openai" or "anthropic"')
-    }
-    const model = typeof body.model === 'string' ? body.model.trim() : ''
-    if (!model) return bad('model is required')
 
     const systemPrompt =
       typeof body.system_prompt === 'string' && body.system_prompt.trim()
@@ -114,8 +123,6 @@ export async function POST(request: Request) {
       handoffAgentId = rawHandoff
     }
 
-    const rawKey = typeof body.api_key === 'string' ? body.api_key.trim() : ''
-
     // Embeddings key (optional, for semantic KB search): a non-empty
     // string sets/replaces it; an explicit null clears it; absent leaves
     // it unchanged. The form only sends it when the admin edits it.
@@ -125,25 +132,24 @@ export async function POST(request: Request) {
         : ''
     const clearEmbeddingsKey = body.embeddings_api_key === null
 
-    // Reuse the stored key when the form didn't send a fresh one.
+    // Reuse the stored key when the form didn't send a fresh one (same
+    // provider + endpoint only).
     const { data: existing } = await supabase
       .from('ai_configs')
-      .select('id, provider, model, api_key')
+      .select('id, provider, model, api_key, base_url')
       .eq('account_id', accountId)
       .maybeSingle()
 
-    let apiKeyPlain: string
-    if (rawKey) {
-      apiKeyPlain = rawKey
-    } else if (existing?.api_key) {
-      try {
-        apiKeyPlain = decrypt(existing.api_key)
-      } catch {
-        return bad('Stored API key could not be decrypted — re-enter your key.')
-      }
-    } else {
-      return bad('api_key is required')
-    }
+    // Fall back to the key saved for this provider under AI Agents → API
+    // keys when the form sent none.
+    const saved = isAiProvider(body.provider)
+      ? await loadProviderKey(supabase, accountId, body.provider)
+      : null
+
+    const creds = await resolveCredentials(body, existing, saved)
+    if (!creds.ok) return bad(creds.error)
+    const { provider, model, baseUrl } = creds
+    const typedKey = typeof body.api_key === 'string' && body.api_key.trim() !== ''
 
     // Only spend a provider round-trip when the credentials that affect
     // reachability actually changed. A save that just flips a toggle or
@@ -151,16 +157,18 @@ export async function POST(request: Request) {
     // skips the call — no wasted token/latency on the account's key.
     const credentialsChanged =
       !existing ||
-      rawKey !== '' ||
+      creds.keyAction !== 'keep' ||
       provider !== existing.provider ||
-      model !== existing.model
+      model !== existing.model ||
+      baseUrl !== (existing.base_url ?? null)
 
     if (credentialsChanged) {
       try {
         await validateAiCredentials({
           provider,
           model,
-          apiKey: apiKeyPlain,
+          apiKey: creds.apiKey,
+          baseUrl,
           systemPrompt,
           isActive,
           autoReplyEnabled,
@@ -197,10 +205,10 @@ export async function POST(request: Request) {
       }
     }
 
-    const encryptedKey = rawKey ? encrypt(rawKey) : null
     const shared: Record<string, unknown> = {
       provider,
       model,
+      base_url: baseUrl,
       system_prompt: systemPrompt,
       is_active: isActive,
       auto_reply_enabled: autoReplyEnabled,
@@ -215,10 +223,15 @@ export async function POST(request: Request) {
       shared.embeddings_api_key = null
     }
 
+    // 'keep' leaves the column untouched; 'clear' drops a key that
+    // belonged to a previous provider (keyless self-hosted server).
+    if (creds.keyAction === 'set') shared.api_key = encrypt(creds.apiKey)
+    else if (creds.keyAction === 'clear') shared.api_key = null
+
     if (existing) {
       const { error: upErr } = await supabase
         .from('ai_configs')
-        .update(encryptedKey ? { ...shared, api_key: encryptedKey } : shared)
+        .update(shared)
         .eq('account_id', accountId)
       if (upErr) {
         console.error('[ai/config POST] update error:', upErr)
@@ -231,7 +244,6 @@ export async function POST(request: Request) {
       const { error: insErr } = await supabase.from('ai_configs').insert({
         account_id: accountId,
         created_by: userId,
-        api_key: encryptedKey, // guaranteed non-null: rawKey required when no existing row
         ...shared,
       })
       if (insErr) {
@@ -241,6 +253,19 @@ export async function POST(request: Request) {
           { status: 500 },
         )
       }
+    }
+
+    // A key typed in Setup (or a keyless local server) also lands in the
+    // per-provider store, so switching providers later doesn't lose it.
+    // Best-effort: the config itself is already saved.
+    if (typedKey || (creds.keyAction === 'clear' && baseUrl)) {
+      await saveProviderKey(supabase, {
+        accountId,
+        userId,
+        provider,
+        apiKey: creds.apiKey,
+        baseUrl,
+      })
     }
 
     return NextResponse.json({ success: true })

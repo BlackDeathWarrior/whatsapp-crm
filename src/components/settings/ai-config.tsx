@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Sparkles, CheckCircle2, Trash2, Eye, EyeOff } from 'lucide-react';
+import {
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  Trash2,
+  Eye,
+  EyeOff,
+  ExternalLink,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
@@ -27,7 +35,11 @@ import {
 import { SettingsPanelHead } from './settings-panel-head';
 import { AiKnowledgeCard } from './ai-knowledge';
 import { AI_PROVIDER_DEFAULT_MODEL } from '@/lib/ai/defaults';
-import type { AiProvider } from '@/lib/ai/types';
+import {
+  AI_PROVIDERS,
+  AI_PROVIDER_META,
+  type AiProvider,
+} from '@/lib/ai/providers/catalog';
 import type { AccountMember } from '@/types';
 import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
 import { useTranslations } from 'next-intl';
@@ -38,15 +50,7 @@ const MASKED_KEY = '••••••••••••••••';
 // unassigned" choice gets a sentinel that maps to null in the payload.
 const HANDOFF_QUEUE = '__queue__';
 
-const PROVIDER_LABEL: Record<AiProvider, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic (Claude)',
-};
-
-const KEY_PLACEHOLDER: Record<AiProvider, string> = {
-  openai: 'sk-...',
-  anthropic: 'sk-ant-...',
-};
+const DEFAULT_MODELS = new Set(Object.values(AI_PROVIDER_DEFAULT_MODEL));
 
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
@@ -65,6 +69,16 @@ export function AiConfig() {
   const [keyEdited, setKeyEdited] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [hasStoredKey, setHasStoredKey] = useState(false);
+  const [baseUrl, setBaseUrl] = useState('');
+  // Provider + base URL the stored key belongs to. The server only
+  // reuses the stored key for that same endpoint, so the masked
+  // placeholder is shown only while they're unchanged.
+  const [savedProvider, setSavedProvider] = useState<AiProvider | null>(null);
+  const [savedBaseUrl, setSavedBaseUrl] = useState<string | null>(null);
+  // Keys saved per provider under AI Agents → API keys.
+  const [savedKeys, setSavedKeys] = useState<
+    { provider: AiProvider; base_url: string | null; has_key: boolean }[]
+  >([]);
   const [embeddingsKey, setEmbeddingsKey] = useState('');
   const [embeddingsKeyEdited, setEmbeddingsKeyEdited] = useState(false);
   const [hasStoredEmbeddingsKey, setHasStoredEmbeddingsKey] = useState(false);
@@ -91,9 +105,13 @@ export function AiConfig() {
         toast.error(data.error ?? t('loadFailed'));
         return;
       }
+      setSavedKeys(Array.isArray(data.saved_keys) ? data.saved_keys : []);
       if (data.configured) {
         setConfigured(true);
         setProvider(data.provider);
+        setSavedProvider(data.provider);
+        setSavedBaseUrl(data.base_url ?? null);
+        setBaseUrl(data.base_url ?? '');
         setModel(data.model);
         setSystemPrompt(data.system_prompt ?? '');
         setIsActive(data.is_active);
@@ -101,7 +119,7 @@ export function AiConfig() {
         setMaxPerConversation(data.auto_reply_max_per_conversation ?? 3);
         setHandoffAgentId(data.handoff_agent_id ?? '');
         setHasStoredKey(Boolean(data.has_key));
-        setApiKey(data.has_key ? MASKED_KEY : '');
+        setApiKey('');
         setKeyEdited(false);
         setHasStoredEmbeddingsKey(Boolean(data.has_embeddings_key));
         setEmbeddingsKey(data.has_embeddings_key ? MASKED_KEY : '');
@@ -128,12 +146,39 @@ export function AiConfig() {
   // typed a custom model.
   const handleProviderChange = (next: AiProvider) => {
     setProvider(next);
-    const isDefaultModel =
-      model === AI_PROVIDER_DEFAULT_MODEL.openai ||
-      model === AI_PROVIDER_DEFAULT_MODEL.anthropic ||
-      model.trim() === '';
-    if (isDefaultModel) setModel(AI_PROVIDER_DEFAULT_MODEL[next]);
+    if (DEFAULT_MODELS.has(model) || model.trim() === '') {
+      setModel(AI_PROVIDER_DEFAULT_MODEL[next]);
+    }
+    if (AI_PROVIDER_META[next].customBaseUrl && !baseUrl.trim()) {
+      const saved = savedKeys.find((k) => k.provider === next);
+      setBaseUrl(saved?.base_url ?? AI_PROVIDER_META[next].baseUrl ?? '');
+    }
   };
+
+  const meta = AI_PROVIDER_META[provider];
+  // Mirrors the server's normalizeBaseUrl closely enough to decide
+  // whether the stored key still applies.
+  const effectiveBaseUrl = meta.customBaseUrl
+    ? baseUrl
+        .trim()
+        .replace(/\/+$/, '')
+        .replace(/\/chat\/completions$/i, '') || null
+    : null;
+  const activeKeyApplies =
+    hasStoredKey &&
+    provider === savedProvider &&
+    effectiveBaseUrl === savedBaseUrl;
+  // Same endpoint rule as the server's resolveCredentials.
+  const usingSavedKey =
+    !activeKeyApplies &&
+    savedKeys.some(
+      (k) =>
+        k.provider === provider &&
+        k.has_key &&
+        (!meta.customBaseUrl || k.base_url === effectiveBaseUrl),
+    );
+  const keyReusable = activeKeyApplies || usingSavedKey;
+  const keyDisplay = keyEdited ? apiKey : keyReusable ? MASKED_KEY : '';
 
   const keyPayload = () => (keyEdited ? apiKey.trim() : undefined);
 
@@ -144,6 +189,7 @@ export function AiConfig() {
   const buildBody = () => ({
     provider,
     model: model.trim(),
+    base_url: effectiveBaseUrl,
     api_key: keyPayload(),
     embeddings_api_key: embeddingsKeyPayload(),
     system_prompt: systemPrompt.trim() || null,
@@ -162,6 +208,7 @@ export function AiConfig() {
         body: JSON.stringify({
           provider,
           model: model.trim(),
+          base_url: effectiveBaseUrl,
           api_key: keyPayload(),
         }),
       });
@@ -180,7 +227,11 @@ export function AiConfig() {
       toast.error(t('missingModel'));
       return;
     }
-    if (!configured && !keyEdited) {
+    if (meta.customBaseUrl && !effectiveBaseUrl) {
+      toast.error(t('missingBaseUrl'));
+      return;
+    }
+    if (meta.keyRequired && !keyReusable && !(keyEdited && apiKey.trim())) {
       toast.error(t('missingApiKey'));
       return;
     }
@@ -213,6 +264,8 @@ export function AiConfig() {
         toast.success(t('removeSuccess'));
         setConfigured(false);
         setHasStoredKey(false);
+        setSavedProvider(null);
+        setSavedBaseUrl(null);
         setApiKey('');
         setKeyEdited(false);
         setIsActive(false);
@@ -277,10 +330,11 @@ export function AiConfig() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="openai">{PROVIDER_LABEL.openai}</SelectItem>
-                    <SelectItem value="anthropic">
-                      {PROVIDER_LABEL.anthropic}
-                    </SelectItem>
+                    {AI_PROVIDERS.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {AI_PROVIDER_META[p].label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -297,25 +351,63 @@ export function AiConfig() {
               </div>
             </div>
 
+            {meta.customBaseUrl && (
+              <div className="space-y-2">
+                <Label htmlFor="ai-base-url">{t('baseUrl')}</Label>
+                <Input
+                  id="ai-base-url"
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder={meta.baseUrl ?? ''}
+                  disabled={disabled}
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('baseUrlHint')}
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="ai-key">{t('apiKey')}</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="ai-key">
+                  {t('apiKey')}
+                  {!meta.keyRequired && (
+                    <span className="font-normal text-muted-foreground">
+                      {' '}
+                      {t('optional')}
+                    </span>
+                  )}
+                </Label>
+                {meta.keyUrl && (
+                  <a
+                    href={meta.keyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    {t('getKey', { provider: meta.label })}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Input
                     id="ai-key"
                     type={showKey ? 'text' : 'password'}
-                    value={apiKey}
+                    value={keyDisplay}
                     onChange={(e) => {
                       setApiKey(e.target.value);
                       setKeyEdited(true);
                     }}
                     onFocus={() => {
-                      if (!keyEdited && hasStoredKey) {
+                      if (!keyEdited) {
                         setApiKey('');
                         setKeyEdited(true);
                       }
                     }}
-                    placeholder={KEY_PLACEHOLDER[provider]}
+                    placeholder={meta.keyPlaceholder}
                     disabled={disabled}
                     autoComplete="off"
                   />
@@ -345,6 +437,11 @@ export function AiConfig() {
                   {t('testKey')}
                 </Button>
               </div>
+              {usingSavedKey && !keyEdited && (
+                <p className="text-xs text-muted-foreground">
+                  {t('usingSavedKey', { provider: meta.label })}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

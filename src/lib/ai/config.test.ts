@@ -49,3 +49,29 @@ describe('loadAiConfig requireActive', () => {
     ).toBeNull()
   })
 })
+
+describe('loadAiConfig keyless providers', () => {
+  it('loads a local provider with no stored key', async () => {
+    const config = await loadAiConfig(
+      dbReturning({
+        ...ROW,
+        provider: 'local',
+        api_key: null,
+        base_url: 'http://localhost:11434/v1',
+      }),
+      'acct',
+      { requireActive: false },
+    )
+    expect(config).not.toBeNull()
+    expect(config!.apiKey).toBe('')
+    expect(config!.baseUrl).toBe('http://localhost:11434/v1')
+  })
+
+  it('still treats a missing key as unconfigured for hosted providers', async () => {
+    expect(
+      await loadAiConfig(dbReturning({ ...ROW, provider: 'gemini', api_key: null }), 'acct', {
+        requireActive: false,
+      }),
+    ).toBeNull()
+  })
+})
